@@ -1,0 +1,343 @@
+# Extra D9.2 questions — serialization and deserialization (second content pass).
+# All programs serialize in memory (ByteArrayOutputStream / ByteArrayInputStream), so no files are needed.
+
+- id: D9-SRX-001
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 180
+  tags: [serialization, record, canonical-constructor, validation, InvalidObjectException]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.io.*;
+
+    class Policy { static int maxQty = 10; }
+
+    record Order(String sku, int qty) implements Serializable {
+        Order {
+            if (qty > Policy.maxQty) throw new IllegalArgumentException("qty " + qty);
+        }
+    }
+    class Ticket implements Serializable {
+        final int seats;
+        Ticket(int seats) {
+            if (seats > Policy.maxQty) throw new IllegalArgumentException("seats " + seats);
+            this.seats = seats;
+        }
+    }
+
+    public class Main {
+        static byte[] write(Object o) throws IOException {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(o); }
+            return bytes.toByteArray();
+        }
+        static Object read(byte[] data) throws Exception {
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(data))) { return in.readObject(); }
+        }
+        public static void main(String[] args) throws Exception {
+            byte[] t = write(new Ticket(8));
+            byte[] o = write(new Order("pen", 8));
+            Policy.maxQty = 5;
+            System.out.println(((Ticket) read(t)).seats);
+            System.out.println(((Order) read(o)).qty());
+        }
+    }
+  options:
+    - key: a
+      text: It prints `8`, then a `java.io.InvalidObjectException` is thrown
+      correct: true
+      why: Ticket is rebuilt without running its constructor, so its check is skipped. A record is always rebuilt through its canonical constructor, whose exception is wrapped in InvalidObjectException.
+    - key: b
+      text: It prints `8`, then an `IllegalArgumentException` is thrown
+      why: The canonical constructor does throw IllegalArgumentException, but ObjectInputStream reports a failed record constructor as InvalidObjectException, with the original exception as the cause.
+    - key: c
+      text: It prints `8` and `8`
+      why: This treats a record like an ordinary serializable class. Records are never rebuilt by setting fields directly. Their canonical constructor always runs.
+    - key: d
+      text: An `InvalidObjectException` is thrown before anything is printed
+      why: Deserializing an ordinary Serializable class runs no constructor of that class (only the no-arg constructor of the first non-serializable superclass, here Object), so Ticket's check never runs.
+  explanation: |
+    An ordinary `Serializable` class is deserialized **without** running its own constructors. Its fields
+    are written straight from the stream, so constructor validation is bypassed (`Ticket` accepts 8).
+    **Records** are handled differently. Only their component values are written, and deserialization
+    always calls the **canonical constructor** with them, so a compact constructor's validation also
+    protects deserialized records. If that constructor throws, `readObject` throws
+    `java.io.InvalidObjectException` with the original exception as its cause.
+  rule: "java.io.ObjectInputStream / Java Object Serialization Specification: a record is deserialized by invoking its canonical constructor with the stream's component values; an exception from it is reported as InvalidObjectException."
+  misconception: "\"Deserialization never runs the constructors of a serializable type.\""
+  hint: How does serialization rebuild a record compared with an ordinary class?
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.io.InvalidObjectException, stdout: "8\n" }
+
+- id: D9-SRX-002
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [serialization, externalizable, no-arg-constructor, transient, readExternal]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    class Profile implements Externalizable {
+        String name = "anon";
+        transient int age = 1;
+        public Profile() { System.out.print("ctor "); }
+        Profile(String name, int age) { this.name = name; this.age = age; }
+        public void writeExternal(ObjectOutput out) throws IOException {
+            System.out.print("write ");
+            out.writeUTF(name);
+            out.writeInt(age);
+        }
+        public void readExternal(ObjectInput in) throws IOException {
+            System.out.print("read ");
+            name = in.readUTF().toUpperCase();
+            age = in.readInt();
+        }
+    }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(new Profile("kim", 40)); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                Profile p = (Profile) in.readObject();
+                System.out.println(p.name + " " + p.age);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`write ctor read KIM 40`"
+      correct: true
+      why: The two-argument constructor prints nothing. Deserialization first calls the public no-arg constructor, then readExternal, which reads exactly what writeExternal wrote, transient or not.
+    - key: b
+      text: "`write ctor read KIM 0`"
+      why: transient only affects default serialization. With Externalizable the class writes its own data, and writeExternal explicitly writes age.
+    - key: c
+      text: "`write read KIM 40`"
+      why: Unlike a Serializable class, an Externalizable class is always created through its public no-arg constructor before readExternal runs.
+    - key: d
+      text: "`write ctor read anon 40`"
+      why: The field initializer sets name to anon when the constructor runs, but readExternal then overwrites it with the value from the stream.
+    - key: e
+      text: "`ctor write read KIM 40`"
+      why: The object being written was created with the two-argument constructor, which prints nothing. The no-arg constructor runs only during deserialization.
+  explanation: |
+    With `Externalizable`, the class takes full control. `writeExternal` decides what is written and
+    `readExternal` must read it back in the same order. The `transient` keyword is irrelevant because no
+    default field serialization happens. To deserialize, the JVM first creates the object with its
+    **public no-arg constructor** (field initializers run too), then calls `readExternal`. If that
+    constructor is missing or not public, `readObject` throws `InvalidClassException`.
+  rule: "java.io.Externalizable: the object is created with its public no-arg constructor, then readExternal is called; writeExternal/readExternal fully define the stream contents."
+  misconception: "\"transient fields are never written, whichever serialization mechanism is used.\""
+  hint: Which constructor does deserialization of an Externalizable call, and does `transient` matter for code you write yourself?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "write ctor read KIM 40" }
+
+- id: D9-SRX-003
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [serialization, enum, singleton, readResolve, identity]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    enum Mode { ON, OFF; int hits; }
+
+    class Registry implements Serializable {
+        static final Registry INSTANCE = new Registry();
+        private Registry() { }
+    }
+    class Config implements Serializable {
+        static final Config INSTANCE = new Config();
+        private Config() { }
+        private Object readResolve() { return INSTANCE; }
+    }
+
+    public class Main {
+        static Object roundTrip(Object o) throws Exception {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(o); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) { return in.readObject(); }
+        }
+        public static void main(String[] args) throws Exception {
+            Mode.ON.hits = 7;
+            Mode m = (Mode) roundTrip(Mode.ON);
+            System.out.println((m == Mode.ON) + " " + m.hits + " "
+                + (roundTrip(Registry.INSTANCE) == Registry.INSTANCE) + " "
+                + (roundTrip(Config.INSTANCE) == Config.INSTANCE));
+        }
+    }
+  options:
+    - key: a
+      text: "`true 7 false true`"
+      correct: true
+      why: Enums are serialized by name and resolved to the existing constant (so hits is the live value 7). Registry gets a brand-new instance. Config's readResolve replaces the copy with INSTANCE.
+    - key: b
+      text: "`false 0 false true`"
+      why: Enum constants are never duplicated by deserialization. Only the name is written, and valueOf-style lookup returns the existing constant.
+    - key: c
+      text: "`true 7 true true`"
+      why: A private constructor does not protect a serializable singleton. Deserialization creates a new object without calling that constructor.
+    - key: d
+      text: "`true 0 false true`"
+      why: The constant returned is the same object as Mode.ON, so it shows the current value of its field, 7. Enum fields are not written to the stream, but nothing is reset either.
+    - key: e
+      text: "`true 7 false false`"
+      why: readResolve is a special hook that ObjectInputStream calls after reading the object, and its return value replaces the deserialized copy, even though the method is private.
+  explanation: |
+    Enum constants are serialized as their **name** only. Deserialization looks the name up and returns the
+    **existing** constant, so identity is preserved and enum fields are never copied or reset. An ordinary
+    serializable "singleton" breaks: deserialization creates a new instance without calling the private
+    constructor. A `readResolve()` method fixes that by returning the canonical instance in place of the
+    freshly read copy.
+  rule: "Java Object Serialization Specification: enum constants are serialized by name and deserialized with Enum.valueOf semantics; readResolve lets a class replace the object returned by readObject."
+  misconception: "\"A private constructor guarantees that a serializable singleton stays a singleton.\""
+  hint: What is actually written to the stream for an enum constant?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "true 7 false true" }
+
+- id: D9-SRX-004
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [serialization, inheritance, null-fields, NotSerializableException, constructors]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.io.*;
+
+    class Engine { int hp = 300; }
+    class Vehicle implements Serializable {
+        Engine engine;
+        Vehicle() { System.out.print("V "); }
+    }
+    class Car extends Vehicle {
+        String name = "gt";
+        Car() { System.out.print("C "); }
+    }
+
+    public class Main {
+        static byte[] write(Object o) throws IOException {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(o); }
+            return bytes.toByteArray();
+        }
+        public static void main(String[] args) throws Exception {
+            Car car = new Car();
+            car.name = "rs";
+            byte[] data = write(car);
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(data))) {
+                Car copy = (Car) in.readObject();
+                System.out.println("| " + copy.name + " " + copy.engine);
+            }
+            car.engine = new Engine();
+            write(car);
+            System.out.println("done");
+        }
+    }
+  options:
+    - key: a
+      text: It prints `V C | rs null`, then a `NotSerializableException` is thrown
+      correct: true
+      why: Car inherits Serializable from Vehicle, and a null Engine field is written as null without trouble. No constructor of Vehicle or Car runs on reading. The second write meets a real Engine object, which is not serializable.
+    - key: b
+      text: A `NotSerializableException` is thrown by the first `write`
+      why: Only objects actually reached in the graph are checked. A field whose value is null holds no object, so its declared type does not matter.
+    - key: c
+      text: It prints `V C | rs null`, then `V C done`
+      why: Writing an object never calls its constructors, and the second write fails because engine now refers to an Engine object.
+    - key: d
+      text: It prints `V C V C | rs null`, then a `NotSerializableException` is thrown
+      why: Vehicle and Car are both serializable, so deserialization runs neither constructor. Only the no-arg constructor of the first non-serializable superclass (Object) runs.
+    - key: e
+      text: It prints `V C | gt null`, then a `NotSerializableException` is thrown
+      why: name is a normal serializable field, so its current value rs is written and restored. Its initializer does not run on deserialization.
+  explanation: |
+    A subclass of a serializable class is serializable too, without repeating `implements Serializable`.
+    `writeObject` checks the **objects** in the graph, not declared field types, so a `null` field of a
+    non-serializable type is fine. Once the field refers to an actual `Engine`, writing fails with
+    `NotSerializableException: Engine`. When reading, no constructor or field initializer of a serializable
+    class runs. Only the no-arg constructor of the first non-serializable superclass (here `Object`) is
+    called, so `rs` comes back from the stream.
+  rule: "java.io.Serializable: subtypes of a serializable class are serializable; NotSerializableException is thrown when a non-serializable object is encountered while writing; deserialization runs only the no-arg constructor of the first non-serializable superclass."
+  misconception: "\"A serializable class may not even declare a field of a non-serializable type.\""
+  hint: Is the check made against the declared type of the field or against the object it currently refers to?
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.io.NotSerializableException, stdout: "V C | rs null\n" }
+
+- id: D9-SRX-005
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 150
+  tags: [serialization, lambdas, intersection-cast, NotSerializableException, functional-interfaces]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.io.*;
+    import java.util.function.*;
+
+    class Job implements Serializable {
+        Supplier<String> task;
+        Job(Supplier<String> task) { this.task = task; }
+    }
+
+    public class Main {
+        static Job roundTrip(Job j) throws Exception {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(j); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                return (Job) in.readObject();
+            }
+        }
+        public static void main(String[] args) throws Exception {
+            Job a = roundTrip(new Job((Supplier<String> & Serializable) () -> "safe"));
+            System.out.println(a.task.get());
+            Job b = roundTrip(new Job(() -> "plain"));
+            System.out.println(b.task.get());
+        }
+    }
+  options:
+    - key: a
+      text: It prints `safe`, then a `NotSerializableException` is thrown
+      correct: true
+      why: The intersection cast makes the first lambda's target type Serializable, so that lambda object is serializable. The second lambda only implements Supplier, so writing the Job that holds it fails.
+    - key: b
+      text: It prints `safe` and `plain`
+      why: A lambda is serializable only if its target type is. Job being Serializable does not make the objects in its fields serializable.
+    - key: c
+      text: Compilation fails because a lambda cannot be cast to `Supplier<String> & Serializable`
+      why: An intersection cast is a valid target type for a lambda, provided only one of the types is a functional interface. Serializable has no abstract methods.
+    - key: d
+      text: A `NotSerializableException` is thrown before anything is printed
+      why: The first lambda is serializable because of the intersection cast, so the first round trip succeeds and prints safe.
+  explanation: |
+    A lambda object is serializable only when its **target type** is serializable. Normally the target is
+    just the functional interface (`Supplier<String>`), which does not extend `Serializable`, so the
+    lambda cannot be written. An intersection cast `(Supplier<String> & Serializable)` makes the target type
+    serializable too, and the compiler then generates a serializable lambda. As always, `writeObject` checks
+    every object it reaches, so a `Job` that holds a plain lambda fails with `NotSerializableException`.
+  rule: "A lambda object is serializable only if its target type (possibly an intersection type such as Supplier<String> & Serializable) is serializable; java.io.NotSerializableException is thrown when a non-serializable object is reached while writing."
+  misconception: "\"Fields of a Serializable class are serializable automatically, including lambdas stored in them.\""
+  hint: What type does the second lambda implement?
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.io.NotSerializableException, stdout: "safe\n" }

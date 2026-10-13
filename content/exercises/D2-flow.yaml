@@ -1,0 +1,136 @@
+- id: D2-EX-001
+  objective: D2.1
+  lesson: flow-decisions-switch
+  title: Message router with switch expressions and patterns
+  difficulty: intermediate
+  kind: implement
+  prompt: |
+    A monitoring service receives messages of mixed types and must decide where each one goes. The message
+    types are already declared in `Solution.java` (do not change them):
+
+    ```java
+    enum Level { DEBUG, INFO, WARN, ERROR }
+    record Login(String user, boolean success) {}
+    record Payment(String id, long cents) {}
+    record Alert(Level level, String text) {}
+    ```
+
+    Implement the two static methods of `Solution`:
+
+    1. `int severity(Level level)` — `DEBUG` and `INFO` → `0`, `WARN` → `1`, `ERROR` → `2`. Write it as a
+       **switch expression without `default`** (listing every constant makes it exhaustive).
+    2. `String route(Object msg)` — a **single switch expression** using `case null`, record patterns and
+       `when` guards:
+
+    | Message | Result |
+    |---|---|
+    | `null` | `"drop"` |
+    | `Login(user, true)` | `"auth:" + user` |
+    | `Login(user, false)` | `"security:" + user` |
+    | `Payment(id, cents)` with `cents <= 0` | `"reject:" + id` |
+    | `Payment(id, cents)` with `cents >= 100_000` | `"review:" + id` |
+    | any other `Payment` | `"ledger:" + id` |
+    | `Alert(level, text)` with `severity(level) == 2` | `"pager:" + text` |
+    | any other `Alert` | `"log:" + text` |
+    | a blank `String` (`isBlank()`) | `"drop"` |
+    | any other `String` | `"text:" + s.strip()` |
+    | anything else | `"unknown:" + simple class name` (e.g. `"unknown:Integer"`) |
+
+    Watch the order of your labels: a guarded case must come before the unguarded case of the same type,
+    and `default` must come last.
+  fileName: Solution.java
+  starter: |
+    enum Level { DEBUG, INFO, WARN, ERROR }
+    record Login(String user, boolean success) {}
+    record Payment(String id, long cents) {}
+    record Alert(Level level, String text) {}
+
+    class Solution {
+
+        // TODO 1: switch expression over the enum, no default
+        static int severity(Level level) {
+            return -1;
+        }
+
+        // TODO 2: one switch expression with case null, record patterns and guards
+        static String route(Object msg) {
+            return "TODO";
+        }
+    }
+  solution: |
+    enum Level { DEBUG, INFO, WARN, ERROR }
+    record Login(String user, boolean success) {}
+    record Payment(String id, long cents) {}
+    record Alert(Level level, String text) {}
+
+    class Solution {
+
+        static int severity(Level level) {
+            return switch (level) {
+                case DEBUG, INFO -> 0;
+                case WARN -> 1;
+                case ERROR -> 2;
+            };
+        }
+
+        static String route(Object msg) {
+            return switch (msg) {
+                case null -> "drop";
+                case Login(String user, boolean ok) when ok -> "auth:" + user;
+                case Login(String user, _) -> "security:" + user;
+                case Payment(String id, long cents) when cents <= 0 -> "reject:" + id;
+                case Payment(String id, long cents) when cents >= 100_000 -> "review:" + id;
+                case Payment(String id, _) -> "ledger:" + id;
+                case Alert(Level level, String text) -> {
+                    String channel = severity(level) == 2 ? "pager:" : "log:";
+                    yield channel + text;
+                }
+                case String s when s.isBlank() -> "drop";
+                case String s -> "text:" + s.strip();
+                default -> "unknown:" + msg.getClass().getSimpleName();
+            };
+        }
+    }
+  harness: |
+    import java.util.function.Supplier;
+    public class Main {
+        static void eq(String name, Object expected, Supplier<Object> actual) {
+            try {
+                Object got = actual.get();
+                if (expected.equals(got)) System.out.println("PASS " + name);
+                else System.out.println("FAIL " + name + ": expected " + expected + " but got " + got);
+            } catch (Throwable t) {
+                System.out.println("FAIL " + name + ": threw " + t);
+            }
+        }
+        public static void main(String[] args) {
+            eq("severity DEBUG/INFO", "0 0", () -> Solution.severity(Level.DEBUG) + " " + Solution.severity(Level.INFO));
+            eq("severity WARN/ERROR", "1 2", () -> Solution.severity(Level.WARN) + " " + Solution.severity(Level.ERROR));
+            eq("null is dropped", "drop", () -> Solution.route(null));
+            eq("successful login", "auth:amira", () -> Solution.route(new Login("amira", true)));
+            eq("failed login", "security:root", () -> Solution.route(new Login("root", false)));
+            eq("payment of 0 rejected", "reject:P0", () -> Solution.route(new Payment("P0", 0)));
+            eq("negative payment rejected", "reject:P1", () -> Solution.route(new Payment("P1", -5)));
+            eq("payment just below review limit", "ledger:P2", () -> Solution.route(new Payment("P2", 99_999)));
+            eq("payment at review limit", "review:P3", () -> Solution.route(new Payment("P3", 100_000)));
+            eq("small payment", "ledger:P4", () -> Solution.route(new Payment("P4", 1)));
+            eq("ERROR alert pages", "pager:disk full", () -> Solution.route(new Alert(Level.ERROR, "disk full")));
+            eq("WARN alert is logged", "log:slow", () -> Solution.route(new Alert(Level.WARN, "slow")));
+            eq("blank string dropped", "drop", () -> Solution.route("   "));
+            eq("empty string dropped", "drop", () -> Solution.route(""));
+            eq("text is stripped", "text:hello", () -> Solution.route("  hello "));
+            eq("unknown type", "unknown:Integer", () -> Solution.route(42));
+            eq("enum constant as message", "unknown:Level", () -> Solution.route(Level.INFO));
+        }
+    }
+  explanation: |
+    `severity` switches over an enum, so listing all four constants makes the switch expression exhaustive
+    without `default`; if someone later adds a constant, the method stops compiling instead of silently
+    returning a wrong value. `route` relies on top-to-bottom matching: `case null` handles the one value that
+    `default` never sees, each guarded record pattern precedes the unguarded pattern of the same record (the
+    reverse order would be a dominance error), and `default` comes after every pattern. The `Alert` arm shows
+    a block body ending in `yield`. `_` (Java 22+, JEP 456) ignores components that the arm does not need.
+  hints:
+    - "Record patterns can bind primitive components of their exact type: `case Payment(String id, long cents) when cents <= 0 -> ...`."
+    - Put `case null` first and `default` last; within one record type, list the guarded cases before the unguarded one.
+    - "`Level.INFO` is neither a String nor one of the records, so it must end up in `default`."

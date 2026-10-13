@@ -1,0 +1,162 @@
+# Java Mastery Quest — local stack.
+#
+#   cp .env.example .env      # then edit POSTGRES_PASSWORD and RUNNER_TOKEN
+#   docker compose up --build
+#   open http://127.0.0.1:3000
+#
+# Services
+#   db       PostgreSQL 17. Not published to the host. Data in the named volume `jmq-pgdata`.
+#   migrate  One-shot job: applies db/migrations, then seeds /content (idempotent, never touches learner data).
+#   web      Next.js UI + HTTP API, published on 127.0.0.1 only.
+#   runner   Java 25 code runner. Hardened container on an internal network with no internet access.
+#
+# Networks
+#   backend     db, migrate, web
+#   runner-net  web, runner        (internal: no egress to the internet, no route to db)
+#
+# See docs/OPERATIONS.md for backup/restore, updates and troubleshooting.
+
+name: java-mastery-quest
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+x-database-url: &database-url "postgres://${POSTGRES_USER:-jmq}:${POSTGRES_PASSWORD:-change-me-local-only}@db:5432/${POSTGRES_DB:-jmq}"
+
+services:
+  db:
+    image: postgres:17-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-jmq}
+      POSTGRES_USER: ${POSTGRES_USER:-jmq}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+    volumes:
+      - jmq-pgdata:/var/lib/postgresql/data
+    networks:
+      - backend
+    # No `ports:` on purpose — the database is only reachable from the backend network.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\" -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    stop_grace_period: 30s   # let PostgreSQL finish its shutdown checkpoint
+    logging: *default-logging
+
+  migrate:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: tools
+    image: java-mastery-quest/web-tools:local
+    restart: "no"
+    environment:
+      DATABASE_URL: *database-url
+      CONTENT_DIR: /app/content
+      MIGRATIONS_DIR: /app/db/migrations
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend
+    logging: *default-logging
+
+  web:
+    build:
+      context: .
+      dockerfile: web/Dockerfile
+      target: runtime
+    image: java-mastery-quest/web:local
+    restart: unless-stopped
+    init: true
+    environment:
+      DATABASE_URL: *database-url
+      RUNNER_URL: http://runner:8090
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-}            # extra Host names accepted besides localhost (DNS-rebinding guard)
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-}
+      CONTENT_DIR: /app/content
+      NODE_ENV: production
+      PORT: "3000"
+      HOSTNAME: 0.0.0.0
+      NEXT_TELEMETRY_DISABLED: "1"
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3000}:3000"   # localhost only (single-learner app, no auth — docs/DECISIONS.md D-006)
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      runner:
+        condition: service_started   # optional: without it, everything except Run/Coding Lab keeps working
+        required: false
+    networks:
+      - backend
+      - runner-net
+    cap_drop: [ALL]
+    security_opt:
+      - "no-new-privileges:true"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 20s
+    logging: *default-logging
+
+  runner:
+    build:
+      context: .
+      dockerfile: runner/Dockerfile
+    image: java-mastery-quest/runner:local
+    restart: unless-stopped
+    init: true
+    user: "10001:10001"
+    environment:
+      RUNNER_BIND: 0.0.0.0
+      RUNNER_PORT: "8090"
+      RUNNER_WORK_DIR: /tmp/jmq-work
+      RUNNER_MAX_CONCURRENT: "2"
+      RUNNER_REAP_ORPHANS: "true"   # kill subprocesses learner code leaves behind (needs `init: true`, below)
+      RUNNER_TOKEN: ${RUNNER_TOKEN:-}
+      # Deliberately absent: DATABASE_URL / any DB credentials, JAVA_TOOL_OPTIONS, proxy settings.
+    # --- isolation -------------------------------------------------------------------------------------------
+    read_only: true
+    tmpfs:
+      # The only writable path. Compiled classes are *loaded* by the JVM (read), never exec'd, so noexec is fine.
+      # tmpfs is RAM-backed and counts against mem_limit.
+      - /tmp:size=128m,mode=1777,noexec,nosuid,nodev
+    cap_drop: [ALL]
+    security_opt:
+      - "no-new-privileges:true"
+    pids_limit: 256          # caps threads + processes (JVM threads count) — stops fork/thread bombs
+    mem_limit: 1g            # runner JVM (-Xmx192m) + up to 2 child JVMs (-Xmx128m each) + tmpfs + healthcheck JVM
+    memswap_limit: 1g
+    cpus: 1.5
+    networks:
+      - runner-net           # internal network: reachable by web only, no internet, no db
+    # No volumes, no published ports, no Docker socket.
+    healthcheck:
+      test: ["CMD", "java", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-XX:-UsePerfData", "-Xmx32m",
+             "-cp", "/app/jmq-runner.jar", "dev.jmq.runner.HealthCheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    stop_grace_period: 10s
+    logging: *default-logging
+
+networks:
+  backend: {}
+  runner-net:
+    internal: true
+
+volumes:
+  jmq-pgdata:
+    name: jmq-pgdata

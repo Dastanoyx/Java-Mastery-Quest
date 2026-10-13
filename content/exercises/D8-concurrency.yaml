@@ -1,0 +1,276 @@
+- id: D8-EX-001
+  objective: D8.2
+  lesson: conc-thread-safety
+  title: A thread-safe, deadlock-free bank
+  difficulty: advanced
+  kind: repair
+  prompt: |
+    The `Bank` below is used by many threads at once — and it is broken. Repair it so that it is correct
+    under concurrency. The set of accounts is fixed when the bank is created.
+
+    1. `deposit(id, amount)` adds `amount` to the account. It must be **thread-safe** (no lost updates) and
+       throw `IllegalArgumentException` if `amount <= 0` or the account id is unknown.
+    2. `transfer(from, to, amount)` moves money **atomically**: if `from` has at least `amount`, both balances
+       change and the method returns `true`; otherwise **nothing** changes and it returns `false`.
+       It throws `IllegalArgumentException` for `amount <= 0`, an unknown id, or `from.equals(to)`.
+    3. Transfers must **never deadlock** — not even when one thread transfers A → B while another transfers
+       B → A at the same time.
+    4. `balance(id)` and `completedTransfers()` (number of successful transfers) must be safe to call from any
+       thread.
+
+    Use what the lesson teaches: one lock per account, a consistent **lock order**, `unlock()` in `finally`,
+    and an atomic counter. The hidden tests run up to eight threads and fail (instead of hanging) if a
+    deadlock is detected.
+  fileName: Solution.java
+  starter: |
+    import java.util.*;
+
+    class Bank {
+        static final class Account {
+            final String id;
+            long balance;
+            Account(String id) { this.id = id; }
+        }
+
+        private final Map<String, Account> accounts = new HashMap<>();
+        private int completed;
+
+        Bank(String... ids) {
+            for (String id : ids) accounts.put(id, new Account(id));
+        }
+
+        void deposit(String id, long amount) {
+            Account a = accounts.get(id);
+            a.balance += amount;                 // read-add-write: updates can be lost
+        }
+
+        boolean transfer(String from, String to, long amount) {
+            Account src = accounts.get(from);
+            Account dst = accounts.get(to);
+            synchronized (src) {                 // lock order depends on the arguments...
+                synchronized (dst) {
+                    src.balance -= amount;       // ...and nobody checks the balance
+                    dst.balance += amount;
+                    completed++;
+                    return true;
+                }
+            }
+        }
+
+        long balance(String id) { return accounts.get(id).balance; }
+
+        int completedTransfers() { return completed; }
+    }
+
+    class Solution { }
+  solution: |
+    import java.util.*;
+    import java.util.concurrent.atomic.*;
+    import java.util.concurrent.locks.*;
+
+    class Bank {
+        static final class Account {
+            final String id;
+            final ReentrantLock lock = new ReentrantLock();
+            long balance;                        // guarded by lock
+            Account(String id) { this.id = id; }
+        }
+
+        private final Map<String, Account> accounts;   // never modified after construction
+        private final AtomicInteger completed = new AtomicInteger();
+
+        Bank(String... ids) {
+            Map<String, Account> m = new HashMap<>();
+            for (String id : ids) m.put(id, new Account(id));
+            accounts = Map.copyOf(m);
+        }
+
+        private Account account(String id) {
+            Account a = id == null ? null : accounts.get(id);
+            if (a == null) throw new IllegalArgumentException("unknown account: " + id);
+            return a;
+        }
+
+        private static void requirePositive(long amount) {
+            if (amount <= 0) throw new IllegalArgumentException("amount must be positive: " + amount);
+        }
+
+        void deposit(String id, long amount) {
+            requirePositive(amount);
+            Account a = account(id);
+            a.lock.lock();
+            try {
+                a.balance += amount;
+            } finally {
+                a.lock.unlock();
+            }
+        }
+
+        boolean transfer(String from, String to, long amount) {
+            requirePositive(amount);
+            Account src = account(from);
+            Account dst = account(to);
+            if (src == dst) throw new IllegalArgumentException("cannot transfer to the same account");
+            // Global lock order (by id) => no cycle of waiting threads => no deadlock.
+            Account first = src.id.compareTo(dst.id) < 0 ? src : dst;
+            Account second = first == src ? dst : src;
+            first.lock.lock();
+            try {
+                second.lock.lock();
+                try {
+                    if (src.balance < amount) return false;
+                    src.balance -= amount;
+                    dst.balance += amount;
+                    completed.incrementAndGet();
+                    return true;
+                } finally {
+                    second.lock.unlock();
+                }
+            } finally {
+                first.lock.unlock();
+            }
+        }
+
+        long balance(String id) {
+            Account a = account(id);
+            a.lock.lock();
+            try {
+                return a.balance;
+            } finally {
+                a.lock.unlock();
+            }
+        }
+
+        int completedTransfers() { return completed.get(); }
+    }
+
+    class Solution { }
+  harness: |
+    import java.util.*;
+    import java.util.concurrent.atomic.*;
+    import java.util.function.*;
+
+    public class Main {
+        static void pass(String name) { System.out.println("PASS " + name); }
+        static void fail(String name, String detail) { System.out.println("FAIL " + name + ": " + detail); }
+        static void check(String name, boolean ok, String detail) { if (ok) pass(name); else fail(name, detail); }
+
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { fail(name, "unexpected " + t); }
+        }
+
+        static boolean throwsIAE(Runnable r) {
+            try { r.run(); return false; }
+            catch (IllegalArgumentException e) { return true; }
+            catch (RuntimeException e) { return false; }
+        }
+
+        /** Runs `threads` daemon workers; returns null when all finished in time, else a description. */
+        static String runConcurrently(int threads, IntConsumer work, long timeoutMs) throws InterruptedException {
+            Thread[] ts = new Thread[threads];
+            AtomicReference<Throwable> error = new AtomicReference<>();
+            for (int i = 0; i < threads; i++) {
+                int n = i;
+                ts[i] = Thread.ofPlatform().daemon().start(() -> {
+                    try { work.accept(n); } catch (Throwable t) { error.compareAndSet(null, t); }
+                });
+            }
+            long deadline = System.currentTimeMillis() + timeoutMs;
+            for (Thread t : ts) {
+                long left = deadline - System.currentTimeMillis();
+                if (left > 0) t.join(left);
+                if (t.isAlive()) return "threads still running after " + timeoutMs + " ms (deadlock?)";
+            }
+            return error.get() == null ? null : "worker threw " + error.get();
+        }
+
+        public static void main(String[] args) {
+            test("deposit and balance", () -> {
+                Bank b = new Bank("A", "B");
+                b.deposit("A", 100);
+                check("deposit and balance", b.balance("A") == 100 && b.balance("B") == 0,
+                        "A=" + b.balance("A") + " B=" + b.balance("B"));
+            });
+            test("invalid arguments rejected", () -> {
+                Bank b = new Bank("A", "B");
+                b.deposit("A", 10);
+                boolean ok = throwsIAE(() -> b.deposit("A", 0))
+                        && throwsIAE(() -> b.transfer("A", "B", -5))
+                        && throwsIAE(() -> b.deposit("Z", 1))
+                        && throwsIAE(() -> b.transfer("A", "Z", 1))
+                        && throwsIAE(() -> b.transfer("A", "A", 1));
+                check("invalid arguments rejected", ok && b.balance("A") == 10,
+                        "expected IllegalArgumentException for amount <= 0, unknown id and from == to");
+            });
+            test("transfer moves money", () -> {
+                Bank b = new Bank("A", "B");
+                b.deposit("A", 50);
+                boolean r = b.transfer("A", "B", 30);
+                check("transfer moves money", r && b.balance("A") == 20 && b.balance("B") == 30
+                        && b.completedTransfers() == 1,
+                        "returned " + r + ", A=" + b.balance("A") + " B=" + b.balance("B")
+                        + " completed=" + b.completedTransfers());
+            });
+            test("overdraft refused", () -> {
+                Bank b = new Bank("A", "B");
+                b.deposit("A", 50);
+                boolean r = b.transfer("A", "B", 80);
+                check("overdraft refused", !r && b.balance("A") == 50 && b.balance("B") == 0
+                        && b.completedTransfers() == 0,
+                        "returned " + r + ", A=" + b.balance("A") + " B=" + b.balance("B")
+                        + " completed=" + b.completedTransfers());
+            });
+            test("concurrent deposits", () -> {
+                Bank b = new Bank("A");
+                String problem = runConcurrently(8, n -> { for (int i = 0; i < 5_000; i++) b.deposit("A", 1); }, 2_000);
+                check("concurrent deposits", problem == null && b.balance("A") == 40_000,
+                        problem != null ? problem : "expected 40000, got " + b.balance("A"));
+            });
+            test("opposite transfers do not deadlock", () -> {
+                Bank b = new Bank("A", "B");
+                b.deposit("A", 1_000);
+                b.deposit("B", 1_000);
+                AtomicInteger succeeded = new AtomicInteger();
+                String problem = runConcurrently(2, n -> {
+                    String from = n == 0 ? "A" : "B", to = n == 0 ? "B" : "A";
+                    for (int i = 0; i < 20_000; i++) if (b.transfer(from, to, 1)) succeeded.incrementAndGet();
+                }, 2_000);
+                if (problem != null) { fail("opposite transfers do not deadlock", problem); return; }
+                long total = b.balance("A") + b.balance("B");
+                check("opposite transfers do not deadlock",
+                        total == 2_000 && b.completedTransfers() == succeeded.get(),
+                        "total=" + total + " (expected 2000), completed=" + b.completedTransfers()
+                        + " but " + succeeded.get() + " transfers returned true");
+            });
+            test("ring of transfers keeps totals", () -> {
+                String[] ids = {"A", "B", "C", "D"};
+                Bank b = new Bank(ids);
+                for (String id : ids) b.deposit(id, 10_000);
+                String problem = runConcurrently(4, n -> {
+                    for (int i = 0; i < 5_000; i++) b.transfer(ids[n], ids[(n + 1) % 4], 1);
+                }, 2_000);
+                if (problem != null) { fail("ring of transfers keeps totals", problem); return; }
+                boolean balanced = true;
+                for (String id : ids) balanced &= b.balance(id) == 10_000;
+                check("ring of transfers keeps totals", balanced && b.completedTransfers() == 20_000,
+                        "balances " + b.balance("A") + "/" + b.balance("B") + "/" + b.balance("C") + "/"
+                        + b.balance("D") + ", completed=" + b.completedTransfers() + " (expected 20000)");
+            });
+        }
+    }
+  explanation: |
+    Each account owns a `ReentrantLock` that guards its balance, so deposits to different accounts never wait
+    for each other while deposits to the same account are serialized. A transfer needs **both** accounts'
+    locks; acquiring them in a **global order** (here: by account id) makes a cycle of waiting threads
+    impossible, which is exactly what prevents the A → B / B → A deadlock of the starter. The balance check and
+    both updates happen while holding both locks, so the transfer is all-or-nothing. Every `lock()` is
+    followed by `try { … } finally { unlock(); }`. The counter of completed transfers is updated under locks
+    of *different* account pairs, so it needs its own atomicity — an `AtomicInteger`. The account map is
+    built once and never modified (`Map.copyOf`), and it is assigned to a `final` field, so threads can read
+    it safely without locking.
+  hints:
+    - Give every `Account` its own `final ReentrantLock` (or use the account object as a monitor) and hold it for every read and write of `balance`.
+    - "To avoid deadlock, always lock the two accounts in the same order, e.g. the one whose id is smaller first — regardless of which is `from`."
+    - "`completed++` is not atomic and two transfers between different account pairs do not share a lock — use an `AtomicInteger`."
+  timeLimitMs: 8000

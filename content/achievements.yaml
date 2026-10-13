@@ -1,0 +1,66 @@
+# Achievements. Each id is evaluated by web/src/server/domain/achievements.ts from persisted events only.
+- id: first-lesson
+  title: First Lesson
+  description: Complete a lesson by passing its mastery quiz.
+  icon: book-open-check
+  xp: 50
+- id: first-exercise
+  title: First Coding Challenge
+  description: Pass every test of a coding exercise in the sandbox.
+  icon: terminal
+  xp: 50
+- id: predictor
+  title: Oracle of Output
+  description: Write 25 output predictions in lessons before revealing the answer.
+  icon: eye
+  xp: 40
+- id: streak-7
+  title: Seven-Day Streak
+  description: Study on seven consecutive days (a day counts after 5 answered questions or a completed lesson).
+  icon: flame
+  xp: 100
+- id: no-hint-20
+  title: Clear Mind
+  description: Answer 20 never-seen questions correctly in a row without using a hint.
+  icon: target
+  xp: 120
+- id: review-100
+  title: Long-Term Memory
+  description: Complete 100 spaced-repetition reviews that were due.
+  icon: brain
+  xp: 100
+- id: mistake-recovery-10
+  title: Mistake Recovery
+  description: Resolve 10 mistakes (two correct answers, at least a day apart, after getting them wrong).
+  icon: rotate-ccw
+  xp: 100
+- id: first-boss
+  title: Boss Slayer
+  description: Defeat a domain boss battle.
+  icon: swords
+  xp: 150
+- id: domain-mastery
+  title: Domain Mastery
+  description: Reach "Mastered" on every objective of one exam domain.
+  icon: crown
+  xp: 200
+- id: all-objectives-covered
+  title: All Objectives Covered
+  description: Answer at least three different questions for every official exam objective.
+  icon: map
+  xp: 200
+- id: first-mock
+  title: Exam Simulation
+  description: Complete a full-length timed mock exam.
+  icon: timer
+  xp: 100
+- id: mock-pass
+  title: Above the Line
+  description: Score at or above the official passing mark on a full-length mock exam.
+  icon: badge-check
+  xp: 150
+- id: sustained-ready
+  title: Sustained Exam Readiness
+  description: Reach the "Consistently Exam Ready" readiness level.
+  icon: trophy
+  xp: 500

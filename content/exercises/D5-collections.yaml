@@ -1,0 +1,159 @@
+- id: D5-EX-001
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  title: Word-frequency leaderboard
+  difficulty: intermediate
+  kind: implement
+  prompt: |
+    You are building the "trending words" panel of a support-ticket dashboard. Implement three static methods
+    in `Solution`:
+
+    1. `SortedMap<String, Integer> countWords(List<String> words)` — counts the words **case-insensitively**
+       (keys are lower case) and ignores `null` and blank entries. The returned map is sorted by word.
+       Use `Map.merge` rather than a get-then-put sequence.
+    2. `List<String> top(Map<String, Integer> counts, int n)` — returns at most `n` entries formatted as
+       `"word=count"`, ordered by **count descending**, ties broken by **word ascending**. `n == 0` gives an
+       empty list; `n < 0` throws `IllegalArgumentException`. The input map must not be modified.
+    3. `<K, V extends Comparable<? super V>> Optional<K> keyOfMax(Map<K, V> map)` — a generic method that
+       returns the key with the largest value, `Optional.empty()` for an empty map. On ties, the key that comes
+       **first in the map's iteration order** wins. Keep the signature exactly as given: it must work for value
+       types such as `LocalDate`, which implements `Comparable<ChronoLocalDate>` rather than
+       `Comparable<LocalDate>`.
+  fileName: Solution.java
+  starter: |
+    import java.util.*;
+
+    class Solution {
+        static SortedMap<String, Integer> countWords(List<String> words) {
+            SortedMap<String, Integer> counts = new TreeMap<>();
+            // TODO: count case-insensitively with merge, skipping null and blank words
+            return counts;
+        }
+
+        static List<String> top(Map<String, Integer> counts, int n) {
+            // TODO: count descending, then word ascending; at most n entries formatted "word=count"
+            return new ArrayList<>();
+        }
+
+        static <K, V extends Comparable<? super V>> Optional<K> keyOfMax(Map<K, V> map) {
+            // TODO: largest value; ties -> first key in iteration order; empty map -> Optional.empty()
+            return Optional.empty();
+        }
+    }
+  solution: |
+    import java.util.*;
+
+    class Solution {
+        static SortedMap<String, Integer> countWords(List<String> words) {
+            SortedMap<String, Integer> counts = new TreeMap<>();
+            for (String w : words) {
+                if (w == null || w.isBlank()) continue;
+                counts.merge(w.strip().toLowerCase(), 1, Integer::sum);
+            }
+            return counts;
+        }
+
+        static List<String> top(Map<String, Integer> counts, int n) {
+            if (n < 0) throw new IllegalArgumentException("n must not be negative: " + n);
+            return counts.entrySet().stream()
+                    .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()
+                            .thenComparing(Map.Entry.comparingByKey()))
+                    .limit(n)
+                    .map(e -> e.getKey() + "=" + e.getValue())
+                    .toList();
+        }
+
+        static <K, V extends Comparable<? super V>> Optional<K> keyOfMax(Map<K, V> map) {
+            K bestKey = null;
+            V bestValue = null;
+            boolean found = false;
+            for (Map.Entry<K, V> e : map.entrySet()) {
+                if (!found || e.getValue().compareTo(bestValue) > 0) {   // strictly greater: first one wins ties
+                    bestKey = e.getKey();
+                    bestValue = e.getValue();
+                    found = true;
+                }
+            }
+            return found ? Optional.of(bestKey) : Optional.empty();
+        }
+    }
+  harness: |
+    import java.time.*;
+    import java.util.*;
+
+    public class Main {
+        static void check(String name, boolean ok, Object actual) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + actual);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+
+        public static void main(String[] args) {
+            test("counts case-insensitively", () -> {
+                var c = Solution.countWords(Arrays.asList("Java", "stream", "JAVA", "java", "Stream", "lambda"));
+                check("counts case-insensitively", String.valueOf(c).equals("{java=3, lambda=1, stream=2}"), c);
+            });
+            test("skips null and blank words", () -> {
+                var c = Solution.countWords(Arrays.asList("ok", null, "", "   ", "OK"));
+                check("skips null and blank words", String.valueOf(c).equals("{ok=2}"), c);
+            });
+            test("empty input", () -> {
+                var c = Solution.countWords(List.of());
+                check("empty input", c != null && c.isEmpty(), c);
+            });
+            test("top: count desc, word asc", () -> {
+                Map<String, Integer> counts = Map.of("pear", 2, "apple", 2, "fig", 5, "kiwi", 1);
+                var t = Solution.top(counts, 3);
+                check("top: count desc, word asc", List.of("fig=5", "apple=2", "pear=2").equals(t), t);
+            });
+            test("top: n larger than map / zero", () -> {
+                Map<String, Integer> counts = new HashMap<>(Map.of("b", 1, "a", 1));
+                var all = Solution.top(counts, 10);
+                var none = Solution.top(counts, 0);
+                check("top: n larger than map / zero",
+                        List.of("a=1", "b=1").equals(all) && none.isEmpty() && counts.size() == 2, all + " / " + none);
+            });
+            test("top: negative n rejected", () -> {
+                boolean thrown = false;
+                try { Solution.top(Map.of("a", 1), -1); } catch (IllegalArgumentException e) { thrown = true; }
+                check("top: negative n rejected", thrown, "no IllegalArgumentException");
+            });
+            test("keyOfMax: ties -> first in iteration order", () -> {
+                Map<String, Integer> m = new LinkedHashMap<>();
+                m.put("b", 3); m.put("a", 3); m.put("c", 1);
+                var k = Solution.keyOfMax(m);
+                check("keyOfMax: ties -> first in iteration order", Optional.of("b").equals(k), k);
+            });
+            test("keyOfMax: other value types", () -> {
+                Map<String, String> words = new LinkedHashMap<>();
+                words.put("x", "pear"); words.put("y", "zoo"); words.put("z", "apple");
+                Map<Integer, LocalDate> releases = new LinkedHashMap<>();
+                releases.put(21, LocalDate.of(2023, 9, 19));
+                releases.put(25, LocalDate.of(2025, 9, 16));
+                releases.put(17, LocalDate.of(2021, 9, 14));
+                var k1 = Solution.keyOfMax(words);
+                var k2 = Solution.keyOfMax(releases);
+                check("keyOfMax: other value types", Optional.of("y").equals(k1) && Optional.of(25).equals(k2), k1 + " / " + k2);
+            });
+            test("keyOfMax: empty map", () -> {
+                var k = Solution.keyOfMax(new HashMap<String, Integer>());
+                check("keyOfMax: empty map", k != null && k.isEmpty(), k);
+            });
+        }
+    }
+  explanation: |
+    `merge(word, 1, Integer::sum)` inserts 1 for a new key and adds 1 otherwise — one call instead of a
+    get/put pair — and a `TreeMap` keeps the keys sorted. For the leaderboard the comparator is built so that
+    `reversed()` applies **only** to the count: `comparingByValue().reversed().thenComparing(comparingByKey())`.
+    Writing `comparingByValue().thenComparing(comparingByKey()).reversed()` would reverse the tie-breaker too
+    and put `pear` before `apple`. (`Map.Entry.<String, Integer>comparingByValue()` needs the explicit type
+    witness because `reversed()` is called on it before the target type is known.) `keyOfMax` uses the bound
+    `V extends Comparable<? super V>`: `LocalDate` compares itself as a `ChronoLocalDate`, so the stricter bound
+    `Comparable<V>` would reject it. Replacing the best entry only when the new value is **strictly** greater
+    keeps the first key on ties.
+  hints:
+    - "`counts.merge(key, 1, Integer::sum)` does insert-or-increment in one call; normalise the key with `strip().toLowerCase()`."
+    - "Where you put `.reversed()` matters: reverse the count comparator first, then add `.thenComparing(Map.Entry.comparingByKey())`."
+    - "For `keyOfMax`, loop over `entrySet()` and replace the current best only if `compareTo(...) > 0`."

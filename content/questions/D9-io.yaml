@@ -1,0 +1,1764 @@
+# D9 — Java I/O (D9.1 streams & console, D9.2 serialization, D9.3 NIO.2 Path & Files)
+
+# ───────────────────────── D9.1 · I/O streams & console ─────────────────────────
+
+- id: D9-IO-001
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [inputstream, read-array, end-of-stream]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            byte[] data = { 10, 20, -128, 30, 40 };
+            try (var in = new ByteArrayInputStream(data)) {
+                byte[] buf = new byte[2];
+                int n, total = 0;
+                while ((n = in.read(buf)) != -1) {
+                    total += n;
+                    System.out.print(n + ":" + buf[0] + " ");
+                }
+                System.out.println(total + " " + in.read());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`2:10 2:-128 1:40 5 -1`"
+      correct: true
+      why: "read(byte[]) returns how many bytes it actually stored (2, 2, then 1) and -1 only at the end; buf[0] is a byte, so -128 prints as -128."
+    - key: b
+      text: "`2:10 2:128 1:40 5 -1`"
+      why: "Only the single-byte read() converts a byte to the unsigned range 0–255. Here the value is read from a byte[] element, which is signed."
+    - key: c
+      text: "`2:10 2:-128 2:40 6 -1`"
+      why: "This assumes read(byte[]) always fills the whole buffer. The last call finds only one byte left and returns 1."
+    - key: d
+      text: "`2:10 5 -1`"
+      why: "A byte value of -128 in the data does not end the loop; the loop compares the returned COUNT with -1, not the data."
+  explanation: |
+    `InputStream.read(byte[] b)` reads up to `b.length` bytes, stores them in `b`, and returns the **number of
+    bytes read** — possibly fewer than requested — or `-1` when the stream is exhausted. The loop sees counts
+    2, 2 and 1 (total 5); afterwards `read()` returns `-1`. Values stored in the array keep their signed `byte`
+    type, so `-128` prints as `-128`. Stale data from earlier reads may remain in the buffer beyond `n`, which is
+    why real code only processes `buf[0..n-1]`.
+  rule: "InputStream.read(byte[]) returns the number of bytes read, or -1 at end of stream; read() returns an unsigned byte value 0–255 or -1."
+  misconception: read(byte[]) always fills the whole array, or returns the data rather than a count.
+  hint: What does read(byte[]) return — data or a count?
+  java:
+    expect: { compiles: true, stdout: "2:10 2:-128 1:40 5 -1" }
+
+- id: D9-IO-002
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [try-with-resources, close-order, decorator, filterreader]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    public class Main {
+        static class Named extends FilterReader {
+            final String name;
+            Named(String name, Reader in) { super(in); this.name = name; }
+            @Override public void close() throws IOException {
+                System.out.print(name + " ");
+                super.close();
+            }
+        }
+        public static void main(String[] args) throws IOException {
+            try (var a = new Named("A", new StringReader("x"));
+                 var b = new Named("B", new Named("C", new StringReader("y")))) {
+                System.out.print("body ");
+            } finally {
+                System.out.println("finally");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`body B C A finally`"
+      correct: true
+      why: "Resources close in reverse declaration order (b before a), and closing the wrapper B closes the stream it wraps, C, before the next resource is closed."
+    - key: b
+      text: "`body A B C finally`"
+      why: "This closes in declaration order; try-with-resources always closes the LAST declared resource first."
+    - key: c
+      text: "`body B A finally`"
+      why: "C is not a declared resource, but FilterReader.close() closes the wrapped reader, so C's close() runs too."
+    - key: d
+      text: "`body C B A finally`"
+      why: "The outer wrapper's close() is called first; it prints B and only then delegates to the inner reader C."
+    - key: e
+      text: "`B C A body finally`"
+      why: "Resources are closed after the try block's body completes, not before it."
+  explanation: |
+    try-with-resources closes resources in the **reverse order of declaration**: first `b`, then `a`, and all
+    of them before the `finally` block runs. Closing a decorator closes the stream it wraps:
+    `FilterReader.close()` calls `in.close()`, so closing `B` prints `B ` and then triggers `C`'s `close()`.
+    That is why it is enough to close the outermost wrapper of a chain.
+  rule: "Resources are closed in reverse declaration order before catch/finally; a filter stream's close() closes its underlying stream."
+  misconception: Only the declared variables are closed, or they are closed in declaration order.
+  hint: Which resource was declared last, and what does B wrap?
+  java:
+    expect: { compiles: true, stdout: "body B C A finally" }
+
+- id: D9-IO-003
+  objective: D9.1
+  lesson: io-streams
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 90
+  tags: [hierarchy, printwriter, printstream, bridge]
+  prompt: Which of the following statements about `java.io` are true? Choose three.
+  options:
+    - key: a
+      text: The `print`/`println` methods of `PrintWriter` never throw `IOException`; failures are reported by `checkError()`.
+      correct: true
+      why: Both PrintWriter and PrintStream swallow IOExceptions in their print methods and set an internal error flag instead.
+    - key: b
+      text: "`System.out` is a `PrintWriter`."
+      why: System.out and System.err are PrintStream objects — byte streams that can also print text.
+    - key: c
+      text: "`InputStreamReader` decodes bytes from an `InputStream` into characters using a charset."
+      correct: true
+      why: InputStreamReader is the bridge from the byte family to the character family.
+    - key: d
+      text: "`Reader` and `Writer` are interfaces implemented by the concrete character streams."
+      why: InputStream, OutputStream, Reader and Writer are all abstract classes, not interfaces.
+    - key: e
+      text: "`PrintWriter` has a constructor that accepts an `OutputStream`."
+      correct: true
+      why: PrintWriter(OutputStream) exists and wraps the byte stream with an encoder internally — the one Writer decorator that accepts both families.
+    - key: f
+      text: "`BufferedReader` has a constructor that accepts an `InputStream`."
+      why: BufferedReader only wraps a Reader; you need new BufferedReader(new InputStreamReader(in)).
+  explanation: |
+    The four roots of `java.io` — `InputStream`, `OutputStream`, `Reader`, `Writer` — are abstract classes.
+    Decorators take a stream of their own family, with two bridges (`InputStreamReader`,
+    `OutputStreamWriter`) and `PrintWriter`, which accepts a `Writer` or an `OutputStream`. `System.out` is a
+    `PrintStream`. Neither `PrintStream` nor `PrintWriter` throws `IOException` from its printing methods.
+  rule: "Byte streams: InputStream/OutputStream; character streams: Reader/Writer (all abstract classes). PrintStream/PrintWriter report errors via checkError()."
+  misconception: Any stream can wrap any other stream, and System.out is a PrintWriter.
+
+- id: D9-IO-004
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [fileoutputstream, append, truncate, write-int]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            File f = Files.createTempDirectory("w").resolve("data.bin").toFile();
+            try (var out = new FileOutputStream(f)) { out.write(65); out.write(322); }
+            System.out.print(Files.readString(f.toPath()) + " ");
+            try (var out = new FileOutputStream(f, true)) { out.write('C'); }
+            System.out.print(Files.readString(f.toPath()) + " ");
+            try (var out = new FileOutputStream(f)) {
+                System.out.print(f.length() + " ");
+            }
+            System.out.println(f.length());
+        }
+    }
+  options:
+    - key: a
+      text: "`AB ABC 0 0`"
+      correct: true
+      why: "write(322) keeps only the low 8 bits (322 - 256 = 66 = 'B'); the append flag keeps AB; opening without append truncates the file immediately, before anything is written."
+    - key: b
+      text: "`AB ABC 3 0`"
+      why: Truncation does not wait for the first write or for close() — the file is emptied when the FileOutputStream is opened.
+    - key: c
+      text: "`AB ABC 3 3`"
+      why: This assumes opening a FileOutputStream without writing leaves the file untouched; without the append flag the existing content is discarded at construction.
+    - key: d
+      text: "`AB C 0 0`"
+      why: "new FileOutputStream(f, true) appends — 'C' is added after the existing AB."
+    - key: e
+      text: An `IllegalArgumentException` is thrown because 322 does not fit in a byte
+      why: OutputStream.write(int) silently ignores the 24 high-order bits; it never validates the range.
+  explanation: |
+    `FileOutputStream(File)` creates the file or **truncates** an existing one as soon as it is constructed;
+    `FileOutputStream(File, true)` opens it in append mode. `OutputStream.write(int b)` writes only the
+    low-order 8 bits, so `322` (`0x142`) becomes `0x42` = `'B'`. The third stream truncates the file to 0
+    bytes on opening, even though nothing is written.
+  rule: "FileOutputStream/FileWriter truncate an existing file when opened unless append is true; write(int) writes the low-order 8 bits."
+  misconception: A file is only overwritten when you actually write to it.
+  hint: When exactly does truncation happen?
+  java:
+    expect: { compiles: true, stdout: "AB ABC 0 0" }
+
+- id: D9-IO-005
+  objective: D9.1
+  lesson: io-streams
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [decorator, wrapping, compile, bridge]
+  prompt: |
+    Assume `import java.io.*;` and `import java.nio.charset.*;`, and that each statement appears in a method
+    declared `throws IOException`. Which statements compile? Choose three.
+  options:
+    - key: a
+      text: "`Reader r = new BufferedReader(new FileReader(\"in.txt\"));`"
+      correct: true
+      why: FileReader is a Reader, so BufferedReader can wrap it, and a BufferedReader is a Reader.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static void test() throws IOException { Reader r = new BufferedReader(new FileReader("in.txt")); }
+              public static void main(String[] args) { System.out.println("ok"); }
+          }
+        expect: { compiles: true, stdout: "ok" }
+    - key: b
+      text: "`Reader r = new BufferedReader(new FileInputStream(\"in.txt\"));`"
+      why: BufferedReader only accepts a Reader; a FileInputStream is a byte stream and needs an InputStreamReader in between.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static void test() throws IOException { Reader r = new BufferedReader(new FileInputStream("in.txt")); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "FileInputStream cannot be converted to java.io.Reader" }
+    - key: c
+      text: "`Writer w = new PrintWriter(new FileOutputStream(\"out.txt\"));`"
+      correct: true
+      why: PrintWriter has a constructor taking an OutputStream, and PrintWriter is a Writer.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static void test() throws IOException { Writer w = new PrintWriter(new FileOutputStream("out.txt")); }
+              public static void main(String[] args) { System.out.println("ok"); }
+          }
+        expect: { compiles: true, stdout: "ok" }
+    - key: d
+      text: "`var w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(\"o.txt\"), StandardCharsets.UTF_8));`"
+      correct: true
+      why: OutputStreamWriter bridges the byte stream to a Writer, which BufferedWriter can wrap.
+      java:
+        source: |
+          import java.io.*;
+          import java.nio.charset.*;
+          public class Main {
+              static void test() throws IOException {
+                  var w = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("o.txt"), StandardCharsets.UTF_8));
+              }
+              public static void main(String[] args) { System.out.println("ok"); }
+          }
+        expect: { compiles: true, stdout: "ok" }
+    - key: e
+      text: "`var out = new ObjectOutputStream(new FileWriter(\"o.bin\"));`"
+      why: ObjectOutputStream writes bytes and only wraps an OutputStream; FileWriter is a character stream.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static void test() throws IOException { var out = new ObjectOutputStream(new FileWriter("o.bin")); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "FileWriter cannot be converted to java.io.OutputStream" }
+    - key: f
+      text: "`InputStream in = new BufferedInputStream(new InputStreamReader(System.in));`"
+      why: InputStreamReader is a Reader; BufferedInputStream needs an InputStream. System.in itself could be wrapped directly.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static void test() throws IOException { InputStream in = new BufferedInputStream(new InputStreamReader(System.in)); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "InputStreamReader cannot be converted to java.io.InputStream" }
+  explanation: |
+    Decorator constructors are typed: `BufferedReader`/`BufferedWriter` wrap a `Reader`/`Writer`,
+    `BufferedInputStream`/`ObjectOutputStream` wrap an `InputStream`/`OutputStream`. Crossing from bytes to
+    characters needs `InputStreamReader` or `OutputStreamWriter`. `PrintWriter` is the exception that accepts
+    both a `Writer` and an `OutputStream`. Mismatches are compile-time errors, not runtime errors.
+  rule: "A Reader/Writer decorator takes a Reader/Writer; a byte-stream decorator takes an InputStream/OutputStream; bridges: InputStreamReader, OutputStreamWriter (and PrintWriter(OutputStream))."
+  misconception: Streams of any family can be chained in any order.
+  hint: Check the family (bytes or characters) of each constructor argument.
+
+- id: D9-IO-006
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [console, null-check, system-console]
+  prompt: |
+    The program is started with `java Main < answers.txt > out.txt` — standard input and output are
+    redirected, so the JVM is not attached to an interactive terminal. What is the result?
+  code: |
+    import java.io.Console;
+
+    public class Main {
+        public static void main(String[] args) {
+            Console console = System.console();
+            System.out.println("start");
+            String name = console.readLine("Name: ");
+            System.out.println("Hello " + name);
+        }
+    }
+  options:
+    - key: a
+      text: "`start` is printed, then a `NullPointerException` is thrown"
+      correct: true
+      why: Without an interactive console System.console() returns null, so calling readLine on it throws a NullPointerException.
+    - key: b
+      text: "`start` and `Hello` followed by the first line of answers.txt are printed"
+      why: Console does not fall back to redirected standard input; with no terminal there is no Console object at all.
+    - key: c
+      text: Compilation fails because `readLine` throws a checked `IOException` that is not handled
+      why: Console.readLine declares no checked exception; I/O failures are reported as the unchecked IOError.
+    - key: d
+      text: The program blocks, waiting for keyboard input
+      why: There is no terminal to read from; the program fails as soon as it dereferences the null Console.
+  explanation: |
+    `System.console()` returns the unique `Console` of the JVM, or **`null`** if there is none — typically
+    when input or output is redirected, inside many IDE run configurations, in CI jobs, and in this course's
+    runner. Always null-check it (or fall back to `BufferedReader`/`Scanner` on `System.in`). The exact
+    conditions under which a console is available have varied between JDK versions and console providers,
+    which is one more reason never to assume it exists.
+  rule: "System.console() returns null when no console device is available; Console.readLine/readPassword throw no checked exceptions."
+  misconception: System.console() always returns an object that reads from standard input.
+  java:
+    stdin: "Ana\n"
+    expect: { compiles: true, stdout: "start", exception: java.lang.NullPointerException }
+
+- id: D9-IO-007
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [mark, reset, skip, readline, bufferedreader]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            try (var r = new BufferedReader(new StringReader("red\ngreen\nblue\n"))) {
+                r.mark(100);
+                String first = r.readLine();
+                r.skip(2);
+                String second = r.readLine();
+                r.reset();
+                System.out.println(first + "|" + second + "|" + r.readLine() + "|" + (char) r.read());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`red|een|red|g`"
+      correct: true
+      why: "skip(2) skips two CHARACTERS (g, r), so the next line is \"een\"; reset() returns to the mark at the very beginning, so readLine() gives red again and read() the g."
+    - key: b
+      text: "`red|green|red|g`"
+      why: skip(n) skips characters, not whitespace or line terminators only — the first two characters of green are discarded.
+    - key: c
+      text: "`red|blue|red|g`"
+      why: This treats skip(2) as skipping lines; Reader.skip counts characters.
+    - key: d
+      text: "`red|een|blue|`"
+      why: reset() does not continue from the current position; it rewinds to the position saved by mark(), here the start of the stream.
+    - key: e
+      text: An `IOException` is thrown by `reset()` because more than one line was read since `mark`
+      why: The read-ahead limit is 100 characters, and only 9 have been read since mark(), so the mark is still valid.
+  explanation: |
+    `mark(100)` remembers the current position (the start) and keeps it valid for up to 100 characters.
+    `readLine()` consumes `red\n`; `skip(2)` discards `g` and `r`; `readLine()` returns `een`. `reset()`
+    rewinds to the mark, so reading starts again at `red`. `BufferedReader` supports mark/reset; a plain
+    `FileReader` would throw `IOException: mark/reset not supported`.
+  rule: "Reader.skip(n) skips characters; mark(limit) saves the position and reset() returns to it if no more than limit characters were read since."
+  misconception: skip works in lines, or reset steps back only one read.
+  hint: Count characters, not lines.
+  java:
+    expect: { compiles: true, stdout: "red|een|red|g" }
+
+- id: D9-IO-008
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [charset, utf-8, outputstreamwriter, inputstreamreader]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+    import java.nio.charset.StandardCharsets;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            var bytes = new ByteArrayOutputStream();
+            try (var w = new OutputStreamWriter(bytes, StandardCharsets.UTF_8)) {
+                w.write("Größe");
+            }
+            var raw = new ByteArrayInputStream(bytes.toByteArray());
+            int byteCount = 0;
+            while (raw.read() != -1) byteCount++;
+            var reader = new InputStreamReader(new ByteArrayInputStream(bytes.toByteArray()), StandardCharsets.UTF_8);
+            int charCount = 0;
+            while (reader.read() != -1) charCount++;
+            System.out.println(bytes.size() + " " + byteCount + " " + charCount);
+        }
+    }
+  options:
+    - key: a
+      text: "`7 7 5`"
+      correct: true
+      why: ö and ß each take two bytes in UTF-8 (5 characters → 7 bytes); the byte stream sees 7 bytes and the UTF-8 reader decodes them back into 5 characters.
+    - key: b
+      text: "`5 5 5`"
+      why: Only ASCII characters are one byte in UTF-8; ö and ß need two bytes each.
+    - key: c
+      text: "`10 10 5`"
+      why: This assumes two bytes per character (as in UTF-16); UTF-8 is variable-length.
+    - key: d
+      text: "`7 7 7`"
+      why: The InputStreamReader decodes with the same charset, so multi-byte sequences become single characters again.
+  explanation: |
+    A `Writer` produces characters and `OutputStreamWriter` encodes them into bytes with the given charset.
+    In UTF-8, ASCII characters take one byte and characters such as `ö` and `ß` take two, so `"Größe"`
+    becomes 7 bytes. Reading the raw bytes counts 7; an `InputStreamReader` with the same charset decodes them
+    back into 5 `char`s.
+  rule: "OutputStreamWriter/InputStreamReader convert between chars and bytes with a Charset; UTF-8 uses 1–4 bytes per character."
+  misconception: One character is always one byte.
+  java:
+    expect: { compiles: true, stdout: "7 7 5" }
+
+- id: D9-IO-009
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [printwriter, autoflush, flush, buffering]
+  prompt: What is the output of the following program on a system whose line separator is `\n`?
+  code: |
+    import java.io.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            var sink = new ByteArrayOutputStream();
+            var pw = new PrintWriter(sink, true);
+            pw.print("a");
+            System.out.print(sink.size());
+            pw.println("b");
+            System.out.print(sink.size());
+            pw.printf("%s", "c");
+            System.out.print(sink.size());
+            pw.write("d");
+            System.out.print(sink.size());
+            pw.close();
+            System.out.println(sink.size());
+        }
+    }
+  options:
+    - key: a
+      text: "`03445`"
+      correct: true
+      why: "Autoflush happens only on println, printf and format: print leaves a buffered, println pushes ab plus newline (3), printf pushes c (4), write keeps d buffered (still 4), close flushes it (5)."
+    - key: b
+      text: "`13445`"
+      why: Autoflush does not apply to print(); the a stays in the internal buffer until the println.
+    - key: c
+      text: "`03345`"
+      why: printf (and format) DO trigger autoflush in a PrintWriter created with autoFlush = true.
+    - key: d
+      text: "`03455`"
+      why: write() is not one of the autoflushing methods, so d stays buffered until close().
+    - key: e
+      text: "`12345`"
+      why: This treats autoflush as "flush after every call", which is not how PrintWriter defines it.
+  explanation: |
+    `new PrintWriter(OutputStream, true)` wraps the stream in a buffered encoder and enables automatic
+    flushing — but, per the `PrintWriter` API, only for `println`, `printf` and `format`. `print` and
+    `write` stay in the buffer until the next autoflushing call, an explicit `flush()`, or `close()`.
+    (`PrintStream`'s autoflush is broader: it also flushes when a newline is written or a byte array is written.)
+  rule: "PrintWriter autoflush flushes only on println, printf and format; close() always flushes."
+  misconception: Autoflush means every write is sent immediately.
+  hint: Which three methods trigger PrintWriter's automatic flushing?
+  java:
+    expect: { compiles: true, stdout: "03445" }
+
+- id: D9-IO-010
+  objective: D9.1
+  lesson: io-streams
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [scanner, system-in, nextint, nextline]
+  prompt: |
+    The program below is run with this text on standard input (each line ends with a newline):
+
+    ```
+    3
+    hello world
+    ```
+
+    What does it print?
+  code: |
+    import java.util.Scanner;
+
+    public class Main {
+        public static void main(String[] args) {
+            Scanner sc = new Scanner(System.in);
+            int n = sc.nextInt();
+            String rest = sc.nextLine();
+            String line = sc.nextLine();
+            System.out.println(n + "[" + rest + "][" + line + "]");
+        }
+    }
+  options:
+    - key: a
+      text: "`3[][hello world]`"
+      correct: true
+      why: nextInt() consumes only the token 3; the first nextLine() returns the empty remainder of that line, the second returns the next line.
+    - key: b
+      text: "`3[hello world][]`"
+      why: The line terminator after 3 is still unread, so the first nextLine() returns "" — not the following line.
+    - key: c
+      text: "`3[hello][world]`"
+      why: nextLine() returns the whole remaining line, spaces included; it does not tokenize.
+    - key: d
+      text: A `java.util.InputMismatchException` is thrown by `nextLine()`
+      why: nextLine() never parses; it returns whatever characters remain up to the line terminator, even none.
+  explanation: |
+    `Scanner.nextInt()` reads the next token and leaves the delimiter (here the newline) in the input.
+    `nextLine()` then returns everything up to the next line terminator — an empty string — and consumes
+    the terminator. Only the second `nextLine()` returns `hello world`. The usual fix is an extra
+    `nextLine()` after `nextInt()`, or reading every line and parsing it with `Integer.parseInt`.
+  rule: "Scanner.nextInt()/next() do not consume the rest of the line; nextLine() returns the remainder of the current line (possibly empty)."
+  misconception: nextLine() after nextInt() returns the next line of input.
+  java:
+    stdin: "3\nhello world\n"
+    expect: { compiles: true, stdout: "3[][hello world]" }
+
+# ───────────────────────── D9.2 · serialization ─────────────────────────
+
+- id: D9-SER-001
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 120
+  tags: [serialization, transient, static]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    class Config implements Serializable {
+        int retries = 3;
+        transient int timeout = 30;
+        static String env = "dev";
+        transient Integer cacheSize = 64;
+    }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            Config c = new Config();
+            c.retries = 5;
+            c.timeout = 60;
+            Config.env = "test";
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(c); }
+            Config.env = "prod";
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                Config copy = (Config) in.readObject();
+                System.out.println(copy.retries + " " + copy.timeout + " " + Config.env + " " + copy.cacheSize);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`5 0 prod null`"
+      correct: true
+      why: retries is written; the transient fields come back with default values (0 and null); the static field is not part of the object and shows its current value.
+    - key: b
+      text: "`5 30 prod 64`"
+      why: Field initializers of a Serializable class do not run during deserialization, so transient fields are not reset to 30 and 64.
+    - key: c
+      text: "`5 60 test 64`"
+      why: transient fields and static fields are never written to the stream.
+    - key: d
+      text: "`3 0 prod null`"
+      why: The non-transient field retries is serialized with its current value 5, and its initializer is not re-run.
+  explanation: |
+    Serialization writes the non-`static`, non-`transient` fields of each serializable class. After
+    deserialization, `transient` fields hold their type's **default value** — field initializers and
+    constructors of serializable classes do not run — and a `static` field simply holds whatever the class
+    currently stores.
+  rule: "transient and static fields are not serialized; after deserialization transient fields have default values."
+  misconception: transient fields are re-initialized with their declared initializer when the object is read.
+  java:
+    expect: { compiles: true, stdout: "5 0 prod null" }
+
+- id: D9-SER-002
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [serialization, constructor, inheritance, non-serializable-superclass]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    class A { int a = 1; A() { System.out.print("A "); } }
+    class B extends A implements Serializable { int b = 2; B() { System.out.print("B "); } }
+    class C extends B { int c = 3; C() { System.out.print("C "); } }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            C obj = new C();
+            obj.a = 10; obj.b = 20; obj.c = 30;
+            System.out.println();
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(obj); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                C copy = (C) in.readObject();
+                System.out.println("| " + copy.a + " " + copy.b + " " + copy.c);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        A B C
+        A | 1 20 30
+      correct: true
+      why: "On reading, only the no-arg constructor of the first NON-serializable superclass (A) runs, so a is re-initialized to 1; b and c are restored from the stream."
+    - key: b
+      text: |
+        A B C
+        | 10 20 30
+      why: A is not serializable, so its field a is never written, and its no-arg constructor does run during deserialization.
+    - key: c
+      text: |
+        A B C
+        A B C | 1 2 3
+      why: Constructors and initializers of serializable classes (B and C) are skipped during deserialization.
+    - key: d
+      text: |
+        A B C
+        A B | 1 20 30
+      why: B is serializable (it implements Serializable), so its constructor does not run; only A, the first non-serializable superclass, is constructed normally.
+    - key: e
+      text: |
+        A B C
+        A | 0 20 30
+      why: Running A() includes running A's field initializers, so a is 1, not its default 0.
+  explanation: |
+    Deserialization creates the object by running the no-arg constructor of the **first non-serializable
+    superclass** — here `A` — together with its field initializers. For the serializable classes `B` and `C`,
+    no constructor, field initializer or instance initializer runs; their fields are read from the stream.
+    Fields declared in `A` were never written, so `a` gets the value assigned by `A()`'s initialization: 1.
+  rule: "On deserialization, the first non-serializable superclass's no-arg constructor runs; serializable classes' constructors and initializers do not, and their fields come from the stream."
+  misconception: No constructor runs at all during deserialization, or all constructors run again.
+  hint: Which is the first class up the hierarchy that is NOT Serializable?
+  java:
+    expect: { compiles: true, stdout: "A B C\nA | 1 20 30" }
+
+- id: D9-SER-003
+  objective: D9.2
+  lesson: io-serialization
+  type: multi
+  format: repair
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [serialization, notserializableexception, transient, static]
+  prompt: |
+    The program below prints `writing` and then throws `java.io.NotSerializableException: Engine`. Which
+    changes, each applied **on its own**, make it print `writing` and `done`? Choose three.
+  code: |
+    import java.io.*;
+
+    class Engine { int hp = 300; }
+    class Car implements Serializable {
+        String model = "GT";
+        Engine engine = new Engine();
+    }
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                System.out.println("writing");
+                out.writeObject(new Car());
+                System.out.println("done");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "Declare `class Engine implements Serializable`"
+      correct: true
+      why: Then every object reachable from Car is serializable and writeObject succeeds.
+      java:
+        source: |
+          import java.io.*;
+          class Engine implements Serializable { int hp = 300; }
+          class Car implements Serializable { String model = "GT"; Engine engine = new Engine(); }
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                      System.out.println("writing"); out.writeObject(new Car()); System.out.println("done");
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "writing\ndone" }
+    - key: b
+      text: "Declare the field as `transient Engine engine = new Engine();`"
+      correct: true
+      why: Transient fields are skipped by serialization, so the non-serializable Engine is never written.
+      java:
+        source: |
+          import java.io.*;
+          class Engine { int hp = 300; }
+          class Car implements Serializable { String model = "GT"; transient Engine engine = new Engine(); }
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                      System.out.println("writing"); out.writeObject(new Car()); System.out.println("done");
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "writing\ndone" }
+    - key: c
+      text: "Add `private static final long serialVersionUID = 1L;` to `Car`"
+      why: A version number does not change which fields are written; Engine is still not serializable.
+      java:
+        source: |
+          import java.io.*;
+          class Engine { int hp = 300; }
+          class Car implements Serializable { private static final long serialVersionUID = 1L; String model = "GT"; Engine engine = new Engine(); }
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                      System.out.println("writing"); out.writeObject(new Car()); System.out.println("done");
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "writing", exception: java.io.NotSerializableException }
+    - key: d
+      text: "Declare the field as `static Engine engine = new Engine();`"
+      correct: true
+      why: Static fields belong to the class and are never serialized, so the Engine is not written (although this changes the design — all cars would share one engine).
+      java:
+        source: |
+          import java.io.*;
+          class Engine { int hp = 300; }
+          class Car implements Serializable { String model = "GT"; static Engine engine = new Engine(); }
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                      System.out.println("writing"); out.writeObject(new Car()); System.out.println("done");
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "writing\ndone" }
+    - key: e
+      text: "Declare the field as `final Engine engine = new Engine();`"
+      why: final does not exclude a field from serialization; the Engine instance is still written and still not serializable.
+      java:
+        source: |
+          import java.io.*;
+          class Engine { int hp = 300; }
+          class Car implements Serializable { String model = "GT"; final Engine engine = new Engine(); }
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  try (var out = new ObjectOutputStream(new ByteArrayOutputStream())) {
+                      System.out.println("writing"); out.writeObject(new Car()); System.out.println("done");
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "writing", exception: java.io.NotSerializableException }
+  explanation: |
+    `writeObject` walks the object graph and throws `NotSerializableException` (message: the class name) at
+    **runtime** when it reaches an object whose class does not implement `Serializable`. The compiler cannot
+    check this. Fixes: make the class serializable, or exclude the field from serialization with `transient`
+    (or, changing the design, `static`). `serialVersionUID` and `final` have no effect on which fields are
+    written.
+  rule: "Every non-transient, non-static field reachable from a serialized object must refer to a serializable object or null, otherwise NotSerializableException is thrown at write time."
+  misconception: Implementing Serializable on the outer class is enough, or the compiler checks serializability.
+  hint: Which modifiers exclude a field from the serialized form?
+
+- id: D9-SER-004
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 150
+  tags: [serialization, invalidclassexception, no-arg-constructor]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.io.*;
+
+    class Base {
+        String id;
+        Base(String id) { this.id = id; }
+    }
+    class Item extends Base implements Serializable {
+        int qty;
+        Item(String id, int qty) { super(id); this.qty = qty; }
+    }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(new Item("x", 2)); }
+            System.out.println("written");
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                Item copy = (Item) in.readObject();
+                System.out.println(copy.id + " " + copy.qty);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`written` is printed, then `java.io.InvalidClassException` (no valid constructor) is thrown"
+      correct: true
+      why: Writing does not need a constructor, but reading must run Base's no-arg constructor — and Base has none.
+    - key: b
+      text: Compilation fails because `Item` must declare a no-arg constructor
+      why: The compiler does not enforce any serialization rule; the problem is only detected at runtime.
+    - key: c
+      text: A `java.io.NotSerializableException` is thrown by `writeObject`
+      why: Item is serializable; a non-serializable SUPERCLASS is allowed — its fields are simply not written.
+    - key: d
+      text: "`written` and `null 2` are printed"
+      why: This would be true only if Base had an accessible no-arg constructor; deserialization cannot skip constructing the non-serializable part of the object.
+  explanation: |
+    During deserialization the JVM must construct the non-serializable part of the object by calling the
+    **no-arg constructor of the first non-serializable superclass** (`Base`). `Base` declares only
+    `Base(String)`, so `readObject` throws `InvalidClassException: Item; no valid constructor`.
+    Serialization itself succeeded — `written` was printed — because writing never invokes constructors.
+  rule: "The first non-serializable superclass of a serializable class must have an accessible no-arg constructor; otherwise deserialization throws InvalidClassException."
+  misconception: A missing no-arg constructor makes serialization fail when writing, or is a compile error.
+  hint: Which step needs to call a constructor — writing or reading?
+  java:
+    expect: { compiles: true, stdout: "written", exception: java.io.InvalidClassException }
+
+- id: D9-SER-005
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [serialization, record, canonical-constructor]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    record Point(int x, int y) implements Serializable {
+        Point { System.out.print("P(" + x + "," + y + ") "); }
+    }
+    class Box implements Serializable {
+        Point p;
+        Box(Point p) { System.out.print("Box "); this.p = p; }
+    }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            Box box = new Box(new Point(1, 2));
+            System.out.println();
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(box); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                Box copy = (Box) in.readObject();
+                System.out.println();
+                System.out.println(copy.p.equals(box.p) + " " + (copy.p == box.p));
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        P(1,2) Box
+        P(1,2)
+        true false
+      correct: true
+      why: Deserializing a record calls its canonical constructor with the stream values; the ordinary class Box is restored without running its constructor. The copy is a new, equal record.
+    - key: b
+      text: |
+        P(1,2) Box
+        P(1,2) Box
+        true false
+      why: Box is an ordinary Serializable class (its superclass Object is the first non-serializable one), so Box's constructor does not run on deserialization.
+    - key: c
+      text: |
+        P(1,2) Box
+
+        true false
+      why: Records are the exception to the "no constructor runs" rule — they are always rebuilt through their canonical constructor.
+    - key: d
+      text: |
+        P(1,2) Box
+        P(1,2)
+        true true
+      why: Deserialization always creates new objects; record equality is value-based, but the references differ.
+  explanation: |
+    Records are serialized as their component values and deserialized by invoking the **canonical
+    constructor** (so a compact constructor's validation or normalization always applies). Ordinary
+    serializable classes such as `Box` are rebuilt without running their constructors. Deserialization
+    produces new objects: `equals` is `true` (records compare components), `==` is `false`.
+  rule: "Records are deserialized through their canonical constructor; ordinary serializable classes skip their own constructors."
+  misconception: Records are deserialized like any other class, without running a constructor.
+  java:
+    expect: { compiles: true, stdout: "P(1,2) Box\nP(1,2)\ntrue false" }
+
+- id: D9-SER-006
+  objective: D9.2
+  lesson: io-serialization
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [serialization, serialversionuid, externalizable, serializable]
+  prompt: Which of the following statements are true? Choose three.
+  options:
+    - key: a
+      text: "`java.io.Serializable` declares no methods."
+      correct: true
+      why: Serializable is a marker interface; the serialization machinery checks for it with instanceof-style tests.
+    - key: b
+      text: A class that does not declare `serialVersionUID` cannot be serialized.
+      why: If it is missing, the runtime computes a default UID from the class structure; declaring it is recommended, not required.
+    - key: c
+      text: If the `serialVersionUID` in the stream differs from that of the local class, deserialization throws `InvalidClassException`.
+      correct: true
+      why: A UID mismatch means "local class incompatible", reported as InvalidClassException by readObject.
+    - key: d
+      text: A class implementing `Externalizable` must have a public no-arg constructor.
+      correct: true
+      why: Deserialization of an Externalizable object calls its public no-arg constructor and then readExternal.
+    - key: e
+      text: "`static` fields are serialized when the class declares a `serialVersionUID`."
+      why: Static fields belong to the class, never to the serialized instance — regardless of serialVersionUID.
+    - key: f
+      text: "`serialVersionUID` must be declared `public static final long`."
+      why: It must be static, final and of type long, but any access modifier works; private is recommended.
+  explanation: |
+    `Serializable` is a marker interface. Each serializable class has a version number — declared as a
+    `static final long serialVersionUID` with any access modifier, or computed from the class structure if
+    absent — and a mismatch during reading raises `InvalidClassException`. `Externalizable` extends
+    `Serializable`, requires `writeExternal`/`readExternal`, and needs a public no-arg constructor.
+  rule: "serialVersionUID: static final long (any access); mismatch ⇒ InvalidClassException. Externalizable requires a public no-arg constructor."
+  misconception: serialVersionUID is mandatory and must be public.
+
+- id: D9-SER-007
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [serialization, back-reference, identity, objectoutputstream]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+    import java.util.*;
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            List<String> tags = new ArrayList<>(List.of("a"));
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) {
+                out.writeObject(tags);
+                tags.add("b");
+                out.writeObject(tags);
+            }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                List<?> first = (List<?>) in.readObject();
+                List<?> second = (List<?>) in.readObject();
+                System.out.println(first + " " + second + " " + (first == second));
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`[a] [a] true`"
+      correct: true
+      why: The second writeObject of the same object on the same stream only writes a back-reference to the first snapshot, so both reads return the same list containing only a.
+    - key: b
+      text: "`[a] [a, b] false`"
+      why: An ObjectOutputStream writes each object once; it does not detect that the object changed after it was first written.
+    - key: c
+      text: "`[a, b] [a, b] true`"
+      why: The first writeObject copied the state into the stream at that moment, when the list held only a.
+    - key: d
+      text: "`[a] [a, b] true`"
+      why: Two reads returning the same reference cannot show two different contents.
+  explanation: |
+    Within one `ObjectOutputStream`, every object is assigned a handle the first time it is written; writing
+    the same object again only writes that handle. When reading, the handle resolves to the object already
+    read, so identity is preserved (`first == second`) and the later change (`"b"`) is lost. Call
+    `out.reset()` between the writes, or use `writeUnshared`, to write a fresh copy.
+  rule: "ObjectOutputStream writes an object once per stream and uses back-references for repeated writes; reading preserves identity within the stream."
+  misconception: Every call to writeObject writes the object's current state.
+  hint: What does the stream do the second time it sees the same object?
+  java:
+    expect: { compiles: true, stdout: "[a] [a] true" }
+
+- id: D9-SER-008
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [serialization, writeobject, readobject, hooks, transient]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.*;
+
+    class Counter implements Serializable {
+        int value = 1;
+        transient int cache = 99;
+
+        private void writeObject(ObjectOutputStream out) throws IOException {
+            System.out.print("W ");
+            value++;
+            out.defaultWriteObject();
+            out.writeInt(cache);
+        }
+        private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+            System.out.print("R ");
+            in.defaultReadObject();
+            cache = in.readInt() + 1;
+        }
+    }
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            Counter c = new Counter();
+            var bytes = new ByteArrayOutputStream();
+            try (var out = new ObjectOutputStream(bytes)) { out.writeObject(c); }
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(bytes.toByteArray()))) {
+                Counter copy = (Counter) in.readObject();
+                System.out.println(c.value + " " + copy.value + " " + copy.cache);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`W R 2 2 100`"
+      correct: true
+      why: The private hooks are called by the streams; value is incremented on the original before defaultWriteObject writes it, and the transient cache is written and read manually (99 + 1).
+    - key: b
+      text: "`W R 1 2 100`"
+      why: writeObject runs on the ORIGINAL object, so value++ changes c.value too.
+    - key: c
+      text: "`W R 2 2 0`"
+      why: transient only excludes a field from defaultWriteObject; the hook writes cache explicitly and readObject restores it.
+    - key: d
+      text: "`2 2 100`"
+      why: The hooks must be private with these exact signatures — which they are — so the streams do invoke them and W and R are printed.
+    - key: e
+      text: "`W R 1 1 99`"
+      why: Neither the increment nor the explicit read-and-add is skipped; hooks run in addition to the default mechanism.
+  explanation: |
+    A serializable class can declare `private void writeObject(ObjectOutputStream)` and
+    `private void readObject(ObjectInputStream)`; the serialization machinery invokes them reflectively
+    instead of the default field handling. `defaultWriteObject()`/`defaultReadObject()` process the normal
+    (non-transient, non-static) fields; anything extra must be written and read in the same order. Here
+    `value` is incremented on the original object before it is written, and the transient `cache` travels
+    through the explicit `writeInt`/`readInt`.
+  rule: "Custom serialization hooks: private void writeObject(ObjectOutputStream) throws IOException; private void readObject(ObjectInputStream) throws IOException, ClassNotFoundException."
+  misconception: transient fields can never be restored, or private hook methods cannot be called by the streams.
+  java:
+    expect: { compiles: true, stdout: "W R 2 2 100" }
+
+- id: D9-SER-009
+  objective: D9.2
+  lesson: io-serialization
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 75
+  tags: [serialization, readobject, checked-exception, classnotfoundexception]
+  prompt: Which line causes a compilation error?
+  code: |
+    import java.io.*;
+    public class Main {
+        static Object load(byte[] data) throws IOException {
+            try (var in = new ObjectInputStream(new ByteArrayInputStream(data))) {
+                return in.readObject();
+            }
+        }
+        public static void main(String[] args) { }
+    }
+  options:
+    - key: a
+      text: Line 5
+      correct: true
+      why: readObject() also declares the checked ClassNotFoundException, which is neither caught nor declared by load().
+    - key: b
+      text: Line 4
+      why: The ObjectInputStream constructor throws IOException, which load() declares; and the implicit close() also throws only IOException.
+    - key: c
+      text: Line 3
+      why: Declaring throws IOException on a static method is perfectly legal.
+    - key: d
+      text: The code compiles
+      why: ClassNotFoundException is a checked exception and not a subclass of IOException, so it must be handled or declared.
+  explanation: |
+    `ObjectInputStream.readObject()` is declared `throws IOException, ClassNotFoundException`. The method
+    declares only `IOException`, and `ClassNotFoundException` extends `ReflectiveOperationException`, not
+    `IOException`. javac reports *unreported exception ClassNotFoundException; must be caught or declared to
+    be thrown* on line 5.
+  rule: "ObjectInputStream.readObject() throws IOException and ClassNotFoundException (both checked)."
+  misconception: All serialization exceptions are IOExceptions.
+  java:
+    expect: { compiles: false, errorContains: "ClassNotFoundException", errorLine: 5 }
+
+# ───────────────────────── D9.3 · NIO.2 Path & Files ─────────────────────────
+
+- id: D9-NIO-001
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [path, getname, subpath, normalize]
+  prompt: What is the output of the following program?
+  code: |
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Path p = Path.of("/var/log/../lib/./app/data.db");
+            System.out.println(p.getNameCount() + " " + p.getName(2) + " " + p.subpath(3, 5));
+            Path n = p.normalize();
+            System.out.println(n + " " + n.getNameCount() + " " + n.getParent().getFileName());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        7 .. lib/.
+        /var/lib/app/data.db 4 app
+      correct: true
+      why: Before normalizing, . and .. are ordinary name elements (7 names, index 2 is ..); subpath(3, 5) covers indices 3 and 4. normalize removes log/.. and . .
+    - key: b
+      text: |
+        8 log lib/.
+        /var/lib/app/data.db 4 app
+      why: The root / is not a name element, so the count is 7 and index 2 is .. (index 0 is var).
+    - key: c
+      text: |
+        5 lib app/data.db
+        /var/lib/app/data.db 4 app
+      why: getNameCount, getName and subpath do not normalize; they work on the path exactly as written.
+    - key: d
+      text: |
+        7 .. lib/./app
+        /var/lib/app/data.db 4 app
+      why: subpath's end index is exclusive, so subpath(3, 5) has only two elements.
+    - key: e
+      text: |
+        7 .. lib/.
+        /var/lib/app/data.db 5 data.db
+      why: After normalization the names are var, lib, app, data.db (4); the parent is /var/lib/app, whose file name is app.
+  explanation: |
+    Name elements are counted without the root, from index 0, and `.`/`..` are ordinary elements until you
+    call `normalize()`. `subpath(begin, end)` is zero-based and end-exclusive and returns a relative path.
+    `normalize()` removes `.` and cancels `log/..` syntactically, giving `/var/lib/app/data.db`.
+  rule: "Path name elements exclude the root; getName/subpath are 0-based (subpath end-exclusive) and purely syntactic; normalize removes . and name/.. pairs."
+  misconception: Path methods automatically normalize, or the root counts as a name element.
+  java:
+    expect: { compiles: true, stdout: "7 .. lib/.\n/var/lib/app/data.db 4 app" }
+
+- id: D9-NIO-002
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [path, resolve, relativize, normalize]
+  prompt: What is the output of the following program?
+  code: |
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Path home = Path.of("/home/kim");
+            Path a = home.resolve("docs/../music");
+            Path b = home.resolve("/tmp/x");
+            Path c = Path.of("docs").resolve("");
+            System.out.println(a + " " + b + " " + c);
+            System.out.println(home.relativize(a.normalize()) + " "
+                + a.normalize().relativize(home) + " [" + home.relativize(home) + "]");
+        }
+    }
+  options:
+    - key: a
+      text: |
+        /home/kim/docs/../music /tmp/x docs
+        music .. []
+      correct: true
+      why: resolve does not normalize; an absolute argument replaces the base; resolving an empty path returns the base. relativize gives the steps between the two paths — none for identical paths.
+    - key: b
+      text: |
+        /home/kim/music /tmp/x docs
+        music .. []
+      why: resolve only joins the paths; the .. is removed only when normalize() is called.
+    - key: c
+      text: |
+        /home/kim/docs/../music /home/kim/tmp/x docs
+        music .. []
+      why: When the argument of resolve is absolute, it is returned as is — the base is ignored.
+    - key: d
+      text: |
+        /home/kim/docs/../music /tmp/x docs
+        music ../.. [.]
+      why: From /home/kim/music back to /home/kim is ONE level up; and relativizing a path against itself gives the empty path, not ".".
+  explanation: |
+    `resolve(other)` returns `other` if it is absolute, the base if `other` is empty, and otherwise the
+    joined path **without normalizing**. `relativize` computes the relative path from one path to another;
+    both must be of the same type, and the result for two equal paths is the empty path (printed as
+    nothing). Neither method touches the file system.
+  rule: "p.resolve(q): q if q is absolute, p if q is empty, else p/q (not normalized). p.relativize(q) is the path from p to q; p.relativize(p) is empty."
+  misconception: resolve always appends and normalizes.
+  java:
+    expect: { compiles: true, stdout: "/home/kim/docs/../music /tmp/x docs\nmusic .. []" }
+
+- id: D9-NIO-003
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [files, delete, deleteifexists, directorynotemptyexception]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.io.IOException;
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            Path dir = Files.createTempDirectory("q");
+            Path data = Files.createDirectories(dir.resolve("data/raw"));
+            Files.writeString(data.resolve("a.csv"), "1,2");
+            Files.deleteIfExists(dir.resolve("missing.txt"));
+            System.out.println("step 1");
+            Files.deleteIfExists(dir.resolve("data"));
+            System.out.println("step 2");
+        }
+    }
+  options:
+    - key: a
+      text: "`step 1` is printed, then a `DirectoryNotEmptyException` is thrown"
+      correct: true
+      why: deleteIfExists returns false for the missing file, but a non-empty directory cannot be deleted by delete or deleteIfExists.
+    - key: b
+      text: "`step 1` and `step 2` are printed; `data` and its contents are deleted"
+      why: Neither delete nor deleteIfExists is recursive; you must walk the tree and delete the leaves first.
+    - key: c
+      text: A `NoSuchFileException` is thrown before anything is printed
+      why: That is Files.delete's behaviour for a missing file; deleteIfExists just returns false.
+    - key: d
+      text: "`step 1` and `step 2` are printed; `deleteIfExists` returns `false` for the non-empty directory"
+      why: deleteIfExists only tolerates a MISSING file; a non-empty directory still throws DirectoryNotEmptyException.
+  explanation: |
+    `Files.deleteIfExists(p)` returns `false` when `p` does not exist, instead of throwing
+    `NoSuchFileException` as `Files.delete(p)` does. Both methods refuse to delete a non-empty directory and
+    throw `DirectoryNotEmptyException` (a `FileSystemException`). Recursive deletion requires walking the tree
+    in reverse order (deepest paths first).
+  rule: "Files.delete: NoSuchFileException if missing; deleteIfExists: false if missing; both throw DirectoryNotEmptyException for a non-empty directory."
+  misconception: deleteIfExists deletes recursively or never throws.
+  java:
+    expect: { compiles: true, stdout: "step 1", exception: java.nio.file.DirectoryNotEmptyException }
+
+- id: D9-NIO-004
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 180
+  tags: [files, walk, maxdepth, lines]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.IOException;
+    import java.nio.file.*;
+    import java.util.stream.Stream;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            Path root = Files.createTempDirectory("w");
+            Files.createDirectories(root.resolve("a/b/c"));
+            Files.writeString(root.resolve("a/x.txt"), "1\n2\n3\n");
+            Files.writeString(root.resolve("a/b/y.txt"), "4\n");
+            try (Stream<Path> s = Files.walk(root.resolve("a"), 1)) {
+                System.out.print(s.count() + " ");
+            }
+            try (Stream<Path> s = Files.walk(root.resolve("a"))) {
+                System.out.print(s.filter(Files::isRegularFile).count() + " ");
+            }
+            try (Stream<Path> s = Files.walk(root, 2)) {
+                System.out.print(s.filter(Files::isDirectory).count() + " ");
+            }
+            try (Stream<String> lines = Files.lines(root.resolve("a/x.txt"))) {
+                System.out.println(lines.mapToInt(Integer::parseInt).sum());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`3 2 3 6`"
+      correct: true
+      why: "walk(a, 1) = a, a/b, a/x.txt; the full walk of a finds two regular files; walk(root, 2) reaches the directories root, a and a/b (c is at depth 3); 1+2+3 = 6."
+    - key: b
+      text: "`2 2 2 6`"
+      why: Files.walk always includes the start path itself at depth 0, in every count.
+    - key: c
+      text: "`3 2 4 6`"
+      why: a/b/c is three levels below root, so walk(root, 2) does not reach it.
+    - key: d
+      text: "`3 1 3 6`"
+      why: Without a depth limit, walk is recursive and also finds a/b/y.txt.
+  explanation: |
+    `Files.walk(start, maxDepth)` streams `start` (depth 0) and everything up to `maxDepth` levels below it,
+    depth-first; without `maxDepth` it is unlimited. Each `walk`/`lines` stream holds open resources and is
+    closed by try-with-resources. `Files.lines` streams the lines without their terminators.
+  rule: "Files.walk includes the start path at depth 0 and descends maxDepth levels (default Integer.MAX_VALUE); stream-returning Files methods must be closed."
+  misconception: walk starts with the children of the start directory, or maxDepth counts from 0 at the children.
+  hint: What is at depth 0?
+  java:
+    expect: { compiles: true, stdout: "3 2 3 6" }
+
+- id: D9-NIO-005
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [path, relativize, resolve, illegalargumentexception]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Path a = Path.of("/data/in");
+            Path b = Path.of("data/out");
+            System.out.println(a.resolve(b));
+            System.out.println(b.resolve(a));
+            System.out.println(a.relativize(b));
+        }
+    }
+  options:
+    - key: a
+      text: Prints `/data/in/data/out` and `/data/in`, then an `IllegalArgumentException` is thrown
+      correct: true
+      why: Resolving a relative path appends it; resolving an absolute path returns it; relativize refuses to mix an absolute and a relative path.
+    - key: b
+      text: Prints `/data/in/data/out`, `data/out/data/in` and `../../data/out`
+      why: An absolute argument to resolve is returned unchanged, and relativize throws for mixed path types.
+    - key: c
+      text: Prints `/data/in/data/out` and `/data/in`, then a `NoSuchFileException` is thrown
+      why: Path operations never access the file system; the failure is an argument check (IllegalArgumentException).
+    - key: d
+      text: Prints `/data/in/data/out`, `/data/in` and `../out`
+      why: relativize does not guess a common base for a relative path; the two paths must be of the same type.
+  explanation: |
+    `resolve` with a relative argument appends it, and with an absolute argument returns the argument.
+    `relativize` can only compute a path between two absolute or two relative paths; otherwise it throws
+    `IllegalArgumentException` ("'other' is different type of Path"). None of these methods checks the disk.
+  rule: "p.relativize(q) throws IllegalArgumentException if exactly one of p and q is absolute."
+  misconception: relativize works between any two paths, or reports missing files.
+  java:
+    expect: { compiles: true, stdout: "/data/in/data/out\n/data/in", exception: java.lang.IllegalArgumentException }
+
+- id: D9-NIO-006
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 120
+  tags: [path, torealpath, toabsolutepath, nosuchfileexception]
+  prompt: The current directory does not contain a `reports` directory or a `draft.txt` file. What is the result of running the program?
+  code: |
+    import java.io.IOException;
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            Path p = Path.of("reports/../draft.txt");
+            System.out.println(p.toAbsolutePath().endsWith("draft.txt") + " " + p.isAbsolute());
+            System.out.println(p.normalize().toAbsolutePath().getFileName());
+            System.out.println(p.toRealPath());
+        }
+    }
+  options:
+    - key: a
+      text: Two lines (`true false` and `draft.txt`) are printed, then a `NoSuchFileException` is thrown
+      correct: true
+      why: toAbsolutePath and normalize are purely syntactic, but toRealPath must look the file up on disk.
+    - key: b
+      text: A `NoSuchFileException` is thrown before anything is printed
+      why: toAbsolutePath does not check existence; it only prefixes the current directory.
+    - key: c
+      text: "Three lines are printed; the last one is the absolute path ending in `/draft.txt`"
+      why: toRealPath resolves links and therefore requires the file to exist.
+    - key: d
+      text: "`true true` and `draft.txt` are printed, then a `NoSuchFileException` is thrown"
+      why: isAbsolute() is asked of p itself, which is relative; toAbsolutePath returns a NEW path.
+  explanation: |
+    `toAbsolutePath()` and `normalize()` only compute a new path; they work for files that do not exist and
+    never modify `p` (paths are immutable). `toRealPath()` returns the canonical path of an **existing**
+    file, resolving symbolic links, so it throws `NoSuchFileException` here.
+  rule: "toRealPath() accesses the file system and throws NoSuchFileException for a missing file; toAbsolutePath() and normalize() do not check existence."
+  misconception: toAbsolutePath checks existence, or toRealPath is just toAbsolutePath plus normalize.
+  java:
+    expect: { compiles: true, stdout: "true false\ndraft.txt", exception: java.nio.file.NoSuchFileException }
+
+- id: D9-NIO-007
+  objective: D9.3
+  lesson: io-nio2
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [files, copy, move, createfile, writestring, replace-existing]
+  prompt: |
+    A directory `dir` contains exactly two regular files, `a.txt` and `b.txt`; `Path a = dir.resolve("a.txt")`
+    and `Path b = dir.resolve("b.txt")`. Which statements complete **without throwing an exception**?
+    Choose three.
+  options:
+    - key: a
+      text: "`Files.copy(a, b);`"
+      why: The target exists and REPLACE_EXISTING was not given, so copy throws FileAlreadyExistsException.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.copy(a, b);
+                  System.out.println("ok");
+              }
+          }
+        expect: { compiles: true, exception: java.nio.file.FileAlreadyExistsException }
+    - key: b
+      text: "`Files.copy(a, b, StandardCopyOption.REPLACE_EXISTING);`"
+      correct: true
+      why: REPLACE_EXISTING allows the existing target to be overwritten.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.copy(a, b, StandardCopyOption.REPLACE_EXISTING);
+                  System.out.println("ok " + Files.readString(b));
+              }
+          }
+        expect: { compiles: true, stdout: "ok A" }
+    - key: c
+      text: "`Files.move(a, b);`"
+      why: move has the same rule as copy — an existing target needs REPLACE_EXISTING.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.move(a, b);
+                  System.out.println("ok");
+              }
+          }
+        expect: { compiles: true, exception: java.nio.file.FileAlreadyExistsException }
+    - key: d
+      text: "`Files.writeString(b, \"x\");`"
+      correct: true
+      why: With no options, writeString uses CREATE, TRUNCATE_EXISTING and WRITE, so an existing file is overwritten.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.writeString(b, "x");
+                  System.out.println("ok " + Files.readString(b));
+              }
+          }
+        expect: { compiles: true, stdout: "ok x" }
+    - key: e
+      text: "`Files.createFile(b);`"
+      why: createFile atomically fails with FileAlreadyExistsException when the file exists.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.createFile(b);
+                  System.out.println("ok");
+              }
+          }
+        expect: { compiles: true, exception: java.nio.file.FileAlreadyExistsException }
+    - key: f
+      text: "`Files.move(a, dir.resolve(\"c.txt\"));`"
+      correct: true
+      why: The target does not exist, so move succeeds — this is how files are renamed with NIO.2.
+      java:
+        source: |
+          import java.nio.file.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  Path dir = Files.createTempDirectory("m");
+                  Path a = Files.writeString(dir.resolve("a.txt"), "A"), b = Files.writeString(dir.resolve("b.txt"), "B");
+                  Files.move(a, dir.resolve("c.txt"));
+                  System.out.println("ok " + Files.exists(a));
+              }
+          }
+        expect: { compiles: true, stdout: "ok false" }
+  explanation: |
+    `copy` and `move` refuse to overwrite an existing target unless `StandardCopyOption.REPLACE_EXISTING` is
+    passed, and `createFile` always fails if the file exists — all with `FileAlreadyExistsException`. The
+    write methods (`writeString`, `write`, `newBufferedWriter`) default to `CREATE`, `TRUNCATE_EXISTING` and
+    `WRITE`, so they overwrite silently; `StandardOpenOption.CREATE_NEW` would make them fail too.
+  rule: "Files.copy/move throw FileAlreadyExistsException for an existing target unless REPLACE_EXISTING; createFile always fails if the file exists; write methods truncate by default."
+  misconception: Files.copy and Files.move overwrite by default, like most command-line tools.
+
+- id: D9-NIO-008
+  objective: D9.3
+  lesson: io-nio2
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [path, immutability, getroot, torealpath, walk]
+  prompt: Which of the following statements about `java.nio.file` are true? Choose three.
+  options:
+    - key: a
+      text: "`Path` objects are immutable; `normalize()` returns a new `Path`."
+      correct: true
+      why: Like String, every Path operation returns a new object and leaves the receiver unchanged.
+    - key: b
+      text: "`Path.of(\"x.txt\")` throws `NoSuchFileException` if `x.txt` does not exist."
+      why: Creating a Path never touches the file system; only Files methods (and toRealPath) check existence.
+    - key: c
+      text: For a relative path, `getRoot()` returns `null`.
+      correct: true
+      why: Only absolute paths have a root component.
+    - key: d
+      text: "`toRealPath()` requires the file to exist."
+      correct: true
+      why: It resolves symbolic links against the real file system and throws NoSuchFileException otherwise.
+    - key: e
+      text: "`Files.walk(dir)` does not include `dir` itself in the stream."
+      why: The start path is always the first element of the stream (depth 0).
+    - key: f
+      text: "`Path.of(\"/a\").resolve(\"/b\")` returns `/a/b`."
+      why: If the argument of resolve is absolute, it is returned unchanged — the result is /b.
+  explanation: |
+    `Path` is an immutable value describing a location; constructing and manipulating it never checks the
+    disk (`Path.of`, `normalize`, `resolve`, `relativize`, `getRoot`…). Methods that must consult the file
+    system — `toRealPath`, `isSameFile` for non-equal paths, and every `Files` operation — can throw
+    `IOException`s. `Files.walk` includes its starting path.
+  rule: "Path operations are syntactic and immutable; toRealPath and Files methods access the file system; walk includes its start path."
+  misconception: A Path is a handle to an existing file.
+
+- id: D9-NIO-009
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [files, mismatch, issamefile]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.IOException;
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            Path dir = Files.createTempDirectory("m");
+            Path a = Files.writeString(dir.resolve("a.txt"), "hello");
+            Path b = Files.writeString(dir.resolve("b.txt"), "hello world");
+            Path c = Files.writeString(dir.resolve("c.txt"), "help");
+            System.out.println(Files.mismatch(a, b) + " " + Files.mismatch(a, c) + " " + Files.mismatch(a, a));
+            Path alias = dir.resolve("./a.txt");
+            System.out.println(Files.isSameFile(a, alias) + " " + Files.isSameFile(a, c) + " " + a.equals(alias));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        5 3 -1
+        true false false
+      correct: true
+      why: a is a prefix of b, so the mismatch is at index 5 (the size of the shorter file); a and c differ at index 3; identical content gives -1. isSameFile checks the file system, so dir/./a.txt is the same file, although the Path objects are not equal.
+    - key: b
+      text: |
+        -1 3 -1
+        true false false
+      why: A file that is a proper prefix of the other is NOT a match — mismatch returns the size of the smaller file.
+    - key: c
+      text: |
+        5 3 0
+        true false false
+      why: Files.mismatch returns -1, not 0, when the files are identical; 0 would mean the first byte differs.
+    - key: d
+      text: |
+        5 3 -1
+        false false false
+      why: For non-equal paths, isSameFile asks the file system whether both locate the same file — they do.
+    - key: e
+      text: |
+        5 3 -1
+        true false true
+      why: Path.equals compares the paths syntactically, without normalizing; ./a.txt is a different path.
+  explanation: |
+    `Files.mismatch(p1, p2)` (Java 12) returns the position of the first mismatched byte, `-1` if the files
+    are identical, or the size of the smaller file if it is a prefix of the larger. `Files.isSameFile` returns
+    `true` for equal paths without I/O; otherwise it checks whether both paths locate the same file (it does
+    not compare contents). `Path.equals` is a syntactic comparison.
+  rule: "Files.mismatch returns -1 for identical content, else the index of the first differing byte (or the smaller size); isSameFile tests file identity, Path.equals tests path syntax."
+  misconception: isSameFile compares paths as strings, or mismatch returns 0 for a match.
+  java:
+    expect: { compiles: true, stdout: "5 3 -1\ntrue false false" }
+
+- id: D9-NIO-010
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [files, find, walk, maxdepth, bipredicate]
+  prompt: What is the output of the following program?
+  code: |
+    import java.io.IOException;
+    import java.nio.file.*;
+    import java.util.stream.Stream;
+
+    public class Main {
+        public static void main(String[] args) throws IOException {
+            Path root = Files.createTempDirectory("f");
+            Files.createDirectories(root.resolve("logs/old"));
+            Files.writeString(root.resolve("logs/app.log"), "x");
+            Files.writeString(root.resolve("logs/old/app.log"), "y");
+            Files.writeString(root.resolve("notes.log"), "z");
+            long one, two, three;
+            try (Stream<Path> s = Files.find(root, 1, (p, attrs) -> p.toString().endsWith(".log"))) {
+                one = s.count();
+            }
+            try (Stream<Path> s = Files.find(root.resolve("logs"), 0, (p, attrs) -> attrs.isDirectory())) {
+                two = s.count();
+            }
+            try (Stream<Path> s = Files.walk(root)) {
+                three = s.filter(p -> p.getFileName().toString().equals("app.log")).count();
+            }
+            System.out.println(one + " " + two + " " + three);
+        }
+    }
+  options:
+    - key: a
+      text: "`1 1 2`"
+      correct: true
+      why: "Depth 1 below root reaches notes.log but not logs/app.log (depth 2); maxDepth 0 still visits the start path, which is a directory; the unlimited walk finds both app.log files."
+    - key: b
+      text: "`2 0 2`"
+      why: Depth is measured from the start path (depth 0), so logs/app.log is at depth 2; and maxDepth 0 means "only the start path", not "nothing".
+    - key: c
+      text: "`1 0 2`"
+      why: The start path is part of every walk/find stream, including with maxDepth 0, and logs is a directory.
+    - key: d
+      text: "`3 1 2`"
+      why: maxDepth 1 stops at the direct children of root, so the two app.log files are not visited.
+  explanation: |
+    `Files.find(start, maxDepth, matcher)` walks like `Files.walk` — the start path is at depth 0, its
+    children at depth 1 — and keeps the paths for which the `BiPredicate<Path, BasicFileAttributes>` is
+    true. `maxDepth 0` visits only the start path itself. `Files.walk(root)` without a depth explores the whole
+    tree.
+  rule: "Files.find/walk visit the start path at depth 0 and paths up to maxDepth below it; find's matcher receives the path and its BasicFileAttributes."
+  misconception: maxDepth counts the start directory's children as depth 0, so maxDepth 0 returns nothing.
+  hint: At what depth is the start directory?
+  java:
+    expect: { compiles: true, stdout: "1 1 2" }
+
+- id: D9-NIO-011
+  objective: D9.3
+  lesson: io-nio2
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [path, paths-get, getfilename, getparent, getroot]
+  prompt: What is the output of the following program?
+  code: |
+    import java.nio.file.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Path p = Paths.get("/opt", "tools", "bin/run.sh");
+            System.out.println(p.getFileName() + " " + p.getParent() + " " + p.getRoot()
+                + " " + p.getNameCount() + " " + p.getName(1));
+        }
+    }
+  options:
+    - key: a
+      text: "`run.sh /opt/tools/bin / 4 tools`"
+      correct: true
+      why: "The arguments are joined and split at separators: names opt, tools, bin, run.sh (4); the root / is not a name; index 1 is tools."
+    - key: b
+      text: "`run.sh /opt/tools/bin / 3 tools`"
+      why: Paths.get joins its arguments with the separator and then parses the result, so bin/run.sh becomes two name elements.
+    - key: c
+      text: "`run.sh /opt/tools/bin / 5 opt`"
+      why: The root is not counted as a name element, so the count is 4 and index 1 is tools.
+    - key: d
+      text: "`/opt/tools/bin/run.sh /opt/tools/bin null 4 tools`"
+      why: getFileName returns only the last name element, and an absolute path has the root /.
+  explanation: |
+    `Paths.get(first, more...)` (like `Path.of`) joins the strings with the name separator and parses the
+    result. `getFileName()` is the last element, `getParent()` everything before it, `getRoot()` the root
+    component. Name elements are numbered from 0 and never include the root.
+  rule: "Path name elements are indexed from 0 excluding the root; getFileName is the last element; getParent drops it."
+  misconception: Each argument to Paths.get is one name element, or the root counts as element 0.
+  java:
+    expect: { compiles: true, stdout: "run.sh /opt/tools/bin / 4 tools" }

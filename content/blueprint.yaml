@@ -1,0 +1,199 @@
+# Single source of truth for exam format + objective map. See docs/EXAM_BLUEPRINT.md.
+exam:
+  code: 1Z0-831
+  title: Java SE 25 Developer Professional
+  questions: 50
+  durationMinutes: 120
+  passingPercent: 68
+  personalReadyTargetPercent: 80
+  verification: secondary
+  verificationNote: >-
+    Format (50 questions, 120 min, 68 %) confirmed by two independent secondary sources (MyExamCloud,
+    Selikoff/Boyarsky) on 2026-10-13; the official Oracle University page was down for maintenance on
+    2026-10-12 and 2026-10-13. Sub-objective wording is reconstructed from 1Z0-830 + Java 22–25 JEPs.
+    Re-check against Oracle's "Review Exam Topics" before booking.
+  # Mock-exam allocation floor per domain (Oracle publishes no domain weights).
+  minQuestionsPerDomain: 3
+
+domains:
+  - id: D1
+    title: Handling Date, Time, Text, Numeric and Boolean Values
+    short: Values, Text & Time
+    region: The Foundry of Values
+    icon: binary
+    summary: Primitives, promotion and casting, String and StringBuilder, text blocks, and the java.time API including time zones and DST.
+    objectives:
+      - id: D1.1
+        title: Use primitives and wrapper classes; evaluate arithmetic and boolean expressions using the Math API, operator precedence, type conversion, promotion and casting
+        basis: "830"
+        verification: reconstructed
+      - id: D1.2
+        title: Manipulate text, including text blocks, using String and StringBuilder
+        basis: "830"
+        verification: reconstructed
+      - id: D1.3
+        title: Work with date, time, duration, period, instant and time-zone objects, including daylight-saving transitions, using the Date-Time API
+        basis: "830"
+        verification: reconstructed
+
+  - id: D2
+    title: Implementing Program Flow Control Using Decision and Looping Constructs
+    short: Flow Control
+    region: The Branching Canyons
+    icon: git-branch
+    summary: if/else, switch statements and expressions with patterns and yield, loops, labels, break/continue and reachability.
+    objectives:
+      - id: D2.1
+        title: Create program flow control constructs including if/else, switch statements and expressions (with pattern labels and yield), loops, break and continue
+        basis: "830"
+        verification: reconstructed
+
+  - id: D3
+    title: Applying Object-Oriented Principles in Java Programs
+    short: Object-Oriented Java
+    region: The Object Citadel
+    icon: boxes
+    summary: Objects and their lifecycle, classes and records, constructors (incl. flexible constructor bodies), overloading, encapsulation, inheritance, sealed types, polymorphism, interfaces and enums.
+    objectives:
+      - id: D3.1
+        title: Declare and instantiate Java objects including nested class objects, and explain the object life cycle including creation, reference reassignment and garbage collection
+        basis: "830"
+        verification: reconstructed
+      - id: D3.2
+        title: Create classes and records, and define and use instance and static fields and methods, constructors (including flexible constructor bodies) and initializers
+        basis: "830+J25"
+        verification: reconstructed
+        javaNotes: JEP 513 (flexible constructor bodies) is final in Java 25.
+      - id: D3.3
+        title: Implement overloaded methods, including var-arg methods
+        basis: "830"
+        verification: reconstructed
+      - id: D3.4
+        title: Understand variable scopes, apply encapsulation, create immutable objects, and use local variable type inference and unnamed variables
+        basis: "830+J22"
+        verification: reconstructed
+        javaNotes: JEP 456 (unnamed variables and patterns) is final since Java 22.
+      - id: D3.5
+        title: Implement inheritance including abstract, sealed and record types; override methods including Object methods; implement polymorphism; differentiate object and reference types; use casting, instanceof and switch pattern matching including record patterns
+        basis: "830"
+        verification: reconstructed
+      - id: D3.6
+        title: Create and use interfaces, identify functional interfaces, and use private, static and default interface methods
+        basis: "830"
+        verification: reconstructed
+      - id: D3.7
+        title: Create and use enum types with fields, methods and constructors
+        basis: "830"
+        verification: reconstructed
+
+  - id: D4
+    title: Implementing Exception Handling in Java Applications
+    short: Exceptions
+    region: The Fault Lines
+    icon: triangle-alert
+    summary: The Throwable hierarchy, checked vs unchecked rules, try/catch/finally, multi-catch, try-with-resources, suppressed exceptions and custom exceptions.
+    objectives:
+      - id: D4.1
+        title: Handle exceptions using try/catch/finally, try-with-resources and multi-catch blocks, including custom exceptions
+        basis: "830"
+        verification: reconstructed
+
+  - id: D5
+    title: Using Arrays and Collections to Store and Retrieve Data
+    short: Arrays & Collections
+    region: The Grand Archive
+    icon: library
+    summary: Arrays, List/Set/Map/Deque, sequenced collections, sorting with Comparable and Comparator, equals/hashCode and generics.
+    objectives:
+      - id: D5.1
+        title: Create arrays and List, Set, Map and Deque collections, and add, remove, update, retrieve and sort their elements, including sequenced collections and generics
+        basis: "830"
+        verification: reconstructed
+
+  - id: D6
+    title: Processing Data Using Streams and Lambda Expressions
+    short: Streams & Lambdas
+    region: The River of Streams
+    icon: waves
+    summary: Lambdas, method references, functional interfaces, object and primitive streams, collectors, Optional, parallel streams and Stream Gatherers.
+    objectives:
+      - id: D6.1
+        title: Use Java object and primitive streams, including lambda expressions implementing functional interfaces, to create, filter, transform, process and sort data
+        basis: "830"
+        verification: reconstructed
+      - id: D6.2
+        title: Perform decomposition, concatenation, reduction, grouping and partitioning on sequential and parallel streams, including Stream Gatherers
+        basis: "830+J24"
+        verification: reconstructed
+        javaNotes: JEP 485 (Stream Gatherers) is final since Java 24.
+
+  - id: D7
+    title: Packaging and Deploying Java Code
+    short: Packaging & Modules
+    region: The Module Harbor
+    icon: package
+    summary: The module system, services, JARs, runtime images, migration, module import declarations, compact source files and instance main methods.
+    objectives:
+      - id: D7.1
+        title: Define modules and expose module content including by reflection, declare module dependencies, define services, providers and consumers, and use module import declarations
+        basis: "830+J25"
+        verification: reconstructed
+        javaNotes: JEP 511 (module import declarations) is final in Java 25.
+      - id: D7.2
+        title: Compile Java code, create modular and non-modular JARs and runtime images, migrate to modules using unnamed and automatic modules, and launch compact source files and multi-file source programs
+        basis: "830+J25"
+        verification: reconstructed
+        javaNotes: JEP 512 (compact source files and instance main methods) is final in Java 25; JEP 458 since Java 22.
+
+  - id: D8
+    title: Implementing Multithreading for Concurrent Code Execution
+    short: Concurrency
+    region: The Thread Forge
+    icon: cpu
+    summary: Platform and virtual threads, executors, Callable and Future, locks, atomics, concurrent collections, parallel streams and Scoped Values.
+    objectives:
+      - id: D8.1
+        title: Create both platform and virtual threads, use Runnable and Callable objects, manage the thread lifecycle, and use executor services, the concurrency API and Scoped Values
+        basis: "830+J25"
+        verification: reconstructed
+        javaNotes: JEP 506 (Scoped Values) is final in Java 25.
+      - id: D8.2
+        title: Develop thread-safe code using different locking mechanisms and the concurrency API
+        basis: "830"
+        verification: reconstructed
+      - id: D8.3
+        title: Process Java collections concurrently and use parallel streams
+        basis: "830"
+        verification: reconstructed
+
+  - id: D9
+    title: Performing Input and Output Operations Using the Java I/O API
+    short: Java I/O
+    region: The Data Depths
+    icon: hard-drive
+    summary: Byte and character streams, buffering, console I/O, serialization, and NIO.2 Path and Files.
+    objectives:
+      - id: D9.1
+        title: Read and write console and file data using I/O streams
+        basis: "830"
+        verification: reconstructed
+      - id: D9.2
+        title: Serialize and de-serialize Java objects
+        basis: "830"
+        verification: reconstructed
+      - id: D9.3
+        title: Construct, traverse, create, read and write Path objects and their properties using the java.nio.file API
+        basis: "830"
+        verification: reconstructed
+
+  - id: D10
+    title: Developing Applications with Localization Support
+    short: Localization
+    region: The Polyglot Bazaar
+    icon: languages
+    summary: Locale, ResourceBundle lookup and fallback, and locale-sensitive formatting and parsing of messages, numbers, currency, percentages and dates.
+    objectives:
+      - id: D10.1
+        title: Implement localization using locales and resource bundles, and parse and format messages, dates, times and numbers including currency and percentage values
+        basis: "830"
+        verification: reconstructed

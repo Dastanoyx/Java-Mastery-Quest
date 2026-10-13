@@ -1,0 +1,861 @@
+# Extra D3.6 (interfaces) and D3.7 (enums) questions — second content pass.
+# D3.6 — private/static/default interface methods, functional-interface identification, X.super rules
+# D3.7 — enum constructors, constant-specific bodies, static initialization, switch, ordering
+
+# ---------------------------------------------------------------- D3.6 interfaces
+
+- id: D3-IFX-001
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [private-interface-methods, static-interface-methods, default-methods, modifiers]
+  prompt: |
+    Each method below is inserted, one at a time, at the `// INSERT` comment. Which insertions compile?
+    Choose two.
+  code: |
+    interface Codec {
+        private String trim(String s) { return s.strip(); }
+        private static String upper(String s) { return s.toUpperCase(); }
+        // INSERT
+    }
+  options:
+    - key: a
+      text: "`default String a(String s) { return upper(trim(s)); }`"
+      correct: true
+      why: A default method is an instance method, so it may call both the private instance method and the private static method of its own interface.
+      java:
+        source: |
+          interface Codec {
+              private String trim(String s) { return s.strip(); }
+              private static String upper(String s) { return s.toUpperCase(); }
+              default String a(String s) { return upper(trim(s)); }
+          }
+          public class Main { public static void main(String[] args) { System.out.println(new Codec() { }.a(" hi ")); } }
+        expect: { compiles: true, stdout: "HI" }
+    - key: b
+      text: "`static String b(String s) { return trim(s); }`"
+      why: trim is a private instance method. A static method has no `this`, so it cannot call it (non-static method cannot be referenced from a static context).
+      java:
+        source: |
+          interface Codec {
+              private String trim(String s) { return s.strip(); }
+              private static String upper(String s) { return s.toUpperCase(); }
+              static String b(String s) { return trim(s); }
+          }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "non-static method trim(java.lang.String) cannot be referenced from a static context" }
+    - key: c
+      text: "`static String c(String s) { return upper(s); }`"
+      correct: true
+      why: A static interface method may call a private static method of the same interface; private only limits access to code inside the interface body.
+      java:
+        source: |
+          interface Codec {
+              private String trim(String s) { return s.strip(); }
+              private static String upper(String s) { return s.toUpperCase(); }
+              static String c(String s) { return upper(s); }
+          }
+          public class Main { public static void main(String[] args) { System.out.println(Codec.c("ok")); } }
+        expect: { compiles: true, stdout: "OK" }
+    - key: d
+      text: "`private default String d() { return \"\"; }`"
+      why: "`default` exists only to give a public interface method a body. `private` and `default` are an illegal combination of modifiers."
+      java:
+        source: |
+          interface Codec {
+              private String trim(String s) { return s.strip(); }
+              private static String upper(String s) { return s.toUpperCase(); }
+              private default String d() { return ""; }
+          }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "illegal combination of modifiers: private and default" }
+    - key: e
+      text: "`private abstract String e();`"
+      why: A private method can never be implemented by anyone else, so it must have a body. `abstract` and `private` are an illegal combination.
+      java:
+        source: |
+          interface Codec {
+              private String trim(String s) { return s.strip(); }
+              private static String upper(String s) { return s.toUpperCase(); }
+              private abstract String e();
+          }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "illegal combination of modifiers: abstract and private" }
+  explanation: |
+    Since Java 9 an interface may declare `private` methods, both instance and `static`, as helpers for its
+    own default and static methods. They must have a body and are invisible outside the interface. The usual
+    static rule still applies: a `static` interface method has no `this`, so it can call only `private static`
+    helpers (c), while a default method can call both kinds (a). `private` cannot be combined with `default`
+    (d) or `abstract` (e).
+  rule: "JLS 9.4: a private interface method must have a body and may not be default or abstract. A static method cannot call an instance method without a receiver."
+  misconception: "\"Any method inside the interface can call any private helper of that interface.\""
+  hint: Which of the two helpers needs an instance to be called on?
+  examEligible: true
+
+- id: D3-IFX-002
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 150
+  tags: [functional-interfaces, generic-methods, lambdas, method-references]
+  prompt: |
+    Given the interface below, which statements compile? Choose three.
+  code: |
+    interface Mapper { <T> T map(T t); }
+
+    // available in class Main:
+    static <T> T id(T t) { return t; }
+  options:
+    - key: a
+      text: "Annotating the declaration as `@FunctionalInterface interface Mapper { <T> T map(T t); }`"
+      correct: true
+      why: Mapper has exactly one abstract method, so it is a functional interface. The method being generic does not change that.
+      java:
+        source: |
+          @FunctionalInterface interface Mapper { <T> T map(T t); }
+          public class Main { public static void main(String[] args) { System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+    - key: b
+      text: "`Mapper m = x -> x;`"
+      why: A lambda cannot declare type parameters, so it cannot implement a generic method. javac reports an invalid functional descriptor for the lambda.
+      java:
+        source: |
+          interface Mapper { <T> T map(T t); }
+          public class Main { public static void main(String[] args) { Mapper m = x -> x; } }
+        expect: { compiles: false, errorContains: "invalid functional descriptor for lambda expression" }
+    - key: c
+      text: "`Mapper m = Main::id;`"
+      correct: true
+      why: A method reference may target a generic functional method. The referenced method id is itself generic, so it fits <T> T map(T).
+      java:
+        source: |
+          interface Mapper { <T> T map(T t); }
+          public class Main {
+              static <T> T id(T t) { return t; }
+              public static void main(String[] args) { Mapper m = Main::id; System.out.println(m.map("x")); }
+          }
+        expect: { compiles: true, stdout: "x" }
+    - key: d
+      text: "`Mapper m = new Mapper() { public <T> T map(T t) { return t; } };`"
+      correct: true
+      why: An anonymous class can declare a generic method, so it can implement Mapper normally.
+      java:
+        source: |
+          interface Mapper { <T> T map(T t); }
+          public class Main {
+              public static void main(String[] args) {
+                  Mapper m = new Mapper() { public <T> T map(T t) { return t; } };
+                  System.out.println(m.map(1));
+              }
+          }
+        expect: { compiles: true, stdout: "1" }
+    - key: e
+      text: "`Mapper m = (String x) -> x;`"
+      why: Giving the parameter an explicit type does not make the lambda generic. A lambda still cannot implement <T> T map(T).
+      java:
+        source: |
+          interface Mapper { <T> T map(T t); }
+          public class Main { public static void main(String[] args) { Mapper m = (String x) -> x; } }
+        expect: { compiles: false, errorContains: "invalid functional descriptor for lambda expression" }
+  explanation: |
+    An interface with a single abstract **generic** method is still a functional interface, so
+    `@FunctionalInterface` is accepted (a). But a lambda expression has no syntax for type parameters, so
+    it can never be the implementation of a generic functional method (b, e). A method reference can (c),
+    because the referenced method may be generic itself. An anonymous class (d) can always declare the generic
+    method explicitly.
+  rule: "JLS 15.27.3: a lambda expression is not compatible with a function type that has type parameters. JLS 15.13.2 allows a method reference to target such a type."
+  misconception: "\"If an interface is a functional interface, any lambda with the right shape can implement it.\""
+  hint: Where would a lambda declare its type parameter `<T>`?
+  examEligible: true
+
+- id: D3-IFX-003
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [static-interface-methods, default-methods, hiding, overriding, access]
+  prompt: |
+    Each member below is inserted, one at a time, into the body of `Impl`. Which insertions compile?
+    Choose two.
+  code: |
+    interface Util {
+        static String id() { return "U"; }
+        default String name() { return "N"; }
+    }
+    class Impl implements Util {
+        // INSERT
+    }
+  options:
+    - key: a
+      text: "`public String id() { return \"I\"; }`"
+      correct: true
+      why: Static interface methods are not inherited, so Impl has no id() member to conflict with. An instance method with the same signature is simply a new method.
+      java:
+        source: |
+          interface Util { static String id() { return "U"; } default String name() { return "N"; } }
+          class Impl implements Util { public String id() { return "I"; } }
+          public class Main { public static void main(String[] args) { System.out.println(Util.id() + new Impl().id()); } }
+        expect: { compiles: true, stdout: "UI" }
+    - key: b
+      text: "`static String id() { return \"S\"; }`"
+      correct: true
+      why: Again, Util.id() is not inherited, so a static id() in Impl neither hides nor overrides anything, and package access is fine.
+      java:
+        source: |
+          interface Util { static String id() { return "U"; } default String name() { return "N"; } }
+          class Impl implements Util { static String id() { return "S"; } }
+          public class Main { public static void main(String[] args) { System.out.println(Util.id() + Impl.id()); } }
+        expect: { compiles: true, stdout: "US" }
+    - key: c
+      text: "`static String name() { return \"S\"; }`"
+      why: The default method name() IS inherited. A static method cannot hide an inherited instance method (overriding method is static).
+      java:
+        source: |
+          interface Util { static String id() { return "U"; } default String name() { return "N"; } }
+          class Impl implements Util { static String name() { return "S"; } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "overriding method is static" }
+    - key: d
+      text: "`String name() { return \"I\"; }`"
+      why: This overrides the default method name(), which is implicitly public. An override cannot have weaker (package) access.
+      java:
+        source: |
+          interface Util { static String id() { return "U"; } default String name() { return "N"; } }
+          class Impl implements Util { String name() { return "I"; } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "attempting to assign weaker access privileges" }
+    - key: e
+      text: "`@Override public String id() { return \"I\"; }`"
+      why: There is no inherited id() to override, because static interface methods are not inherited. @Override therefore makes this a compile error.
+      java:
+        source: |
+          interface Util { static String id() { return "U"; } default String name() { return "N"; } }
+          class Impl implements Util { @Override public String id() { return "I"; } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "method does not override or implement a method from a supertype" }
+  explanation: |
+    A class inherits the **default** methods of its interfaces but **not their static methods**. So for
+    `name()` the full overriding rules apply: the class method must be an instance method (not c) and must
+    stay `public` (not d). For `id()` there is nothing inherited, so Impl may declare an instance or a static
+    `id()` freely (a, b). Adding `@Override` to it (e) fails because nothing is being overridden.
+  rule: "JLS 8.4.8: a class does not inherit static methods from its superinterfaces. JLS 8.4.8.2–8.4.8.3: a static method cannot hide an inherited instance method, and an override cannot reduce access."
+  misconception: "\"An interface's static method behaves like a superclass static method, so the class can only hide it with another static method.\""
+  hint: Which of the two Util methods is actually a member of Impl?
+  examEligible: true
+
+- id: D3-IFX-004
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [interface-fields, implicit-modifiers, ambiguity, constants]
+  prompt: |
+    Each statement below is placed, one at a time, as the only statement in `main`. Which ones compile?
+    Choose three.
+  code: |
+    interface Limits { int MAX = 10; }
+    interface Bounds { int MAX = 20; int MIN = 1; }
+    public class Main implements Limits, Bounds {
+        public static void main(String[] args) {
+            // INSERT
+        }
+    }
+  options:
+    - key: a
+      text: "`System.out.println(MAX);`"
+      why: Main inherits a field named MAX from both interfaces. The simple name is ambiguous and the compiler refuses to choose.
+      java:
+        source: |
+          interface Limits { int MAX = 10; }
+          interface Bounds { int MAX = 20; int MIN = 1; }
+          public class Main implements Limits, Bounds { public static void main(String[] args) { System.out.println(MAX); } }
+        expect: { compiles: false, errorContains: "reference to MAX is ambiguous" }
+    - key: b
+      text: "`System.out.println(Bounds.MAX + MIN);`"
+      correct: true
+      why: Qualifying the name removes the ambiguity, and MIN is declared in only one interface, so the simple name works. It prints 21.
+      java:
+        source: |
+          interface Limits { int MAX = 10; }
+          interface Bounds { int MAX = 20; int MIN = 1; }
+          public class Main implements Limits, Bounds { public static void main(String[] args) { System.out.println(Bounds.MAX + MIN); } }
+        expect: { compiles: true, stdout: "21" }
+    - key: c
+      text: "`Limits.MAX++;`"
+      why: Interface fields are implicitly final, so they cannot be incremented or reassigned.
+      java:
+        source: |
+          interface Limits { int MAX = 10; }
+          interface Bounds { int MAX = 20; int MIN = 1; }
+          public class Main implements Limits, Bounds { public static void main(String[] args) { Limits.MAX++; } }
+        expect: { compiles: false, errorContains: "cannot assign a value to static final variable MAX" }
+    - key: d
+      text: "`System.out.println(new Main().MIN);`"
+      correct: true
+      why: MIN is a static field inherited by Main. Accessing a static field through an instance reference is legal (just poor style).
+      java:
+        source: |
+          interface Limits { int MAX = 10; }
+          interface Bounds { int MAX = 20; int MIN = 1; }
+          public class Main implements Limits, Bounds { public static void main(String[] args) { System.out.println(new Main().MIN); } }
+        expect: { compiles: true, stdout: "1" }
+    - key: e
+      text: "`int MAX = 5; System.out.println(MAX);`"
+      correct: true
+      why: The local variable MAX shadows both inherited fields, so the simple name now refers to the local variable without any ambiguity.
+      java:
+        source: |
+          interface Limits { int MAX = 10; }
+          interface Bounds { int MAX = 20; int MIN = 1; }
+          public class Main implements Limits, Bounds { public static void main(String[] args) { int MAX = 5; System.out.println(MAX); } }
+        expect: { compiles: true, stdout: "5" }
+  explanation: |
+    Every interface field is implicitly `public static final`, so it is a constant that cannot be assigned (c).
+    A class that implements two interfaces inherits both `MAX` fields. That is legal, but using the simple
+    name `MAX` is an ambiguity error (a). Qualifying it (b) or shadowing it with a local variable (e) fixes
+    that. Because the fields are static, they can also be reached through an instance reference (d).
+  rule: "JLS 9.3: interface fields are implicitly public, static and final. JLS 8.3: a reference to an ambiguously inherited field by its simple name is a compile-time error."
+  misconception: "\"Implementing two interfaces with the same constant name is already a compile error.\""
+  hint: Is the error at the `implements` clause or only where the name is used?
+  examEligible: true
+
+- id: D3-IFX-005
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [functional-interfaces, object-methods, clone, default-methods, interface-inheritance]
+  prompt: |
+    Which interfaces can be the target type of a lambda expression? Choose three.
+  options:
+    - key: a
+      text: "`interface Copier { Object clone(); void run(); }`"
+      why: clone() is protected in Object, not public. Only public Object methods are ignored when counting abstract methods, so Copier has two abstract methods.
+      java:
+        source: |
+          interface Copier { Object clone(); void run(); }
+          public class Main { public static void main(String[] args) { Copier c = () -> { }; } }
+        expect: { compiles: false, errorContains: "Copier is not a functional interface" }
+    - key: b
+      text: "`interface Printer { String toString(); int hashCode(); void print(String s); }`"
+      correct: true
+      why: toString() and hashCode() match public methods of Object, so they do not count. Only print(String) is left.
+      java:
+        source: |
+          interface Printer { String toString(); int hashCode(); void print(String s); }
+          public class Main { public static void main(String[] args) { Printer p = s -> System.out.println(s); p.print("P"); } }
+        expect: { compiles: true, stdout: "P" }
+    - key: c
+      text: "`interface Task { void run(); }` and `interface Job extends Task { default void run() { } int priority(); }` (target: `Job`)"
+      correct: true
+      why: Job gives the inherited abstract run() a default body, so run() is no longer abstract in Job. Only priority() is abstract.
+      java:
+        source: |
+          interface Task { void run(); }
+          interface Job extends Task { default void run() { } int priority(); }
+          public class Main { public static void main(String[] args) { Job j = () -> 7; System.out.println(j.priority()); } }
+        expect: { compiles: true, stdout: "7" }
+    - key: d
+      text: "`interface Named { String toString(); }`"
+      why: toString() is a public Object method, so it does not count. Named has no abstract method at all, so it is not functional.
+      java:
+        source: |
+          interface Named { String toString(); }
+          public class Main { public static void main(String[] args) { Named n = () -> "x"; } }
+        expect: { compiles: false, errorContains: "no abstract method found in interface Named" }
+    - key: e
+      text: "`interface A { void go(int x); }`, `interface B { void go(int y); }` and `interface C extends A, B { }` (target: `C`)"
+      correct: true
+      why: The two inherited methods have the same signature (parameter names do not matter), so they merge into one abstract method.
+      java:
+        source: |
+          interface A { void go(int x); }
+          interface B { void go(int y); }
+          interface C extends A, B { }
+          public class Main { public static void main(String[] args) { C c = n -> System.out.println(n); c.go(3); } }
+        expect: { compiles: true, stdout: "3" }
+  explanation: |
+    A functional interface has exactly one abstract method after three adjustments: abstract methods that match
+    a **public** method of `Object` (`equals`, `hashCode`, `toString`) are ignored (b, d), an inherited
+    abstract method that is given a default body no longer counts (c), and inherited methods with the same
+    signature count once (e). `clone()` and `finalize()` are **protected** in `Object`, so redeclaring
+    `clone()` adds a real abstract method (a). An interface with zero abstract methods (d) is not functional
+    either.
+  rule: "JLS 9.8: a functional interface has exactly one abstract method apart from those that match public methods of Object; override-equivalent inherited methods count once."
+  misconception: "\"Any method that also exists in Object is ignored when deciding whether an interface is functional.\""
+  hint: Check the access modifier of `clone()` in `java.lang.Object`.
+  examEligible: true
+
+- id: D3-IFX-006
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [default-methods, class-wins, abstract-classes, access, interface-super]
+  prompt: |
+    Given the types below, which class declarations compile? Choose three.
+  code: |
+    interface Greeter { default String hello() { return "hi"; } }
+    abstract class Base { public abstract String hello(); }
+    class Plain { String hello() { return "plain"; } }
+    class Open { public String hello() { return "open"; } }
+  options:
+    - key: a
+      text: "`class A extends Base implements Greeter { }`"
+      why: The superclass method wins over the interface default, even when it is abstract. The default does not implement Base.hello(), so A must be abstract or override hello().
+      java:
+        source: |
+          interface Greeter { default String hello() { return "hi"; } }
+          abstract class Base { public abstract String hello(); }
+          class A extends Base implements Greeter { }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "A is not abstract and does not override abstract method hello() in Base" }
+    - key: b
+      text: "`class B extends Plain implements Greeter { }`"
+      why: The inherited Plain.hello() wins and becomes the implementation of Greeter.hello(), but it has package access, which is weaker than the public interface method.
+      java:
+        source: |
+          interface Greeter { default String hello() { return "hi"; } }
+          class Plain { String hello() { return "plain"; } }
+          class B extends Plain implements Greeter { }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "attempting to assign weaker access privileges" }
+    - key: c
+      text: "`abstract class C extends Base implements Greeter { }`"
+      correct: true
+      why: An abstract class may leave hello() abstract. Concrete subclasses will still have to implement it.
+      java:
+        source: |
+          interface Greeter { default String hello() { return "hi"; } }
+          abstract class Base { public abstract String hello(); }
+          abstract class C extends Base implements Greeter { }
+          public class Main { public static void main(String[] args) { System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+    - key: d
+      text: "`class D extends Open implements Greeter { }`"
+      correct: true
+      why: Open.hello() is public and concrete, so it wins over the default and implements Greeter.hello(). new D().hello() returns open.
+      java:
+        source: |
+          interface Greeter { default String hello() { return "hi"; } }
+          class Open { public String hello() { return "open"; } }
+          class D extends Open implements Greeter { }
+          public class Main { public static void main(String[] args) { System.out.println(new D().hello()); } }
+        expect: { compiles: true, stdout: "open" }
+    - key: e
+      text: "`class E extends Base implements Greeter { public String hello() { return Greeter.super.hello(); } }`"
+      correct: true
+      why: E implements hello() itself and may explicitly delegate to the default of its direct superinterface with Greeter.super.hello().
+      java:
+        source: |
+          interface Greeter { default String hello() { return "hi"; } }
+          abstract class Base { public abstract String hello(); }
+          class E extends Base implements Greeter { public String hello() { return Greeter.super.hello(); } }
+          public class Main { public static void main(String[] args) { System.out.println(new E().hello()); } }
+        expect: { compiles: true, stdout: "hi" }
+  explanation: |
+    "Class wins": a method from the superclass chain takes priority over an interface default with the same
+    signature. A concrete public class method (d) simply wins. If the class method is **abstract** (a), the
+    default does **not** implement it, so a concrete class still has to override `hello()`. If the class
+    method has **package access** (b), it still wins, but then it would implement a public interface method
+    with weaker access, which is an error. To use the default anyway, override the method and call
+    `Greeter.super.hello()` (e). An abstract class may leave the method unimplemented (c).
+  rule: "JLS 8.4.8 and 8.4.8.4: a concrete method inherited from the superclass blocks an interface default with the same signature, and an abstract superclass method is not implemented by such a default. JLS 8.4.8.3: the inherited class method must not have weaker access than the interface method."
+  misconception: "\"An interface default always supplies a body when the class has none.\""
+  hint: For A and B, which hello() does the class actually inherit, the class one or the default?
+  examEligible: true
+
+- id: D3-IFX-007
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 150
+  tags: [default-methods, interface-super, diamond, direct-superinterface]
+  prompt: Which line fails to compile?
+  code: |
+    interface A { default String m() { return "A"; } }
+    interface B extends A { default String m() { return "B" + A.super.m(); } }
+    interface C extends A { }
+    class D implements B, C {
+        public String m() { return B.super.m() + C.super.m(); }
+    }
+    public class Main {
+        public static void main(String[] args) { System.out.println(new D().m()); }
+    }
+  options:
+    - key: a
+      text: Line 2, because `X.super.m()` can only be used inside a class
+      why: An interface's default method may also call a default of a direct superinterface. A is a direct superinterface of B, so A.super.m() is legal there.
+    - key: b
+      text: Line 4, because `D` inherits two different defaults for `m()`
+      why: Through C, D only reaches A.m(), and B.m() overrides A.m(), so B's version is more specific. In any case D overrides m() itself, so no conflict remains.
+    - key: c
+      text: Line 5, because `C.super.m()` names a default that `B` already overrides
+      correct: true
+      why: C is a direct superinterface, but the m() it would reach is A.m(), which another direct superinterface of D (B) overrides. javac rejects it as a bad type qualifier.
+    - key: d
+      text: No line, the program prints `BAA`
+      why: This assumes C.super.m() simply runs A.m(). The compiler forbids reaching a method through C when another direct superinterface overrides it.
+  explanation: |
+    `X.super.m()` is legal in a class **or interface** when `X` is a **direct** superinterface (so line 2 is
+    fine, while `A.super.m()` inside D would fail with *not an enclosing class*). There is one more rule:
+    the call is rejected if the method that `X` provides is overridden by another direct supertype of the
+    current type. C only passes on A.m(), and B overrides A.m(), so `C.super.m()` on line 5 fails with *bad
+    type qualifier C in default super call: method m() is overridden in B*. Writing only `B.super.m()` would
+    print `BA`.
+  rule: "JLS 15.12.1 and 15.12.3: for TypeName.super.m(), TypeName must be a direct superinterface, and the method it provides must not be overridden from another direct supertype of the enclosing type."
+  misconception: "\"Any direct superinterface can be used with .super to reach the inherited default.\""
+  hint: Which interface already overrides the method that C would hand to D?
+  examEligible: true
+  java:
+    expect: { compiles: false, errorContains: "bad type qualifier C in default super call", errorLine: 5 }
+
+# ---------------------------------------------------------------- D3.7 enums
+
+- id: D3-ENX-001
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [enums, constant-specific-body, getClass, getDeclaringClass, overriding]
+  prompt: What is the output?
+  code: |
+    enum Op {
+        PLUS  { int apply(int a, int b) { return a + b; } },
+        TIMES { int apply(int a, int b) { return a * b; } },
+        NEG;
+        int apply(int a, int b) { return -a; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Op p = Op.PLUS, n = Op.NEG;
+            System.out.println((p.getClass() == Op.class) + " " + (n.getClass() == Op.class) + " "
+                + (p.getDeclaringClass() == Op.class) + " " + Op.TIMES.apply(3, 4) + " " + n.apply(3, 4));
+        }
+    }
+  options:
+    - key: a
+      text: "`false true true 12 -3`"
+      correct: true
+      why: PLUS has a class body, so it is an instance of an anonymous subclass of Op. NEG has no body, so its class is Op itself. getDeclaringClass() returns Op for every constant.
+    - key: b
+      text: "`true true true 12 -3`"
+      why: This assumes every constant's runtime class is Op. A constant with a class body is an instance of an anonymous subclass.
+    - key: c
+      text: "`false false true 12 -3`"
+      why: Only constants with a class body get their own subclass. NEG uses the enum class directly.
+    - key: d
+      text: "`false true false 12 -3`"
+      why: getDeclaringClass() exists exactly to return the enum type (Op), even for constants with a class body.
+    - key: e
+      text: Compilation fails because `NEG` does not override `apply`
+      why: apply is a concrete method in Op, so a constant without a body just inherits it. Only an abstract method would force every constant to provide a body.
+  explanation: |
+    A constant with a **class body** is compiled to an anonymous class that extends the enum. Its
+    `getClass()` is that anonymous class, not `Op`. A constant without a body is a direct instance of `Op`.
+    That is why `Enum.getDeclaringClass()` exists: it always returns the enum type. Overriding works as
+    usual. TIMES uses its own `apply` (12) and NEG inherits the default `apply` (-3).
+  rule: "JLS 8.9.1: the optional class body of an enum constant implicitly declares an anonymous class that extends the enum class. Enum.getDeclaringClass() returns the enum class of a constant."
+  misconception: "\"Every enum constant's runtime class is exactly the enum type.\""
+  hint: What kind of class does `PLUS { ... }` declare?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "false true true 12 -3" }
+
+- id: D3-ENX-002
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 150
+  tags: [enums, switch-expression, exhaustiveness, null-selector, NullPointerException]
+  prompt: What is the result?
+  code: |
+    enum Light { RED, AMBER, GREEN }
+    public class Main {
+        static String act(Light l) {
+            return switch (l) {
+                case RED -> "stop";
+                case AMBER, GREEN -> "go";
+            };
+        }
+        static String old(Light l) {
+            String r = "none";
+            switch (l) { case RED: r = "stop"; }
+            return r;
+        }
+        public static void main(String[] args) {
+            System.out.print(act(Light.GREEN) + " " + old(Light.AMBER) + " ");
+            Light none = null;
+            System.out.println(act(none));
+        }
+    }
+  options:
+    - key: a
+      text: It prints `go none ` and then a `NullPointerException` is thrown
+      correct: true
+      why: The switch expression covers all three constants, so no default is needed, and the old-style statement need not be exhaustive. Switching on null without a case null throws NullPointerException.
+    - key: b
+      text: Compilation fails because the switch expression in `act` has no `default`
+      why: A switch expression over an enum is exhaustive when it lists every constant. A default is then optional.
+    - key: c
+      text: Compilation fails because the switch statement in `old` does not cover every constant
+      why: An old-style switch statement (no patterns, no case null) does not have to be exhaustive. Unmatched values just skip the switch.
+    - key: d
+      text: It prints `go none null`
+      why: A switch never matches null unless it has a case null label. Without one, a null selector throws NullPointerException.
+    - key: e
+      text: It prints `go stop ` and then a `NullPointerException` is thrown
+      why: AMBER does not match case RED, and a classic switch statement has no implicit default, so r keeps the value none.
+  explanation: |
+    A switch **expression** must be exhaustive. For an enum selector, listing every constant is enough and no
+    `default` is needed. An old-style switch **statement** without patterns or `case null` does not have to
+    be exhaustive. Values that match no label just skip it. Any switch whose selector is `null` throws
+    `NullPointerException` unless it has a `case null` label (Java 21+). Note that adding `case null` to a
+    switch statement makes it an enhanced switch, and it then has to be exhaustive too.
+  rule: "JLS 14.11 and 15.28: switch expressions (and enhanced switch statements) must be exhaustive; a null selector throws NullPointerException unless a case null label is present."
+  misconception: "\"A switch expression over an enum always needs a default branch.\""
+  hint: Check each switch for exhaustiveness separately, then think about the null selector.
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.lang.NullPointerException, stdout: "go none " }
+
+- id: D3-ENX-003
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [enums, compareTo, ordinal, sorting, TreeSet, comparator]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    enum Rank { ZETA, ALPHA, MID }
+    public class Main {
+        public static void main(String[] args) {
+            List<Rank> list = new ArrayList<>(List.of(Rank.MID, Rank.ALPHA, Rank.ZETA));
+            Collections.sort(list);
+            System.out.print(list + " ");
+            System.out.print(new TreeSet<>(List.of(Rank.MID, Rank.ZETA)).first() + " ");
+            System.out.print(Rank.ZETA.compareTo(Rank.MID) + " ");
+            System.out.println(Collections.min(list, Comparator.comparing(Rank::name)));
+        }
+    }
+  options:
+    - key: a
+      text: "`[ZETA, ALPHA, MID] ZETA -2 ALPHA`"
+      correct: true
+      why: Enum natural order is declaration order (ordinal), so sorting and TreeSet follow ZETA, ALPHA, MID. compareTo returns 0 - 2 = -2. The explicit comparator compares names, so ALPHA is the minimum.
+    - key: b
+      text: "`[ALPHA, MID, ZETA] MID 13 ALPHA`"
+      why: This treats enums as if they were sorted by name. Enum's compareTo is based on ordinal, not on the constant name.
+    - key: c
+      text: "`[ZETA, ALPHA, MID] ZETA -1 ALPHA`"
+      why: compareTo of enums returns the ordinal difference (0 - 2), not just a sign of -1.
+    - key: d
+      text: "`[ZETA, ALPHA, MID] ZETA -2 ZETA`"
+      why: Collections.min with a comparator uses that comparator, not the natural order. By name, ALPHA comes first.
+  explanation: |
+    Every enum implements `Comparable<E>`, and `Enum.compareTo` is **final** and compares ordinals, i.e. the
+    declaration order. So `Collections.sort`, `TreeSet` and `TreeMap` order constants as they are declared,
+    not alphabetically. The method returns `this.ordinal() - other.ordinal()` (here 0 - 2 = -2). To order by
+    name, pass an explicit comparator such as `Comparator.comparing(Rank::name)`. Because `compareTo` is
+    final, an enum cannot override it.
+  rule: "java.lang.Enum: compareTo is final and orders constants by ordinal, i.e. by declaration order."
+  misconception: "\"Enums sort alphabetically because their toString() is the constant name.\""
+  hint: What does `Enum.compareTo` actually compare?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "[ZETA, ALPHA, MID] ZETA -2 ALPHA" }
+
+- id: D3-ENX-004
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: trace
+  difficulty: expert
+  estSeconds: 180
+  tags: [enums, class-initialization, static-fields, constant-variables, constructors]
+  prompt: What is the output?
+  code: |
+    enum Level {
+        LOW, HIGH;
+        static final String TAG = "L-";
+        static int a;
+        static int b = 0;
+        private final String label;
+        Level() {
+            label = TAG + name();
+            bump();
+        }
+        static void bump() { a++; b++; }
+        @Override public String toString() { return label; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Level.HIGH + " " + Level.a + " " + Level.b);
+        }
+    }
+  options:
+    - key: a
+      text: "`L-HIGH 2 0`"
+      correct: true
+      why: The constants are created first, so bump() runs twice while a and b are still 0. Then the static initializers run in order, and b = 0 resets b, while a has no initializer and keeps 2.
+    - key: b
+      text: "`L-HIGH 2 2`"
+      why: This ignores that static initializers run after the enum constants are constructed, so b = 0 overwrites the two increments.
+    - key: c
+      text: "`nullHIGH 2 0`"
+      why: TAG is a compile-time constant (static final String with a constant initializer). Its value is inlined, so it is already available in the constructor.
+    - key: d
+      text: Compilation fails because the constructor refers to the static field `TAG`
+      why: The illegal-reference rule exempts constant variables like TAG. And bump() is a method call, which the rule does not check at all.
+    - key: e
+      text: "`L-HIGH 0 0`"
+      why: Field a has no initializer, so nothing resets it after the constructors have incremented it.
+  explanation: |
+    The enum constants are the **first** static fields of the enum, so their constructors run before any other
+    static initializer. A constructor may not *directly* read a non-constant static field (*illegal reference
+    to static field from initializer*). But constant variables such as `TAG` are exempt, and the compiler
+    does not look inside a called method such as `bump()`. While the constants are built, `a` and `b` are
+    still 0 and both become 2. Then the remaining static initializers run in textual order. `a` has no
+    initializer and keeps 2, but `b = 0` resets it.
+  rule: "JLS 8.9.2: it is a compile-time error to refer to a non-constant static field of an enum from its constructors or instance initializers; enum constants are initialized before the other static fields (JLS 12.4.2 textual order)."
+  misconception: "\"Static fields are always initialized before any constructor of the class runs.\""
+  hint: In what order do the static initializers of an enum run, and where are the constants in that order?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "L-HIGH 2 0" }
+
+- id: D3-ENX-005
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [enums, values, valueOf, singleton, mutable-state]
+  prompt: What is the output?
+  code: |
+    enum Seat {
+        WINDOW, AISLE;
+        int booked;
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Seat[] all = Seat.values();
+            all[0] = Seat.AISLE;
+            Seat s = Seat.valueOf("WINDOW");
+            s.booked++;
+            Seat.WINDOW.booked++;
+            System.out.println(Seat.values()[0] + " " + (all == Seat.values()) + " "
+                + Seat.WINDOW.booked + " " + all[0].booked);
+        }
+    }
+  options:
+    - key: a
+      text: "`WINDOW false 2 0`"
+      correct: true
+      why: values() returns a new copy of the array each time, so changing all does not affect the enum. valueOf returns the single WINDOW instance, so both increments hit the same object. all[0] is AISLE, whose counter is 0.
+    - key: b
+      text: "`AISLE true 2 0`"
+      why: values() does not hand out the enum's internal array. Each call returns a fresh copy, so writing into it changes nothing else.
+    - key: c
+      text: "`WINDOW false 1 0`"
+      why: valueOf does not create a new object. It returns the existing constant, so s and Seat.WINDOW are the same instance.
+    - key: d
+      text: Compilation fails because enum fields must be `final`
+      why: Enum fields can be mutable. Doing so is usually a bad idea because the constant is a JVM-wide singleton, but it compiles.
+  explanation: |
+    Each enum constant is a **single** instance, and `valueOf` returns that instance, never a copy, so
+    mutable state on a constant is shared by everyone. `values()` returns a **new array** on every call, so a
+    caller cannot corrupt the enum's list of constants, and two calls are never `==`. Here `all[0]` was
+    replaced by AISLE, whose counter was never touched.
+  rule: "JLS 8.9.3: values() returns an array containing the constants in declaration order (a new array per call in practice); each enum constant is the only instance of its kind."
+  misconception: "\"valueOf creates a new enum object, and values() exposes the enum's internal array.\""
+  hint: Is `Seat.values()` the same array object every time?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "WINDOW false 2 0" }
+
+- id: D3-ENX-006
+  objective: D3.7
+  lesson: oop-enums
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [enums, local-enums, nested-enums, inheritance, instantiation, java16]
+  prompt: Which of the following declarations compile? Choose two.
+  options:
+    - key: a
+      text: "`class Outer { void m() { enum Local { A, B } System.out.println(Local.A); } }`"
+      correct: true
+      why: Since Java 16 an enum can be declared locally inside a method body. It is implicitly static.
+      java:
+        source: |
+          class Outer { void m() { enum Local { A, B } System.out.println(Local.A); } }
+          public class Main { public static void main(String[] args) { new Outer().m(); } }
+        expect: { compiles: true, stdout: "A" }
+    - key: b
+      text: "`enum E { A } class F extends E { }`"
+      why: An enum class cannot be extended by an explicit class declaration. javac reports that enum classes are not extensible.
+      java:
+        source: |
+          enum E { A } class F extends E { }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "enum classes are not extensible" }
+    - key: c
+      text: "`enum E { A, B; static E pick() { return new E(); } }`"
+      why: Enum constructors can only be invoked by the constant declarations. Even code inside the enum may not use new E().
+      java:
+        source: |
+          enum E { A, B; static E pick() { return new E(); } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "enum classes may not be instantiated" }
+    - key: d
+      text: "`class Outer { class Inner { enum E { A } } }`"
+      correct: true
+      why: Since Java 16 an inner (non-static) class may declare static members, including a nested enum, which is implicitly static.
+      java:
+        source: |
+          class Outer { class Inner { enum E { A } } }
+          public class Main { public static void main(String[] args) { System.out.println(Outer.Inner.E.A); } }
+        expect: { compiles: true, stdout: "A" }
+    - key: e
+      text: "`class Outer { int x; void m() { enum Local { A; void f() { System.out.println(x); } } } }`"
+      why: A local enum is implicitly static, so it has no enclosing instance and cannot use the instance field x of Outer.
+      java:
+        source: |
+          class Outer { int x; void m() { enum Local { A; void f() { System.out.println(x); } } } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "non-static variable x cannot be referenced from a static context" }
+  explanation: |
+    An enum implicitly extends `java.lang.Enum`, so it cannot `extends` anything else, and no class can extend
+    it (b). Its constructors are implicitly private and may only be invoked by the constant list, never with
+    `new` (c). Nested and local enums are always **implicitly static**. Since Java 16 they are allowed inside
+    method bodies (a) and inside inner classes (d), but being static they cannot touch the enclosing
+    instance's fields (e).
+  rule: "JLS 8.9: an enum class cannot be extended by a class declaration (it is implicitly final, or implicitly sealed when a constant has a class body), may not be instantiated with new, and a nested or local enum is implicitly static."
+  misconception: "\"Enums can only be declared as top-level types or as members of a top-level class.\""
+  hint: What does "implicitly static" mean for a local enum's access to the enclosing object?
+  examEligible: true

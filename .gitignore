@@ -1,0 +1,14 @@
+node_modules/
+.next/
+out/
+runner/out/
+*.log
+.env
+web/.env.local
+web/test-results/
+web/playwright-report/
+backups/*.sql
+backups/*.dump
+!backups/.gitkeep
+.DS_Store
+*.tsbuildinfo

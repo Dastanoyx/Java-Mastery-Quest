@@ -1,0 +1,893 @@
+# D1.2 — String, StringBuilder and text blocks
+# Remediation lesson: values-strings-text (content/lessons/D1/02-strings-text-blocks.md)
+
+- id: D1-STR-001
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [string, immutability, concat, replace]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String s = "Java";
+            s.concat(" 25");
+            s.toUpperCase();
+            String t = s.replace('a', 'o');
+            s = s + "!";
+            System.out.println(s + " " + t);
+        }
+    }
+  options:
+    - key: a
+      text: "`Java! Jovo`"
+      correct: true
+      why: concat and toUpperCase return new Strings that are discarded; replace's result is kept in t; only the reassignment s = s + "!" changes what s refers to.
+    - key: b
+      text: "`JAVA 25! JOVO 25`"
+      why: String is immutable — concat and toUpperCase cannot change the object s refers to, and their return values are never assigned.
+    - key: c
+      text: "`Jovo! Jovo`"
+      why: replace returns a new String stored in t; the original s still contains "Java".
+    - key: d
+      text: "`Java 25! Jovo 25`"
+      why: The result of s.concat(" 25") is thrown away because it is not assigned to anything.
+  explanation: |
+    A `String` object can never change. Methods such as `concat`, `toUpperCase`, `replace`, `strip` and
+    `substring` build and **return** a new String; calling them as a statement without using the result has no
+    visible effect. Only assigning a new reference to the variable (`s = s + "!"`) makes `s` refer to different
+    text.
+  rule: "java.lang.String is immutable; every method that seems to modify it returns a new String (or the same instance if nothing changes)."
+  misconception: String methods such as concat or toUpperCase modify the string in place, like StringBuilder methods.
+  hint: Which lines assign their result to a variable?
+  java:
+    expect: { compiles: true, stdout: "Java! Jovo" }
+
+- id: D1-STR-002
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [concatenation, char, left-to-right, promotion]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            char c = 'A';
+            int n = 2;
+            System.out.println(c + n + "B" + c + n);
+            System.out.println("" + c + n + (c + n));
+            System.out.println(n + n + "" + n * n + 'x' + 1);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        67BA2
+        A267
+        44x1
+      correct: true
+      why: "Left to right: 'A' + 2 is numeric (67) until \"B\" appears; on line 2 the parentheses force numeric addition (67); on line 3, 2 + 2 = 4, then * binds tighter (4), then 'x' and 1 are appended."
+    - key: b
+      text: |
+        A2BA2
+        A2A2
+        44x1
+      why: A char is a numeric type; with no String yet on the left, 'A' + 2 is int addition giving 67.
+    - key: c
+      text: |
+        67BA2
+        A267
+        2224x1
+      why: "Multiplication has higher precedence than +, so n * n is computed first (4); and n + n at the start is numeric addition because no String has appeared yet."
+    - key: d
+      text: |
+        67B67
+        A267
+        44x1
+      why: Once the left operand is the String "67B", every further + is concatenation, so c and n are appended separately as "A" and "2".
+  explanation: |
+    `+` is left-associative. It means numeric addition (with promotion — a `char` counts as a number) until
+    one operand is a `String`; from then on each step concatenates. Parentheses and higher-precedence operators
+    such as `*` create their own numeric subexpression first, whose result is then concatenated.
+  rule: "JLS 15.18: + is string concatenation if either operand is a String, otherwise numeric addition; + and - are left-associative and bind looser than * / %."
+  misconception: A String anywhere in the expression turns every + into concatenation, including those to its left.
+  hint: Process each + strictly from left to right and track whether the running result is a number or a String.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        67BA2
+        A267
+        44x1
+
+- id: D1-STR-003
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [string-pool, intern, constant-expression, identity]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static final String PREFIX = "Ja";
+        public static void main(String[] args) {
+            String lit = "Java";
+            String a = PREFIX + "va";
+            String suffix = "va";
+            String b = PREFIX + suffix;
+            String c = b.intern();
+            String d = new String("Java").intern();
+            String e = "Ja".concat("va");
+            System.out.println((lit == a) + " " + (lit == b) + " " + (lit == c) + " " + (lit == d) + " " + (lit == e));
+        }
+    }
+  options:
+    - key: a
+      text: "`true false true true false`"
+      correct: true
+      why: PREFIX is a constant variable so PREFIX + "va" is folded at compile time and pooled; suffix is not final so b is built at runtime; intern() returns the pooled "Java"; concat() creates a new String at runtime.
+    - key: b
+      text: "`false false true true false`"
+      why: A static final String field initialised with a literal is a constant variable, so PREFIX + "va" is a compile-time constant and shares the pooled instance.
+    - key: c
+      text: "`true true true true true`"
+      why: "== compares references; strings built at runtime from a non-constant variable, or by concat(), are new objects even if their content is equal."
+    - key: d
+      text: "`true false false true false`"
+      why: intern() returns the canonical pooled instance with the same content — the literal "Java" already in the pool — so lit == c is true.
+  explanation: |
+    String literals and **compile-time constant expressions** are interned. `PREFIX` is a `final` field of type
+    `String` initialised with a constant, so it is a *constant variable* and `PREFIX + "va"` is folded into the
+    literal `"Java"`. `suffix` is not final, so `PREFIX + suffix` is evaluated at runtime and produces a new
+    object. `intern()` returns the pooled instance with equal content. `concat` (with a non-empty argument)
+    always creates a new String.
+  rule: "JLS 15.29 / 3.10.5: constant expressions of type String are interned; strings computed at runtime are newly created unless intern() is called."
+  misconception: Any concatenation of literals produces a pooled string, regardless of whether the variables involved are final.
+  hint: Which right-hand sides are compile-time constant expressions?
+  java:
+    expect: { compiles: true, stdout: "true false true true false" }
+
+- id: D1-STR-004
+  objective: D1.2
+  lesson: values-strings-text
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [substring, charAt, indexOf, StringIndexOutOfBoundsException]
+  prompt: "Given `String s = \"exam\";`, which expressions throw a `StringIndexOutOfBoundsException`? Choose three."
+  options:
+    - key: a
+      text: "`s.substring(4)`"
+      why: The begin index may equal length(); the result is the empty string.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println("[" + s.substring(4) + "]"); } }
+        expect: { compiles: true, stdout: "[]" }
+    - key: b
+      text: "`s.substring(2, 1)`"
+      correct: true
+      why: The begin index must not be greater than the end index.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println(s.substring(2, 1)); } }
+        expect: { compiles: true, exception: java.lang.StringIndexOutOfBoundsException }
+    - key: c
+      text: "`s.charAt(s.length())`"
+      correct: true
+      why: Valid charAt indexes run from 0 to length() - 1; length() itself is one past the end.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println(s.charAt(s.length())); } }
+        expect: { compiles: true, exception: java.lang.StringIndexOutOfBoundsException }
+    - key: d
+      text: "`s.substring(1, 4)`"
+      why: The end index is exclusive and may equal length(), so this returns "xam".
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println(s.substring(1, 4)); } }
+        expect: { compiles: true, stdout: "xam" }
+    - key: e
+      text: "`s.substring(s.indexOf('z'))`"
+      correct: true
+      why: indexOf returns -1 when the character is absent, and -1 is not a valid begin index.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println(s.substring(s.indexOf('z'))); } }
+        expect: { compiles: true, exception: java.lang.StringIndexOutOfBoundsException }
+    - key: f
+      text: "`s.indexOf(\"m\", 10)`"
+      why: A fromIndex beyond the end is allowed for indexOf; the search just finds nothing and returns -1.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String s = "exam"; System.out.println(s.indexOf("m", 10)); } }
+        expect: { compiles: true, stdout: "-1" }
+  explanation: |
+    `substring(begin, end)` requires `0 <= begin <= end <= length()`; the end is **exclusive**, so
+    `begin == length()` and `end == length()` are fine and may yield `""`. `charAt(i)` needs
+    `0 <= i < length()`. Search methods (`indexOf`, `lastIndexOf`) never throw for an out-of-range start index;
+    they return `-1`, which becomes a problem only when that `-1` is fed into `substring`.
+  rule: "String.substring(begin, end) throws IndexOutOfBoundsException (StringIndexOutOfBoundsException) unless 0 <= begin <= end <= length(); charAt requires 0 <= index < length(); indexOf returns -1 if not found."
+  misconception: Using length() as an index is always out of bounds, and indexOf throws for a start index past the end.
+  hint: Write down the valid index range for each method separately.
+
+- id: D1-STR-005
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [split, regex, limit, trailing-empty]
+  prompt: What is the output?
+  code: |
+    import java.util.Arrays;
+    public class Main {
+        public static void main(String[] args) {
+            String csv = ";a;;b;;";
+            System.out.println(csv.split(";").length + " " + csv.split(";", -1).length + " " + csv.split(";", 2).length);
+            System.out.println("1.2.3".split(".").length + " " + "1.2.3".split("\\.").length);
+            System.out.println(Arrays.toString("a1b22c".split("\\d")));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        4 6 2
+        0 3
+        [a, b, , c]
+      correct: true
+      why: "split(\";\") keeps the leading \"\" but drops trailing empties ([\"\", a, \"\", b]); limit -1 keeps all 6; limit 2 stops after one split; \".\" is a regex matching every character; \\d splits \"22\" into an empty element between the two digits."
+    - key: b
+      text: |
+        3 6 2
+        0 3
+        [a, b, c]
+      why: Only trailing empty strings are removed; a leading empty string (before the first delimiter) and empties in the middle are kept.
+    - key: c
+      text: |
+        4 6 2
+        3 3
+        [a, b, , c]
+      why: The argument of split is a regular expression, and an unescaped . matches any character, so every element is empty and all are removed as trailing empties.
+    - key: d
+      text: |
+        6 6 2
+        0 3
+        [a, b, , c]
+      why: Without a limit (or with limit 0), trailing empty strings are removed from the result.
+  explanation: |
+    `split(regex)` is `split(regex, 0)`: it splits as often as possible and then **removes trailing empty
+    strings** — leading and inner empty strings stay. A negative limit keeps everything; a positive limit `n`
+    produces at most `n` elements, the last one holding the unsplit rest. The argument is a **regular
+    expression**, so `.` must be escaped (`"\\."`) to mean a literal dot.
+  rule: "String.split(regex, limit): limit > 0 → at most limit elements; limit < 0 → all elements; limit 0 (the one-arg form) → trailing empty strings discarded."
+  misconception: split works on literal text and discards all empty strings.
+  hint: Write out the elements before deciding which ones are removed.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        4 6 2
+        0 3
+        [a, b, , c]
+
+- id: D1-STR-006
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: trace
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [StringBuilder, insert, replace, reverse, substring]
+  prompt: What does the program print?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder sb = new StringBuilder("java");
+            sb.append(25).insert(0, '[').append(']');
+            sb.replace(1, 5, "JDK");
+            String sub = sb.substring(1, 4);
+            sb.deleteCharAt(0).reverse();
+            System.out.println(sb + " " + sub + " " + sb.length());
+        }
+    }
+  options:
+    - key: a
+      text: "`]52KDJ JDK 6`"
+      correct: true
+      why: "\"[java25]\" → replace indexes 1..4 (\"java\") with \"JDK\" → \"[JDK25]\"; substring returns a new String \"JDK\" without mutating; deleteCharAt(0) → \"JDK25]\"; reverse → \"]52KDJ\" (6 chars)."
+    - key: b
+      text: "`]52KDJ ]52 6`"
+      why: substring on a StringBuilder returns an independent String, captured before the later deleteCharAt and reverse.
+    - key: c
+      text: "`]52KDJa JDK 7`"
+      why: StringBuilder.replace(start, end, str) replaces the whole range start..end-1 with str — the range and the replacement need not have the same length.
+    - key: d
+      text: "`]52avaj JDK 7`"
+      why: Every mutator in the chain acts on the same builder, including replace, which swapped "java" for "JDK".
+  explanation: |
+    StringBuilder methods mutate the receiver and return `this`, so chained calls all act on one buffer.
+    `replace(start, end, str)` replaces the **range** `[start, end)` — here 4 characters replaced by 3 — unlike
+    `String.replace`, which replaces occurrences. `substring` is read-only and returns a new `String`, so later
+    mutations do not affect it.
+  rule: "StringBuilder.append/insert/replace/delete/deleteCharAt/reverse modify the builder and return it; StringBuilder.substring returns a new String."
+  misconception: StringBuilder.replace works like String.replace, and substring returns a view that changes with the builder.
+  hint: Write the builder's content after each call.
+  java:
+    expect: { compiles: true, stdout: "]52KDJ JDK 6" }
+
+- id: D1-STR-007
+  objective: D1.2
+  lesson: values-strings-text
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 120
+  tags: [StringBuilder, equals, contentEquals, compareTo]
+  prompt: |
+    Given `StringBuilder a = new StringBuilder("ok"), b = new StringBuilder("ok");` and `String s = "ok";`,
+    which expressions evaluate to `true`? Choose three.
+  options:
+    - key: a
+      text: "`a.equals(b)`"
+      why: StringBuilder does not override equals, so it inherits Object's identity comparison — two distinct builders are never equal.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"), b = new StringBuilder("ok"); System.out.println(a.equals(b)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: b
+      text: "`a.toString().equals(b.toString())`"
+      correct: true
+      why: Converting both builders to Strings and using String.equals compares content.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"), b = new StringBuilder("ok"); System.out.println(a.toString().equals(b.toString())); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`s.equals(a)`"
+      why: String.equals returns true only for another String with the same characters; a StringBuilder argument is never equal.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"); String s = "ok"; System.out.println(s.equals(a)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: d
+      text: "`s.contentEquals(a)`"
+      correct: true
+      why: contentEquals(CharSequence) compares the characters of any CharSequence, including a StringBuilder.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"); String s = "ok"; System.out.println(s.contentEquals(a)); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: e
+      text: "`a.compareTo(b) == 0`"
+      correct: true
+      why: StringBuilder implements Comparable<StringBuilder> (since Java 11) and compares lexicographically by content.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"), b = new StringBuilder("ok"); System.out.println(a.compareTo(b) == 0); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: f
+      text: "`a.toString() == b.toString()`"
+      why: Each toString() call creates a new String object at runtime, so == compares two different references.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { StringBuilder a = new StringBuilder("ok"), b = new StringBuilder("ok"); System.out.println(a.toString() == b.toString()); } }
+        expect: { compiles: true, stdout: "false" }
+  explanation: |
+    `StringBuilder` inherits `equals` and `hashCode` from `Object`, so `equals` means identity. To compare the
+    contents, convert to `String` and use `String.equals`, call `String.contentEquals(CharSequence)`, or use
+    `compareTo` (StringBuilder has been `Comparable` since Java 11). `String.equals` only accepts another
+    `String`, and `toString()` produces a fresh object that is not pooled.
+  rule: "StringBuilder does not override Object.equals; String.equals(Object) is true only for a String with the same characters; String.contentEquals(CharSequence) compares any character sequence."
+  misconception: equals compares contents for every text-like class.
+  hint: Which classes override equals, and what type of argument does each equals accept?
+
+- id: D1-STR-008
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [text-block, incidental-whitespace, closing-delimiter, trailing-newline]
+  prompt: What is the output? (Spaces in the text block are rendered as dots by the program.)
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String json = """
+                  {
+                    "id": 7,
+                    "tags": []
+                  }
+                """;
+            System.out.print(json.replace(' ', '.'));
+            System.out.println(json.lines().count() + " " + json.endsWith("\n"));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        ..{
+        ...."id":.7,
+        ...."tags":.[]
+        ..}
+        4 true
+      correct: true
+      why: The closing delimiter (12 spaces) is less indented than the content (14), so only 12 spaces are removed, leaving 2 extra on every line; a delimiter on its own line adds a final \n.
+    - key: b
+      text: |
+        {
+        .."id":.7,
+        .."tags":.[]
+        }
+        4 true
+      why: The closing delimiter's line takes part in the minimum-indentation calculation when it stands on its own line, so 2 extra spaces survive.
+    - key: c
+      text: |
+        ..{
+        ...."id":.7,
+        ...."tags":.[]
+        ..}
+        5 true
+      why: lines() splits on line terminators and does not produce an extra empty element for a trailing \n, so there are 4 lines.
+    - key: d
+      text: |
+        ..{
+        ...."id":.7,
+        ...."tags":.[]
+        ..}4 false
+      why: When the closing """ is on its own line, the last content line is terminated with \n.
+  explanation: |
+    javac removes **incidental whitespace**: the minimum indentation over all non-blank content lines **and the
+    closing-delimiter line** (when it stands alone). Here the content is indented 14 spaces but the closing
+    `"""` only 12, so 12 are stripped and each line keeps 2 extra. A closing delimiter on its own line means the
+    string ends with `\n`. `lines()` returns 4 lines because a final terminator does not start a new line.
+  rule: "JLS 3.10.6: the closing delimiter's line counts toward the minimum indentation if it contains only whitespace; trailing whitespace is stripped; a closing delimiter on its own line yields a final line terminator."
+  misconception: The text block's indentation is measured only from its content lines.
+  hint: Compare the column of the closing delimiter with the column of the leftmost content line.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        ..{
+        ...."id":.7,
+        ...."tags":.[]
+        ..}
+        4 true
+
+- id: D1-STR-009
+  objective: D1.2
+  lesson: values-strings-text
+  type: multi
+  format: does-it-compile
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [text-block, delimiter, escape-sequences, quotes]
+  prompt: Which of the following declarations compile? Choose three.
+  options:
+    - key: a
+      text: "`String a = \"\"\"abc\"\"\";`"
+      why: The opening delimiter must be followed by optional whitespace and a line terminator; content cannot start on the same line.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { String a = """abc"""; System.out.println(a); } }
+        expect: { compiles: false, errorContains: "illegal text block open delimiter sequence" }
+    - key: b
+      text: |
+        ```java
+        String b = """
+            He said "hi", then ""ok"".
+            """;
+        ```
+      correct: true
+      why: One or two consecutive double quotes need no escaping inside a text block; only a run of three would end it.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] x) {
+                  String b = """
+                      He said "hi", then ""ok"".
+                      """;
+                  System.out.print(b);
+              }
+          }
+        expect: { compiles: true, stdout: "He said \"hi\", then \"\"ok\"\"." }
+    - key: c
+      text: |
+        ```java
+        String c = """
+            x""";
+        ```
+      correct: true
+      why: The closing delimiter may directly follow the last content character; the string is then "x" with no trailing newline.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] x) {
+                  String c = """
+                      x""";
+                  System.out.println("[" + c + "]");
+              }
+          }
+        expect: { compiles: true, stdout: "[x]" }
+    - key: d
+      text: |
+        ```java
+        String d = """
+            C:\path\to
+            """;
+        ```
+      why: Escape sequences are processed in text blocks just as in string literals, and \p is not a valid escape sequence.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] x) {
+                  String d = """
+                      C:\path\to
+                      """;
+                  System.out.print(d);
+              }
+          }
+        expect: { compiles: false, errorContains: "illegal escape character" }
+    - key: e
+      text: |
+        ```java
+        String e = """
+            three quotes: """ inside
+            """;
+        ```
+      why: An unescaped run of three quotes closes the text block, so the remaining text is parsed as Java code and is a syntax error. Escape it as \""".
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] x) {
+                  String e = """
+                      three quotes: """ inside
+                      """;
+                  System.out.print(e);
+              }
+          }
+        expect: { compiles: false }
+    - key: f
+      text: |
+        ```java
+        String f = """
+            col1\tcol2\s
+            joined \
+            """;
+        ```
+      correct: true
+      why: \t and \s are ordinary escape sequences, and a backslash at the end of a line is the line-continuation escape — all legal in a text block.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] x) {
+                  String f = """
+                      col1\tcol2\s
+                      joined \
+                      """;
+                  System.out.println(f.replace('\t', '>').replace(' ', '.') + "|");
+              }
+          }
+        expect:
+          compiles: true
+          stdout: |
+            col1>col2.
+            joined.|
+  explanation: |
+    A text block opens with `"""`, optional whitespace and a **line terminator**; it closes at the next `"""`,
+    which may follow content directly. Inside, single and double quote pairs are literal, but three quotes must
+    be escaped (`\"""`). All ordinary escape sequences are interpreted, so an invalid one such as `\p` is a
+    compile error, and two text-block-oriented escapes exist: `\s` (a space that survives trailing-space
+    stripping) and `\` at end of line (joins the next line without a newline). Both were added with text
+    blocks in Java 15 (JEP 378).
+  rule: "JLS 3.10.6: a text block's opening delimiter is \"\"\" followed by whitespace and a line terminator; escape sequences are processed (including \\s and \\<line-terminator>); three consecutive quotes must be escaped."
+  misconception: Text blocks are raw strings in which backslashes and quotes need no attention at all.
+  hint: Check the opening delimiter line, every backslash, and every run of quotes.
+
+- id: D1-STR-010
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [strip, trim, isBlank, isEmpty, indent, repeat]
+  prompt: What is the output? (`\u2003` is EM SPACE, a Unicode whitespace character.)
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String s = "\u2003 hi \t";
+            System.out.println(s.trim().length() + " " + s.strip().length() + " " + s.stripTrailing().length());
+            System.out.println(" ".isEmpty() + " " + " ".isBlank() + " " + "".isBlank());
+            System.out.print("x\ny".indent(1).replace(' ', '.'));
+            System.out.println("ab".repeat(2) + "|" + "-".repeat(0) + "|");
+        }
+    }
+  options:
+    - key: a
+      text: |
+        4 2 4
+        false true true
+        .x
+        .y
+        abab||
+      correct: true
+      why: trim removes only chars <= U+0020, so the leading EM SPACE stays ("\u2003 hi", 4); strip removes all Unicode whitespace ("hi", 2); stripTrailing leaves the leading part (4); isBlank is true for empty strings too; indent adds a final \n; repeat(0) is "".
+    - key: b
+      text: |
+        2 2 4
+        false true true
+        .x
+        .y
+        abab||
+      why: trim() predates Unicode-aware whitespace handling and only removes characters with code points up to U+0020; EM SPACE (U+2003) is not removed.
+    - key: c
+      text: |
+        4 2 4
+        false true false
+        .x
+        .y
+        abab||
+      why: isBlank() is true when the string is empty or contains only whitespace, so "".isBlank() is true.
+    - key: d
+      text: |
+        4 2 4
+        false true true
+        .x
+        .yabab||
+      why: indent(n) normalises line terminators and always ends the result with \n, even if the input had none.
+  explanation: |
+    `trim()` removes leading and trailing characters whose code point is **≤ U+0020** (space and control
+    characters). `strip()`, `stripLeading()` and `stripTrailing()` (Java 11) use `Character.isWhitespace`, so
+    they also remove Unicode spaces such as U+2003. `isEmpty()` means `length() == 0`; `isBlank()` means empty
+    or whitespace only. `indent(n)` adds (or removes, for negative `n`) spaces on every line and terminates
+    every line, including the last, with `\n`. `repeat(0)` returns `""`.
+  rule: "String.trim strips code points <= U+0020; String.strip strips Character.isWhitespace characters; indent(n) adjusts each line and normalises line endings to \\n including a final one."
+  misconception: trim() and strip() are interchangeable, and indent() only adds spaces.
+  hint: Which method looks only at code points up to U+0020?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        4 2 4
+        false true true
+        .x
+        .y
+        abab||
+
+- id: D1-STR-011
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [compareTo, natural-order, lexicographic, sorting]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = new ArrayList<>(List.of("banana", "Apple", "apple", "10", "9", "app"));
+            Collections.sort(words);
+            System.out.println(words);
+            System.out.println("apple".compareTo("app") + " " + "B".compareTo("a"));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        [10, 9, Apple, app, apple, banana]
+        2 -31
+      correct: true
+      why: "Natural String order compares UTF-16 code units: digits (48–57) < uppercase (65–90) < lowercase (97–122); '1' < '9' so \"10\" comes first; a prefix sorts first and compareTo returns the length difference (5 - 3); 'B' - 'a' = 66 - 97."
+    - key: b
+      text: |
+        [9, 10, Apple, app, apple, banana]
+        2 -31
+      why: Strings are compared character by character, not numerically; "10" starts with '1', which is smaller than '9'.
+    - key: c
+      text: |
+        [10, 9, app, apple, Apple, banana]
+        2 -31
+      why: Natural order is case-sensitive and every uppercase letter has a smaller code than every lowercase letter, so "Apple" precedes "app".
+    - key: d
+      text: |
+        [10, 9, Apple, app, apple, banana]
+        1 1
+      why: compareTo returns the actual difference (of the first differing chars, or of the lengths for a prefix), not just -1, 0 or 1; and 'B' is less than 'a'.
+  explanation: |
+    `String.compareTo` compares lexicographically by UTF-16 code unit. At the first differing index it returns
+    the difference of the two characters; if one string is a prefix of the other, it returns the difference of
+    the lengths. Hence digits sort before uppercase letters, which sort before lowercase letters, and numeric
+    strings sort "alphabetically" (`"10"` before `"9"`). Use `compareToIgnoreCase` or a `Collator` for other
+    orders.
+  rule: "String.compareTo returns this.charAt(k) - other.charAt(k) at the first differing index k, or this.length() - other.length() if one is a prefix of the other."
+  misconception: compareTo returns only -1, 0 or 1, and strings containing digits sort numerically.
+  hint: Compare code points, not meanings.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        [10, 9, Apple, app, apple, banana]
+        2 -31
+
+- id: D1-STR-012
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [StringBuilder, delete, setLength, insert, StringIndexOutOfBoundsException]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder sb = new StringBuilder("abc");
+            sb.delete(1, 10);
+            sb.setLength(3);
+            System.out.println(sb.length());
+            sb.insert(4, "x");
+            System.out.println(sb);
+        }
+    }
+  options:
+    - key: a
+      text: It prints `3`, then a `StringIndexOutOfBoundsException` is thrown
+      correct: true
+      why: delete clamps an end beyond the length (leaving "a"); setLength(3) pads with two '\u0000' characters; insert's offset must be between 0 and length() (3), so offset 4 throws.
+    - key: b
+      text: A `StringIndexOutOfBoundsException` is thrown by `delete(1, 10)` before anything is printed
+      why: delete(start, end) only requires start to be valid; an end greater than length() is treated as length().
+    - key: c
+      text: It prints `1`, then a `StringIndexOutOfBoundsException` is thrown
+      why: setLength can grow the builder; the new positions are filled with the null character '\u0000', so the length is 3.
+    - key: d
+      text: It prints `3` and then the text `a` followed by two invisible characters and `x`
+      why: Unlike delete, insert does not clamp its offset; inserting at an index greater than length() is an error.
+  explanation: |
+    StringBuilder index rules differ per method. `delete(start, end)` requires `0 <= start <= length()` and
+    `start <= end`, but an `end` past the length is clamped. `setLength(n)` truncates or pads with `'\u0000'`.
+    `insert(offset, …)` requires `0 <= offset <= length()` — inserting at `length()` appends, anything beyond
+    throws `StringIndexOutOfBoundsException`.
+  rule: "AbstractStringBuilder: delete clamps end to length(); setLength pads with '\\u0000'; insert throws StringIndexOutOfBoundsException if offset < 0 or offset > length()."
+  misconception: All StringBuilder methods clamp out-of-range indexes the way delete does.
+  hint: Track the length after each statement and check each method's allowed range.
+  java:
+    expect: { compiles: true, stdout: "3", exception: java.lang.StringIndexOutOfBoundsException }
+
+- id: D1-STR-013
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [switch, string-switch, equals, constant-expression, identity]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String a = "go";
+            String cmd = new StringBuilder("og").reverse().toString();
+            System.out.print((a == cmd) + " ");
+            switch (cmd) {
+                case "go" -> System.out.print("GO ");
+                case "GO" -> System.out.print("UP ");
+                default -> System.out.print("? ");
+            }
+            final String STOP = "st" + "op";
+            switch ("stop") {
+                case STOP -> System.out.println("halt");
+                default -> System.out.println("run");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`false GO halt`"
+      correct: true
+      why: cmd is built at runtime so == is false, but a String switch matches with equals(); arrow labels never fall through; STOP is a constant variable, so it is a legal case label and matches "stop".
+    - key: b
+      text: "`false ? halt`"
+      why: A switch on a String compares contents (hashCode and equals), not references, so the runtime-built "go" matches case "go".
+    - key: c
+      text: "`false GO UP halt`"
+      why: Arrow-form case labels (->) do not fall through to the next case.
+    - key: d
+      text: Compilation fails because `STOP` is not a literal
+      why: A case label may be any constant expression; a final local String initialised with a constant expression qualifies.
+  explanation: |
+    A `switch` on a `String` compares the selector with each label using `equals` (after a `hashCode`
+    pre-check), so identity is irrelevant — even though `a == cmd` is `false` here. Case labels must be
+    **constant expressions**; a `final` String variable initialised with `"st" + "op"` is a constant variable,
+    so `case STOP` compiles. With `->` labels exactly one branch runs.
+  rule: "JLS 14.11: a String switch matches as if by String.equals; case labels must be constant expressions; switch rules (->) do not fall through."
+  misconception: A String switch compares references like ==, and case labels must be literals.
+  hint: Is the comparison inside a String switch == or equals?
+  java:
+    expect: { compiles: true, stdout: "false GO halt" }
+
+- id: D1-STR-014
+  objective: D1.2
+  lesson: values-strings-text
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [translateEscapes, indent, line-terminators, escape-sequences]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String raw = "a\\tb\\n";
+            String t = raw.translateEscapes();
+            System.out.println(raw.length() + " " + t.length() + " " + t.contains("\t"));
+            String block = "    x\n      y";
+            System.out.print(block.indent(-2).replace(' ', '.'));
+            System.out.print("x".indent(3).replace(' ', '.'));
+            System.out.println("a\r\nb".indent(0).length());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        6 4 true
+        ..x
+        ....y
+        ...x
+        4
+      correct: true
+      why: "raw holds backslash characters (a \\ t b \\ n = 6); translateEscapes turns \\t and \\n into a tab and a newline (4 chars); indent(-2) removes up to 2 leading spaces per line; indent(3) adds 3; indent(0) only normalises line endings (\"a\\nb\\n\", 4)."
+    - key: b
+      text: |
+        4 4 true
+        ..x
+        ....y
+        ...x
+        4
+      why: In a string literal "\\t" is a backslash followed by t — two characters — so raw has length 6 before translateEscapes runs.
+    - key: c
+      text: |
+        6 4 true
+        ..x
+        ....y
+        ...x
+        5
+      why: indent normalises every line terminator, so \r\n becomes \n, and it appends a final \n — giving "a\nb\n" (4 characters).
+    - key: d
+      text: |
+        6 4 true
+        x
+        ..y
+        ...x
+        4
+      why: indent(-2) removes at most 2 leading whitespace characters from each line; it does not strip the common indentation.
+  explanation: |
+    In source code `"\\t"` is two characters (`\` and `t`). `translateEscapes()` (Java 15) interprets such
+    sequences at runtime, producing a real tab and newline. `indent(n)` splits into lines, adds `n` spaces to
+    each line (or removes up to `-n` leading whitespace characters when `n` is negative), and joins them with
+    `\n`, always ending with `\n`; `indent(0)` therefore just normalises line terminators.
+  rule: "String.translateEscapes interprets escape sequences as in string literals; String.indent(n) adjusts each line by n and normalises line terminators to \\n, adding one at the end."
+  misconception: Escape sequences in a string literal stay as two characters at runtime, and indent(0) returns the string unchanged.
+  hint: Count characters in the literal as the compiler sees them first.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        6 4 true
+        ..x
+        ....y
+        ...x
+        4

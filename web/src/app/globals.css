@@ -1,0 +1,226 @@
+@import "tailwindcss";
+@import "@fontsource-variable/ibm-plex-sans";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* ─────────────────────────── Java Mastery Quest design tokens ───────────────────────────
+   Semantic accents, one meaning each:
+     ion    (blue)   learning actions & focus
+     arc    (violet) the game layer only: XP, levels, quests, achievements
+     signal (cyan)   mastery & correctness
+     amber           due reviews / time pressure
+     rose            mistakes & errors                                                     */
+:root {
+  --bg: #0a0f1e;
+  --surface: #111a2e;
+  --raised: #17223b;
+  --sunken: #0c1324;
+  --border: #24324f;
+  --border-strong: #33456b;
+  --text: #e6ecf8;
+  --muted: #9aa8c4;
+  --faint: #6b7a99;
+  --ion: #4c8dff;
+  --ion-strong: #79a9ff;
+  --ion-soft: rgb(76 141 255 / 0.14);
+  --arc: #8b6cff;
+  --arc-soft: rgb(139 108 255 / 0.16);
+  --signal: #2fd4e0;
+  --signal-soft: rgb(47 212 224 / 0.13);
+  --amber: #f2b33d;
+  --amber-soft: rgb(242 179 61 / 0.14);
+  --rose: #ff6b81;
+  --rose-soft: rgb(255 107 129 / 0.14);
+  --code-bg: #0d1426;
+  --shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px -18px rgb(0 0 0 / 0.7);
+  /* chart series (validated: dataviz validate_palette, dark surface #111a2e) */
+  --series-1: #3987e5;
+  --series-2: #199e70;
+  --grid: #1e2a44;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --bg: #f3f6fc;
+  --surface: #ffffff;
+  --raised: #eef2fa;
+  --sunken: #e8edf7;
+  --border: #d5dcea;
+  --border-strong: #b9c4da;
+  --text: #121a2e;
+  --muted: #4d5b78;
+  --faint: #6f7d99;
+  --ion: #2563eb;
+  --ion-strong: #1d4fc4;
+  --ion-soft: rgb(37 99 235 / 0.1);
+  --arc: #6d4fe0;
+  --arc-soft: rgb(109 79 224 / 0.1);
+  --signal: #0b8f9c;
+  --signal-soft: rgb(11 143 156 / 0.1);
+  --amber: #a86800;
+  --amber-soft: rgb(168 104 0 / 0.1);
+  --rose: #d42c4a;
+  --rose-soft: rgb(212 44 74 / 0.09);
+  --code-bg: #f7f9fd;
+  --shadow: 0 1px 2px rgb(18 26 46 / 0.06), 0 10px 24px -16px rgb(18 26 46 / 0.25);
+  --series-1: #2a78d6;
+  --series-2: #1baf7a;
+  --grid: #e3e8f2;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] {
+    --bg: #f3f6fc; --surface: #ffffff; --raised: #eef2fa; --sunken: #e8edf7; --border: #d5dcea; --border-strong: #b9c4da;
+    --text: #121a2e; --muted: #4d5b78; --faint: #6f7d99; --ion: #2563eb; --ion-strong: #1d4fc4; --ion-soft: rgb(37 99 235 / 0.1);
+    --arc: #6d4fe0; --arc-soft: rgb(109 79 224 / 0.1); --signal: #0b8f9c; --signal-soft: rgb(11 143 156 / 0.1);
+    --amber: #a86800; --amber-soft: rgb(168 104 0 / 0.1); --rose: #d42c4a; --rose-soft: rgb(212 44 74 / 0.09);
+    --code-bg: #f7f9fd; --shadow: 0 1px 2px rgb(18 26 46 / 0.06), 0 10px 24px -16px rgb(18 26 46 / 0.25);
+    --series-1: #2a78d6; --series-2: #1baf7a; --grid: #e3e8f2;
+    color-scheme: light;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-sunken: var(--sunken);
+  --color-line: var(--border);
+  --color-line-strong: var(--border-strong);
+  --color-ink: var(--text);
+  --color-muted: var(--muted);
+  --color-faint: var(--faint);
+  --color-ion: var(--ion);
+  --color-ion-strong: var(--ion-strong);
+  --color-ion-soft: var(--ion-soft);
+  --color-arc: var(--arc);
+  --color-arc-soft: var(--arc-soft);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-amber: var(--amber);
+  --color-amber-soft: var(--amber-soft);
+  --color-rose: var(--rose);
+  --color-rose-soft: var(--rose-soft);
+  --color-code: var(--code-bg);
+  --font-sans: "IBM Plex Sans Variable", "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, monospace;
+  --radius-panel: 14px;
+  --radius-control: 8px;
+  --shadow-panel: var(--shadow);
+}
+
+* { border-color: var(--border); }
+html { background: var(--bg); }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "ss02";
+}
+::selection { background: color-mix(in srgb, var(--ion) 35%, transparent); }
+
+:focus-visible { outline: 2px solid var(--ion); outline-offset: 2px; border-radius: 6px; }
+button, [role="button"], a { -webkit-tap-highlight-color: transparent; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+:root[data-motion="reduced"] *, :root[data-motion="reduced"] *::before, :root[data-motion="reduced"] *::after {
+  animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important;
+}
+
+/* thin scrollbars that match the surfaces */
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
+
+/* ─────────── Panels: hierarchy, not one card style for everything ─────────── */
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-panel); box-shadow: var(--shadow); }
+.panel-flat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
+.well { background: var(--sunken); border: 1px solid var(--border); border-radius: 10px; }
+
+/* ─────────── Code (Shiki dual theme via CSS variables) ─────────── */
+.code-frame { background: var(--code-bg); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.shiki, .shiki span { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style); }
+:root[data-theme="light"] .shiki, :root[data-theme="light"] .shiki span { color: var(--shiki-light); font-style: var(--shiki-light-font-style); }
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] .shiki, :root[data-theme="system"] .shiki span { color: var(--shiki-light); font-style: var(--shiki-light-font-style); }
+}
+.shiki { background: transparent !important; margin: 0; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6; tab-size: 4; }
+.shiki code { counter-reset: line; display: block; min-width: max-content; }
+.code-numbered .shiki code > .line::before {
+  counter-increment: line; content: counter(line); display: inline-block; width: 2.2em; margin-right: 1.1em; text-align: right;
+  color: var(--faint); opacity: 0.7; user-select: none;
+}
+.code-plain { font-family: var(--font-mono); font-size: 13.5px; line-height: 1.6; padding: 14px 16px; white-space: pre; overflow-x: auto; color: var(--text); }
+
+/* ─────────── Lesson prose ─────────── */
+.prose-lesson { max-width: 72ch; color: var(--text); font-size: 16px; line-height: 1.7; }
+.prose-lesson > * + * { margin-top: 1em; }
+.prose-lesson h2 { font-size: 1.45rem; line-height: 1.25; font-weight: 620; letter-spacing: -0.012em; margin-top: 2.4em; padding-top: 0.2em; scroll-margin-top: 84px; }
+.prose-lesson h3 { font-size: 1.12rem; font-weight: 600; margin-top: 1.8em; scroll-margin-top: 84px; }
+.prose-lesson h4 { font-size: 1rem; font-weight: 600; margin-top: 1.4em; }
+.prose-lesson p { color: color-mix(in srgb, var(--text) 92%, var(--muted)); }
+.prose-lesson strong { font-weight: 620; color: var(--text); }
+.prose-lesson a { color: var(--ion-strong); text-decoration: underline; text-underline-offset: 3px; text-decoration-thickness: 1px; }
+.prose-lesson ul, .prose-lesson ol { padding-left: 1.3em; }
+.prose-lesson ul { list-style: disc; }
+.prose-lesson ol { list-style: decimal; }
+.prose-lesson li + li { margin-top: 0.35em; }
+.prose-lesson li::marker { color: var(--faint); }
+.prose-lesson :not(pre) > code, .md-inline :not(pre) > code {
+  font-family: var(--font-mono); font-size: 0.86em; padding: 0.12em 0.38em; border-radius: 5px;
+  background: var(--raised); border: 1px solid var(--border); color: var(--text); white-space: break-spaces;
+}
+.prose-lesson table { width: 100%; border-collapse: collapse; font-size: 14px; display: block; overflow-x: auto; }
+.prose-lesson th, .prose-lesson td { border-bottom: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+.prose-lesson th { color: var(--muted); font-weight: 600; background: var(--sunken); }
+.prose-lesson blockquote { border-left: 3px solid var(--border-strong); padding: 2px 0 2px 14px; color: var(--muted); }
+.prose-lesson hr { border: 0; border-top: 1px solid var(--border); margin: 2em 0; }
+
+/* Callouts: the label is a word, not an all-caps tag */
+.callout { border: 1px solid var(--border); border-left-width: 3px; border-radius: 8px; padding: 12px 14px 12px 14px; background: var(--surface); }
+.callout > .callout-title { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.callout > .callout-body > * + * { margin-top: 0.6em; }
+.callout-rule { border-left-color: var(--ion); } .callout-rule .callout-title { color: var(--ion-strong); }
+.callout-trap { border-left-color: var(--rose); background: color-mix(in srgb, var(--rose-soft) 55%, var(--surface)); } .callout-trap .callout-title { color: var(--rose); }
+.callout-j25 { border-left-color: var(--arc); } .callout-j25 .callout-title { color: var(--arc); }
+.callout-note { border-left-color: var(--border-strong); } .callout-note .callout-title { color: var(--muted); }
+.callout-tip { border-left-color: var(--signal); } .callout-tip .callout-title { color: var(--signal); }
+.callout-real { border-left-color: var(--amber); } .callout-real .callout-title { color: var(--amber); }
+
+.md-inline p + p { margin-top: 0.5em; }
+.md-inline ul { list-style: disc; padding-left: 1.2em; }
+.md-inline strong { font-weight: 620; }
+
+/* ─────────── Small pieces ─────────── */
+.kbd { font-family: var(--font-mono); font-size: 11px; padding: 1px 6px; border-radius: 5px; border: 1px solid var(--border-strong); color: var(--muted); background: var(--raised); }
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* The one orchestrated motion moment: the world map lights up on load */
+@keyframes region-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.region-in { animation: region-in 520ms cubic-bezier(.2,.7,.2,1) both; }
+@keyframes path-draw { from { stroke-dashoffset: var(--len, 600); } to { stroke-dashoffset: 0; } }
+.path-draw { stroke-dasharray: var(--len, 600); animation: path-draw 1200ms ease-out both; }
+@keyframes xp-pop { 0% { transform: translateY(4px); opacity: 0; } 20% { transform: none; opacity: 1; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+/* Code must show exactly what you type: no ligatures (JetBrains Mono would draw -> as an arrow and != as ≠). */
+code, pre, kbd, .shiki, .code-plain, .kbd, .font-mono, .cm-editor, .cm-content {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "calt" 0;
+}
+
+/* Long identifiers in inline code must never push the page wider than a phone screen. */
+.md-inline :not(pre) > code, .prose-lesson :not(pre) > code { overflow-wrap: anywhere; }
+.md-inline table { display: block; max-width: 100%; overflow-x: auto; }
+
+/* Grid children may shrink below their content's width (default min-width:auto lets a wide table or a long
+   unbreakable word push a minmax(0,1fr) track — and the page — wider than a phone). In the base layer so a
+   utility like min-w-[…] still wins. */
+@layer base {
+  .grid > * { min-width: 0; }
+}
+/* Scroll containers must be the containing block of absolutely positioned descendants (e.g. .sr-only cells),
+   otherwise those escape the clipping and widen the whole page on phones. */
+.prose-lesson table, .md-inline table { position: relative; }

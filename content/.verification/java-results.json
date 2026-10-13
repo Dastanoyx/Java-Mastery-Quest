@@ -1,0 +1,3842 @@
+{
+  "generatedAt": "2026-10-13T09:46:49.761Z",
+  "jdk": "25.0.4+7-LTS",
+  "results": {
+    "question:D1-DT-001": {
+      "hash": "912e247646f1b6c9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:55.673Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-003": {
+      "hash": "3ae473bf82ed43c8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:55.693Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-004": {
+      "hash": "b3704c756741f234",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:55.734Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-006": {
+      "hash": "bb67e053d6131221",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:55.857Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-007": {
+      "hash": "141545d893925342",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:55.969Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-008": {
+      "hash": "5351cd773fd207ed",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.062Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-005": {
+      "hash": "357521dd7bed41cb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.142Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-009": {
+      "hash": "6ac8795f7785a11d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.190Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-011": {
+      "hash": "8a24ee092567b1f0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.252Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-012": {
+      "hash": "c6c942a2ee16dcd4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.325Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-013": {
+      "hash": "644aebeab88e56cf",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.422Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-014": {
+      "hash": "d9105e8b3a2acfa8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.515Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-010": {
+      "hash": "f9ef0805b766ce82",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.558Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-001": {
+      "hash": "154e8b90dd321cd1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.815Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-002": {
+      "hash": "4fa7d96524a6582e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.839Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-003": {
+      "hash": "6b7ee62b2aad94c5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:56.895Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-004": {
+      "hash": "b19fa39e0273c8c0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.054Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-DT-015": {
+      "hash": "968920da23fcd677",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.196Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-006": {
+      "hash": "0cf679eec504480f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.267Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-007": {
+      "hash": "07eaabf7259cdbab",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.376Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-008": {
+      "hash": "76926250585bba13",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.485Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-005": {
+      "hash": "207b06f24f9d96ee",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.490Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-009": {
+      "hash": "ce122f2be8476750",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.575Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-010": {
+      "hash": "e4d7480aa1a9e798",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.622Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-011": {
+      "hash": "53ce3ca82b969d58",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.659Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-012": {
+      "hash": "8c7503aa1ad6bd8d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:57.690Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-013": {
+      "hash": "977bc1e06bead987",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.048Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-015": {
+      "hash": "ea7511b8c49ab1c6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.116Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-014": {
+      "hash": "67e80eaa7bf4ff33",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.185Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-PRM-016": {
+      "hash": "0e33ec3b8fb04038",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.203Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-001": {
+      "hash": "25f9e377499e3893",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.247Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-002": {
+      "hash": "e19624567a339515",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.271Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-003": {
+      "hash": "26cce42dc544a71f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.326Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-005": {
+      "hash": "a921b9062d5b1ff1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.469Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-006": {
+      "hash": "1dea25e84bf838b5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.551Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-004": {
+      "hash": "ecdd3b18b57ec80b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.706Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-008": {
+      "hash": "c00ceb4a8e02aef4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:58.788Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-007": {
+      "hash": "6f93ba78cf03db3d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.060Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-009": {
+      "hash": "b673228b6977c498",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.120Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-010": {
+      "hash": "9745e7bbfed0f899",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.181Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-011": {
+      "hash": "02cac1237838961a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.195Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-012": {
+      "hash": "2c2d29bc27a34051",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.266Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-013": {
+      "hash": "e99e90546d5c22e6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.296Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D1-STR-014": {
+      "hash": "9fccc99d94b13631",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.366Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-002": {
+      "hash": "4851de4280959e55",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.469Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-003": {
+      "hash": "b9fc6d08a9bd5b0c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.620Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-001": {
+      "hash": "7de5e1819ba4c6f7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.699Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-004": {
+      "hash": "23c5c1aa3f3a02ec",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.790Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-005": {
+      "hash": "a7170556e00c0c7e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.818Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-006": {
+      "hash": "6fe8d20c4c5fdbe1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:45:59.970Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-008": {
+      "hash": "af8c7fb22ffe0348",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.098Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-009": {
+      "hash": "31088994d7964f17",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.201Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-010": {
+      "hash": "b2df734f1aad67e4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.309Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-007": {
+      "hash": "0a4c1389887f7b9d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.415Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-011": {
+      "hash": "cb469d84932d20a8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.465Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-012": {
+      "hash": "88d824a9711878b5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.543Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-013": {
+      "hash": "6441bbfc5579201f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.801Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-014": {
+      "hash": "3b3f21b865e9f574",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.831Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-015": {
+      "hash": "e820fd1f2a782ec3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:00.899Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-017": {
+      "hash": "c490ea703ed2ae40",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.156Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-019": {
+      "hash": "0e47dc6e5b4d1498",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.270Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-001": {
+      "hash": "45516bb3b8c10093",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.347Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-002": {
+      "hash": "5fb56cf6d0e6b6ad",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.420Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D10-L10N-018": {
+      "hash": "39214f416b71d9af",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.479Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-004": {
+      "hash": "0a33428df4042742",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.623Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-005": {
+      "hash": "be41dff8238bd9d2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.713Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-006": {
+      "hash": "9cefbd13e850acf2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.736Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-007": {
+      "hash": "ebe94e47661a8754",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.762Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-003": {
+      "hash": "211633261efb751d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.777Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-009": {
+      "hash": "765f93cc7c6658c8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.851Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-010": {
+      "hash": "398192ef9772b642",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.868Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-011": {
+      "hash": "bd343eaf359f0b06",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.894Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-012": {
+      "hash": "a54b3b9d884fe755",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:01.960Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-008": {
+      "hash": "b1f83089453998db",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.027Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-013": {
+      "hash": "7aa5200629131f57",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.062Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-014": {
+      "hash": "324a5adb1d9be1a0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.068Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-016": {
+      "hash": "d39d2cfa72ee261d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.133Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-015": {
+      "hash": "05ff210d9c9edd27",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.157Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-017": {
+      "hash": "a2c4d7ee33420237",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.219Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-018": {
+      "hash": "b22d7c5ef8466c66",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.220Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-020": {
+      "hash": "fd997064908baec3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.253Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-019": {
+      "hash": "0404ba217b901a4a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.469Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-021": {
+      "hash": "76f540f4bd97c1ce",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.526Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-023": {
+      "hash": "aa62e431985a1b80",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.581Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-024": {
+      "hash": "124d80d9aabac8d3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.608Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-022": {
+      "hash": "6da99d7ac8b4642d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.819Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-026": {
+      "hash": "163d81743e65ed94",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.943Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-027": {
+      "hash": "5176a7778ec9b79c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.962Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-028": {
+      "hash": "472b8b976c0ba81e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:02.996Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-025": {
+      "hash": "43fcbbab0ba8d2d3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.068Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-029": {
+      "hash": "621aa29367e7a903",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.124Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-001": {
+      "hash": "b878cd9b4016d24b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.153Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-002": {
+      "hash": "e8509dca93835a71",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.243Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-003": {
+      "hash": "8a6821f3b3ab4ebb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.313Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-004": {
+      "hash": "cbc373fa270c155e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.357Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D2-FLW-030": {
+      "hash": "8409f7be99a14fad",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.460Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-006": {
+      "hash": "be1bcc4490905048",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.524Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-005": {
+      "hash": "9dd0a8b1ea5e0971",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.552Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-008": {
+      "hash": "e4da5eb03d2e09dc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.617Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-007": {
+      "hash": "017034e0fb21b692",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.621Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-CTR-009": {
+      "hash": "4c1a78f357f41ea2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.713Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-002": {
+      "hash": "3d004cb8f84c4465",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:03.800Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-001": {
+      "hash": "769f75afd91a2dee",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.038Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-003": {
+      "hash": "59a908f001ea854b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.073Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-004": {
+      "hash": "4e960f4fd5f1334b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.099Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-005": {
+      "hash": "560c108f9365e043",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.218Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-007": {
+      "hash": "e00c5d8628b04a21",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.239Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-INH-006": {
+      "hash": "e9337746f649c7ca",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.250Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-001": {
+      "hash": "6f507497bcdff2ec",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.260Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-003": {
+      "hash": "24a58ac3017eafa6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.345Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-004": {
+      "hash": "2a044659dced136d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.365Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-005": {
+      "hash": "bf33673e470646ec",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.457Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-002": {
+      "hash": "1ee1434612990af8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.505Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-007": {
+      "hash": "299a260ba16c9ca6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.529Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-006": {
+      "hash": "d16fbca2e39a9ef1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.562Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-001": {
+      "hash": "5a62a6175c275efc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.654Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-002": {
+      "hash": "537e5fd313a4385e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.725Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-003": {
+      "hash": "5f4b1963c8db98b9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.756Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-PAT-008": {
+      "hash": "6e07f3019c6c65f9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.774Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-005": {
+      "hash": "b0c589017fee8279",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.793Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-004": {
+      "hash": "267f0c3b4d191fb3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.832Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-007": {
+      "hash": "6fe1f7d66738a893",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:04.930Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-001": {
+      "hash": "2935d5c5b51909b2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.028Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFC-006": {
+      "hash": "3179f8bc34d9aa57",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.066Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-003": {
+      "hash": "5b0df42a96d3cda0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.084Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-002": {
+      "hash": "2472775dacb03e94",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.091Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-004": {
+      "hash": "303884640f0993fd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.153Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-005": {
+      "hash": "6801c912bcc1d08e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.159Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-006": {
+      "hash": "5bba80c6e7c55abd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.275Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENM-007": {
+      "hash": "5588f299512dd69f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.394Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-001": {
+      "hash": "5033352a5e169a87",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.469Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-002": {
+      "hash": "60c0830723e1997f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.631Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-003": {
+      "hash": "90b4a582b06c3a33",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.739Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-004": {
+      "hash": "4b2f6e9298b6548c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:05.949Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-005": {
+      "hash": "709ee3cbbcfc15b0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.028Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-007": {
+      "hash": "37681cb233b283d6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.064Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-001": {
+      "hash": "c84022e47619986b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.164Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-IFX-006": {
+      "hash": "0a3879d9aefb6964",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.216Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-002": {
+      "hash": "9fbdaed61c8b3566",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.242Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-004": {
+      "hash": "19ef8820e6cdc82e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.314Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-003": {
+      "hash": "b96618f555949fa0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.318Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-005": {
+      "hash": "19a3b878cb4261c3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.378Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-001": {
+      "hash": "7f28f9f27df6c0d5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.467Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-ENX-006": {
+      "hash": "5d05cf0f9a13ec43",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.516Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-003": {
+      "hash": "2eac1fbca6a65c60",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.542Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-002": {
+      "hash": "67e1f7201af2c6f8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.544Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-004": {
+      "hash": "672f77d5a4cc0166",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.616Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-005": {
+      "hash": "c751f44554c99371",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.781Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-006": {
+      "hash": "9ecd121c166eea49",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.793Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-007": {
+      "hash": "191c0f5f884c9c7d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.955Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-009": {
+      "hash": "0993d86a5d77ef04",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.961Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-010": {
+      "hash": "253fb8476af407a2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:06.976Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-001": {
+      "hash": "fef2886efe53bd08",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.002Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OBJ-011": {
+      "hash": "aad458f3138c8586",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.080Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-003": {
+      "hash": "bc85992bfa4f5bb7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.099Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-002": {
+      "hash": "b17d38f9af5cadfe",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.126Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-005": {
+      "hash": "966f5a99b2e02f8f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.146Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-004": {
+      "hash": "ff2f78dc203514ff",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.153Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-007": {
+      "hash": "4366959da3afa85f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.232Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-006": {
+      "hash": "f2eb8bc56a5a6ebb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.244Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-009": {
+      "hash": "3e25b06c1c1cb768",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.332Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-010": {
+      "hash": "6d51ffdc084c55a0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.353Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-008": {
+      "hash": "956f3c8b24beaabe",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.525Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-012": {
+      "hash": "62fdc22efbd3a9e9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.609Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-011": {
+      "hash": "44daa874c4ad160d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.661Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-001": {
+      "hash": "b03a8551334eea47",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.684Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-OVL-013": {
+      "hash": "3ca9fc1b335b8ad4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.690Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-003": {
+      "hash": "8f9b8622a85e200b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.719Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-002": {
+      "hash": "938060e69b36bce2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.784Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-005": {
+      "hash": "685f3c7951e9ac6c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.840Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-006": {
+      "hash": "61da21f0a58b2cc2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:07.912Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-004": {
+      "hash": "ba06e0657834c2cc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.033Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-008": {
+      "hash": "ad65fac51bca0d22",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.196Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-009": {
+      "hash": "9b000d4f5d6ec994",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.282Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-007": {
+      "hash": "7814158f7f9135ab",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.287Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-002": {
+      "hash": "941a8ab2b9a7bfac",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.316Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D3-SCP-010": {
+      "hash": "9ee7cd5b5b290dfb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.575Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-003": {
+      "hash": "b6e2949576178a86",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.619Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-004": {
+      "hash": "d11db5f7b1c255a4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.650Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-006": {
+      "hash": "d1faf90b6c149362",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.695Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-005": {
+      "hash": "cc44d350f4c3e198",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.725Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-007": {
+      "hash": "cb546bba6f8de3b3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.768Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-008": {
+      "hash": "0e23c808f2f0e3f6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.803Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-010": {
+      "hash": "f0ba5ba4b836a266",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.911Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-011": {
+      "hash": "23697123c1f3c287",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:08.971Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-012": {
+      "hash": "2fdc1c740a2b31ca",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.023Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-013": {
+      "hash": "7db8432c2fa685a0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.068Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-009": {
+      "hash": "f99838c5ab0edea9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.113Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-014": {
+      "hash": "88cde166ade2e2c3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.145Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-015": {
+      "hash": "d60bb8cab229f883",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.200Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-017": {
+      "hash": "bed9ad375cdd6a44",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.278Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-EXC-016": {
+      "hash": "b6f8589a07948a97",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.352Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-002": {
+      "hash": "0559a172e8a8abf5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.421Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-003": {
+      "hash": "7da4ce57c06df3a8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.501Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-001": {
+      "hash": "41510e9946816654",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.511Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-004": {
+      "hash": "07e23895527af429",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.528Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-005": {
+      "hash": "4218d6002ecc175e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.547Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D4-TWR-006": {
+      "hash": "b6e8b6e28fa50bdc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.606Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-002": {
+      "hash": "ce4c2befa3212564",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.681Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-003": {
+      "hash": "836773b8efe91b84",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.758Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-004": {
+      "hash": "c8a257afe24b0b6f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.829Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-001": {
+      "hash": "911c7b2548f7f061",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.837Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-005": {
+      "hash": "7eca570a588e4d7f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.891Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-006": {
+      "hash": "3cc13c9ffb3cb19f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.910Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-007": {
+      "hash": "8fdae9dd1c934768",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:09.978Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-LST-001": {
+      "hash": "4598bebabb770d50",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.118Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-ARR-008": {
+      "hash": "b4c40b6548f59fe7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.168Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-LST-002": {
+      "hash": "1aecdfb21cb12bb2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.194Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-LST-003": {
+      "hash": "83f285f9672c64ca",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.254Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SET-001": {
+      "hash": "23114a5350fd48ec",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.343Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SET-002": {
+      "hash": "c32ac34732578dc1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.436Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SET-003": {
+      "hash": "4a2ee868635fc83c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.543Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-LST-004": {
+      "hash": "6d9ae5237c5d741a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.607Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-DEQ-001": {
+      "hash": "0f9cac983b5de100",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.619Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SEQ-001": {
+      "hash": "dc604f27fc882b21",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.693Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SEQ-003": {
+      "hash": "0714eb0a3912daa2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.766Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-MAP-001": {
+      "hash": "dd85acc05364c2ed",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.860Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SEQ-002": {
+      "hash": "3bfa88c64c847167",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.869Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-MAP-002": {
+      "hash": "81a0782bf0aa0cb4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.944Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-MAP-003": {
+      "hash": "ea22cecb9de8f373",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.958Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SRT-003": {
+      "hash": "f8668ba083f48d5a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:10.985Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-SRT-002": {
+      "hash": "d6d3ec87fb29f4f9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.041Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-EQH-001": {
+      "hash": "38ca8e650690344a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.052Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-GEN-002": {
+      "hash": "b643a61450592d89",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.218Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-GEN-001": {
+      "hash": "ecce8732177690e8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.384Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-GEN-003": {
+      "hash": "d1305c49d7a529e7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.440Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-001": {
+      "hash": "cad9631dc8725019",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.460Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D5-GEN-004": {
+      "hash": "e18cd7befaac25f0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.473Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-003": {
+      "hash": "2d634bb5d6c9e8c6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.591Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-004": {
+      "hash": "5bc7bc8eedca1648",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.661Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-002": {
+      "hash": "8d6d5e78d42de124",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.837Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-006": {
+      "hash": "f1cb2978355d25fe",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:11.958Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-005": {
+      "hash": "2117cd8204e8fef9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.025Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-007": {
+      "hash": "91efc2d088905654",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.040Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-LAM-009": {
+      "hash": "ed8edb884ddb0d1f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.063Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-002": {
+      "hash": "4291808435751d23",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.138Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-001": {
+      "hash": "d9e54e5f76cdd3d8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.161Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-003": {
+      "hash": "9e2b66a704f0a059",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.170Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-004": {
+      "hash": "e0925076d3ebe69e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.322Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-005": {
+      "hash": "f0cc38abd7caa831",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.331Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-006": {
+      "hash": "fc37643ccdc7127b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.394Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-008": {
+      "hash": "481b0f2c57ab3960",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.485Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-009": {
+      "hash": "82528f2ba3093b4d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.555Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-010": {
+      "hash": "4d6184328f58a069",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.656Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-PIP-007": {
+      "hash": "9b1e0954e2b3aef7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.666Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-001": {
+      "hash": "cf054eec55a2f9a1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.734Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-002": {
+      "hash": "75a6901aa4dc5926",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.766Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-003": {
+      "hash": "39ff11f96f2d752e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.822Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-005": {
+      "hash": "642e0ddcc365ef12",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.847Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-006": {
+      "hash": "493c1b903bd837b3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.860Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-007": {
+      "hash": "f7d6b6a9562470b9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.933Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-008": {
+      "hash": "71886754c41a545d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:12.985Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-009": {
+      "hash": "9eaebda34e51c7fa",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.045Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-COL-010": {
+      "hash": "2ea4525ad6739dc9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.055Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-001": {
+      "hash": "7c240f6f3b188161",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.147Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-002": {
+      "hash": "1e493892e0ccf0ed",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.157Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-003": {
+      "hash": "764d9fe3e965d640",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.213Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-004": {
+      "hash": "742831693fe40916",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.226Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-006": {
+      "hash": "d93c5594fa168038",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.353Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-001": {
+      "hash": "fba0942d0d48a08e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:13.840Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-002": {
+      "hash": "7fabbc8b13d79e8c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:14.508Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-003": {
+      "hash": "358f1bd3caa1e9b1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:15.168Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-004": {
+      "hash": "b2fd3c5c2c93ba0b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:18.035Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-006": {
+      "hash": "125fa0aece8498c3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:18.852Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-007": {
+      "hash": "42a0e4f733764e16",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:22.115Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-008": {
+      "hash": "f2e7e544ec446b6d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:22.794Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-009": {
+      "hash": "f33fc74535e79645",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:23.611Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-010": {
+      "hash": "4b0b5f8dff84d9c8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:24.271Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-011": {
+      "hash": "cc18c25568c28c02",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:24.842Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-012": {
+      "hash": "488ab991cc4b90bf",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:25.457Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-013": {
+      "hash": "14fca3e15478698b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:25.871Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-014": {
+      "hash": "23812ab265b92df9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:28.074Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D6-GAT-007": {
+      "hash": "7372bc3a27b7d4d6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:28.076Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-015": {
+      "hash": "8cf7ae1d37b295d2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:28.137Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-017": {
+      "hash": "4d11790eb94d0e7b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:28.870Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-001": {
+      "hash": "301d2f30f70b9bdd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:28.983Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-002": {
+      "hash": "e2562538b1de358d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.039Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-003": {
+      "hash": "391a37d909007ee7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.094Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-MOD-016": {
+      "hash": "fb34e44e2e367d81",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.184Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-005": {
+      "hash": "c16dee79a23741a2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.329Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-004": {
+      "hash": "aa3a7c3855f84e85",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.732Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D7-PKG-006": {
+      "hash": "000c468584018df1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.749Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-001": {
+      "hash": "431270b489244a07",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.770Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-002": {
+      "hash": "68cb50511db9ec42",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.871Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-003": {
+      "hash": "9005fa32f4ed5141",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.885Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-004": {
+      "hash": "76553141c082649c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.987Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-005": {
+      "hash": "c771efaf168d9148",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:29.999Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-006": {
+      "hash": "fc11326e93e8cbea",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.110Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-009": {
+      "hash": "aef16be928e6f386",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.197Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-010": {
+      "hash": "17aa708b39ebbe7f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.341Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-001": {
+      "hash": "e9c72bcf4130c13d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.455Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-002": {
+      "hash": "700d372ed60bc9bb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.548Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-003": {
+      "hash": "50940bdfd38ef562",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.796Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-LCK-008": {
+      "hash": "9c3a8a64603bad9d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.851Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-005": {
+      "hash": "9a280fe8bdf06b32",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:30.990Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-007": {
+      "hash": "5243b0b8f5a19e71",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.101Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-008": {
+      "hash": "d4a43da685d4ed66",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.221Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-001": {
+      "hash": "58541e600d95867a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.328Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-002": {
+      "hash": "969e7b79d519e450",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.450Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-COL-004": {
+      "hash": "c9299736eafd56ea",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.572Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-003": {
+      "hash": "b683c7e2854f475e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.760Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-006": {
+      "hash": "2e443d18a40447ed",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.878Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-005": {
+      "hash": "43c2e18ff09c4ac2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:31.922Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-009": {
+      "hash": "e6a8ac67534011c9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.016Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-010": {
+      "hash": "011e4f2ae7f23f83",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.242Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-008": {
+      "hash": "4f1630f10d558b31",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.295Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-VT-001": {
+      "hash": "b838ab0f56a15a64",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.414Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-THR-011": {
+      "hash": "4a5f6de51f8f30d9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.577Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-VT-004": {
+      "hash": "d430d4459fb74453",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.666Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-SV-001": {
+      "hash": "1127e38dbde91c00",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.817Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-SV-002": {
+      "hash": "25a47f90ef19a974",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.900Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-VT-003": {
+      "hash": "2e623ecc330046d1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.993Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-SV-004": {
+      "hash": "f701aeb50cb6e88c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:32.995Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-SV-006": {
+      "hash": "96f91cf775ea555b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.121Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-001": {
+      "hash": "2eb4c1d7dc17d9ad",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.275Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-SV-005": {
+      "hash": "c0d0ae2ecf6f66f5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.288Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-002": {
+      "hash": "7bb12fe183b34052",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.335Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-003": {
+      "hash": "de1cf21be291170a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.798Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-004": {
+      "hash": "5511d6fedca0a024",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.858Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-005": {
+      "hash": "57a7710c1e35a707",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.907Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D8-PCX-006": {
+      "hash": "49a9fa592cedb17b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.965Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-001": {
+      "hash": "16ed661e74eb9806",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:33.999Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-002": {
+      "hash": "518b469dbb84bad2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.070Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-004": {
+      "hash": "d0185b729a4120d4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.096Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-006": {
+      "hash": "f03be2c7125d6a54",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.272Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-007": {
+      "hash": "567efe5359200cb1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.367Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-005": {
+      "hash": "b881d62cf97f867a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.451Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-008": {
+      "hash": "28d64ae45082b91d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.505Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-009": {
+      "hash": "4530b0e31d2fb40d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.507Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-IO-010": {
+      "hash": "a24a361a532a743e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.596Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-001": {
+      "hash": "27d5fbd7740db40a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.660Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-002": {
+      "hash": "1a56cac9ae5d9ae9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.739Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-004": {
+      "hash": "ab6a1795cfbd8c2d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:34.868Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-005": {
+      "hash": "06ebf7f2a7cf6fc8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.059Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-007": {
+      "hash": "a094f0c659bc5076",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.188Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-003": {
+      "hash": "06e27924bdda741a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.287Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-009": {
+      "hash": "9730d8efbf27dd6e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.313Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SER-008": {
+      "hash": "b800b9e98a9770b1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.350Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-001": {
+      "hash": "f9c7f38ae994c004",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.395Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-002": {
+      "hash": "f059f5bead01bba9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.422Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-003": {
+      "hash": "72dbcb611d1289b1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.503Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-005": {
+      "hash": "c1c87bc17d38329e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.554Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-004": {
+      "hash": "7621035354fdf7c3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.570Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-006": {
+      "hash": "01eac82dc0e3d002",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.633Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-009": {
+      "hash": "d46111a80bf2dd1f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.727Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-010": {
+      "hash": "d6e4b2f2ac773bb4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.892Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-011": {
+      "hash": "33b5e15aa420ef94",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:35.983Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SRX-001": {
+      "hash": "a6d0e32178209e17",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.143Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-NIO-007": {
+      "hash": "784339cbc487b7bd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.369Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SRX-002": {
+      "hash": "5b2caccee0facce7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.383Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SRX-003": {
+      "hash": "a462b7ce07c1e5a5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.503Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SRX-004": {
+      "hash": "b7125c198eea5368",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.528Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-primitives-operators#0": {
+      "hash": "0edc9e13e2603383",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.614Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "question:D9-SRX-005": {
+      "hash": "4ea06182e55e9ed2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.627Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-primitives-operators#1": {
+      "hash": "cae48d5308264927",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.634Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-primitives-operators#2": {
+      "hash": "49bb5431633aeb74",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.709Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-primitives-operators#3": {
+      "hash": "42c9b50acc46fd73",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.717Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-primitives-operators#4": {
+      "hash": "e6575c59d94845d5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.810Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-strings-text#0": {
+      "hash": "5caf0ac3416c6643",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.818Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-strings-text#1": {
+      "hash": "cfb47c399a5b6f73",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.871Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-strings-text#2": {
+      "hash": "c6417ee63c6a37cb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.898Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-strings-text#3": {
+      "hash": "e1505f95c9546e95",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.933Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-strings-text#4": {
+      "hash": "416d15152b80f33b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:36.963Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-date-time#0": {
+      "hash": "4b996b35629d8308",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.020Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-date-time#1": {
+      "hash": "a0439c03c2d20e6c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.054Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-date-time#2": {
+      "hash": "d4652d017885091c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.136Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:values-date-time#3": {
+      "hash": "6934cb2017449899",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.178Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#1": {
+      "hash": "84fb3810cc0d9b83",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.267Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#2": {
+      "hash": "866db94a348404d1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.586Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#0": {
+      "hash": "bd994f0674b5cef8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.602Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#3": {
+      "hash": "132fe997279f2a1c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:37.671Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#5": {
+      "hash": "7e4fcc817f031328",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.041Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#6": {
+      "hash": "9394196ee13625aa",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.122Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#4": {
+      "hash": "8f598392a2166795",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.128Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#0": {
+      "hash": "6f87c27381f0acbb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.190Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:l10n-locales-bundles#7": {
+      "hash": "2699ac6799815f00",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.258Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#1": {
+      "hash": "2f3e61874e75aa9d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.266Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#3": {
+      "hash": "a9f96f42fc994405",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.320Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#2": {
+      "hash": "0651edb37dda7f58",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.332Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#4": {
+      "hash": "e0af707009130b95",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.403Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-decisions-switch#5": {
+      "hash": "0e09fcb89dfab0e8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.445Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-loops-branching#0": {
+      "hash": "beb39b373125ad47",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.503Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-loops-branching#1": {
+      "hash": "daabb5971d883b62",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.511Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-loops-branching#3": {
+      "hash": "1956e7a67f26a12c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.527Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-loops-branching#2": {
+      "hash": "4349b75bfecfc604",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.566Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:flow-loops-branching#4": {
+      "hash": "49baf98387fcd263",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.592Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#1": {
+      "hash": "90b936595535519c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.631Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#0": {
+      "hash": "d0cfd93db6aad8bd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.631Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#3": {
+      "hash": "bad6dfc750e0f2e0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.728Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#2": {
+      "hash": "a6c9024edd07e269",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.738Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#4": {
+      "hash": "6d00603b9a10c669",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.745Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#0": {
+      "hash": "c380198b0f8ed6b2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.794Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-objects-lifecycle#5": {
+      "hash": "0f82712047916264",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.816Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#1": {
+      "hash": "14705456bf6600be",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.907Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#2": {
+      "hash": "d9706157f8fc7716",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.981Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#3": {
+      "hash": "d5f4c46c18c64e67",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:38.997Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#4": {
+      "hash": "c610b57e5d4e78bb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.013Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#0": {
+      "hash": "b63c78c408771b24",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.121Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-constructors#5": {
+      "hash": "2d1f051bea84e703",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.129Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#1": {
+      "hash": "ce8a666f0ba1bc5a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.207Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#2": {
+      "hash": "ddb8b56a4a04f477",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.233Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#3": {
+      "hash": "9ed8b71ebbbed5b1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.249Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#5": {
+      "hash": "53f41b2efef153e7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.335Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-overloading#4": {
+      "hash": "d29cb6d28b45783f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.340Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#1": {
+      "hash": "e7915f992fb1083a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.369Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#2": {
+      "hash": "0a9462c645087c4b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.388Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#0": {
+      "hash": "fae61619a0190b68",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.447Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#3": {
+      "hash": "0e214a2133457e30",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.492Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#4": {
+      "hash": "6e31c8c4507acf3b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.554Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-encapsulation-scope#5": {
+      "hash": "bdeb0d17979b56bf",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.575Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#0": {
+      "hash": "2b99d4bcbdd9ad7b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.637Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#1": {
+      "hash": "ca2d009f22873eca",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.640Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#3": {
+      "hash": "a0ed4d94235cf586",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.725Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#2": {
+      "hash": "9b7866b454d41df0",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.731Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#4": {
+      "hash": "8f6916e4973655cd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.782Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-inheritance-polymorphism#5": {
+      "hash": "6c13d5622aac455c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.783Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#0": {
+      "hash": "5b289f906070dfbb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.841Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#1": {
+      "hash": "aa01d9d1fd87443a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.891Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#2": {
+      "hash": "2c8f3dd8c77e20c6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.917Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#3": {
+      "hash": "4bd047cbca600c3a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:39.981Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#4": {
+      "hash": "99714a84a97a2e97",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.020Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-interfaces#0": {
+      "hash": "e1adaa549d4e7d2d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.051Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-sealed-patterns#5": {
+      "hash": "2a3a305ecef6c251",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.088Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-interfaces#1": {
+      "hash": "0591484a5f58a604",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.117Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-interfaces#2": {
+      "hash": "5f4690178c5e4eb7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.174Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-interfaces#3": {
+      "hash": "e84d288f437fa40f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.251Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#1": {
+      "hash": "6d65e25af1680009",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.321Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#0": {
+      "hash": "e25ac7b24b463cd5",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.327Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#2": {
+      "hash": "ba9da8ea4f886f5c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.406Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#3": {
+      "hash": "a6f61e7654078282",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.418Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#5": {
+      "hash": "7e8c3316962bf5d1",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.461Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#0": {
+      "hash": "cb17bb42048d097b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.479Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:oop-enums#4": {
+      "hash": "cd1f6ae2704b8c65",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.509Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#1": {
+      "hash": "1ea9bf2b9165e3b4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.552Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#2": {
+      "hash": "44fb712afae967a7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.592Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#3": {
+      "hash": "0eb91ec8a7a3eaaa",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.644Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#4": {
+      "hash": "a59c162f10521bb9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.660Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-fundamentals#5": {
+      "hash": "84dbc11173a56602",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.708Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-try-with-resources#0": {
+      "hash": "589eaab1a0bcb69d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.721Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-try-with-resources#2": {
+      "hash": "e1b4ea4a1c1c6a14",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.797Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-try-with-resources#1": {
+      "hash": "3962ad497e1bfb11",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.798Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-try-with-resources#4": {
+      "hash": "351a0fefa6bef206",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.814Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:exc-try-with-resources#3": {
+      "hash": "2331b40b5b173d20",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.857Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-arrays#0": {
+      "hash": "4f30712cb65b11e9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.885Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-arrays#1": {
+      "hash": "020673725ba213e6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.918Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-arrays#2": {
+      "hash": "7e18a9d7ce24283b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.961Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-arrays#3": {
+      "hash": "01e0bfe87e7cad3d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:40.989Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#0": {
+      "hash": "02b0bf8040504364",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.039Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#1": {
+      "hash": "57cb1bb7b69b025a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.054Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#2": {
+      "hash": "da313cac4e0a5e80",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.111Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#3": {
+      "hash": "1d5cdeea47c049d7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.117Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#5": {
+      "hash": "c40ab2da930e151c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.178Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#4": {
+      "hash": "6ee9ac2f43f3427f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.193Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#6": {
+      "hash": "d02ce25419935375",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.256Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-lists-sets-deques#7": {
+      "hash": "92d27baf320ee358",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.271Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#0": {
+      "hash": "47cc72cf234e22c6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.325Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#1": {
+      "hash": "4e15b1705b45b434",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.339Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#3": {
+      "hash": "666ef432d95c8c51",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.433Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#2": {
+      "hash": "95493ba3f258f198",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.453Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#5": {
+      "hash": "156441014e7714f2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.481Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#0": {
+      "hash": "d82354bee62acf49",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.516Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:coll-maps-sorting-generics#4": {
+      "hash": "c14782b9dbd74d63",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.527Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#1": {
+      "hash": "c374212cefd23f5f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.598Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#2": {
+      "hash": "29b2433e31f4d7f4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.621Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#4": {
+      "hash": "56554f2a237efa85",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:41.666Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#3": {
+      "hash": "ce16675e66d3e702",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.025Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-lambdas#5": {
+      "hash": "d258d1e00e29aad9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.054Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#0": {
+      "hash": "f9ad66a64c346cc9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.098Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#1": {
+      "hash": "5dabecd64ca61675",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.212Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#2": {
+      "hash": "2d9650de7b27b82d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.275Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#3": {
+      "hash": "9fc9df262f87f239",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.289Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#5": {
+      "hash": "347f0d741f547bbc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.352Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#4": {
+      "hash": "237955afc698ccd4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.366Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#6": {
+      "hash": "0d813286926f5609",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.396Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#7": {
+      "hash": "b1fe91b214a98f56",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.432Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#0": {
+      "hash": "0dd7dc2bc83ee97a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.482Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-pipelines#8": {
+      "hash": "740db49354c86e3f",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.491Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#1": {
+      "hash": "debc9b3cd46e099a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.602Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#2": {
+      "hash": "8b604f9806b29bef",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.613Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#4": {
+      "hash": "41f444d7584a3888",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.696Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#3": {
+      "hash": "7dfdb622dd0442d9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.698Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-collectors#5": {
+      "hash": "4bc6a7e310786380",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.770Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-gatherers#0": {
+      "hash": "e862cd9ffcfaa57a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.789Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-gatherers#1": {
+      "hash": "4e9a6d50b250a1e6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.867Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-gatherers#3": {
+      "hash": "54b64705942f0d59",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.949Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:streams-gatherers#2": {
+      "hash": "626109f7e9abacfb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:42.991Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-modules-services#0": {
+      "hash": "7b5c283c4d323e2b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.033Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-modules-services#2": {
+      "hash": "bcd47e128873025d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.068Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-modules-services#1": {
+      "hash": "4b3a49e4a38436e8",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.080Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-compile-package-run#0": {
+      "hash": "fc1183d8bb8dad8a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.325Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-modules-services#3": {
+      "hash": "efa773c7c8a04e2b",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.341Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-compile-package-run#1": {
+      "hash": "64cf61cd126b86c3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.381Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:pkg-compile-package-run#2": {
+      "hash": "2206aa0e6f99b166",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.398Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-threads-executors#0": {
+      "hash": "df65fe2731992039",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.462Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-threads-executors#1": {
+      "hash": "ae60e09b671bdbf4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.488Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-threads-executors#2": {
+      "hash": "592fc8eab0e08ac4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.563Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-threads-executors#3": {
+      "hash": "907a398126a4c6a7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.570Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-threads-executors#4": {
+      "hash": "e75438cf2b10f22e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.654Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-virtual-scoped#0": {
+      "hash": "ccb623a3b008f642",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.680Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-virtual-scoped#2": {
+      "hash": "b5c32076f9c4e13a",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.751Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-virtual-scoped#3": {
+      "hash": "8a5e1d64068e6143",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.898Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-virtual-scoped#1": {
+      "hash": "bda260c230966b1d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.917Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-virtual-scoped#4": {
+      "hash": "ee4f2f650c2d7b27",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:43.999Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-thread-safety#0": {
+      "hash": "a78b3c0073816c3e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.058Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-thread-safety#1": {
+      "hash": "08dc4d56783bf5d6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.079Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-thread-safety#3": {
+      "hash": "6a0331fd49f18f12",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.132Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-thread-safety#2": {
+      "hash": "872abe0366feca3e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.135Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-collections-parallel#0": {
+      "hash": "a343c800ad5a2215",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.211Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-thread-safety#4": {
+      "hash": "ad3f30cc3942d93d",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.254Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-collections-parallel#1": {
+      "hash": "3af79420e0e6b270",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.288Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-collections-parallel#2": {
+      "hash": "54796c05f63955dd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.350Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:conc-collections-parallel#3": {
+      "hash": "4d89e8cbd4093374",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.374Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#0": {
+      "hash": "b604cabf18ad9b60",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.441Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#1": {
+      "hash": "6165a019fa1a5327",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.448Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#3": {
+      "hash": "26b073d235be5f57",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.508Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#2": {
+      "hash": "152b872147325ba2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.556Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#4": {
+      "hash": "26b51b263df95a30",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.594Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#5": {
+      "hash": "6bf86cd529080866",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.628Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#6": {
+      "hash": "4d55ee68bc92a752",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.665Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#7": {
+      "hash": "431b8ca05520f0d4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.710Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-streams#8": {
+      "hash": "441d1d0d54bb00fe",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.757Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-serialization#0": {
+      "hash": "93d3cc47ee323e16",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.839Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-serialization#1": {
+      "hash": "6891eec213a15869",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.880Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-serialization#2": {
+      "hash": "3cd62da7c2481746",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:44.944Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-serialization#3": {
+      "hash": "354de532ed3e90cd",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.009Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#0": {
+      "hash": "b22a70257a667ecc",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.062Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#1": {
+      "hash": "b7c89e8c545cff6e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.085Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#3": {
+      "hash": "0d8319d158143040",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.202Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#2": {
+      "hash": "73984b3a06495517",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.224Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#4": {
+      "hash": "868a414b9a3945f3",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.331Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "lesson:io-nio2#5": {
+      "hash": "200f5c7965fef592",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.339Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D1-EX-001": {
+      "hash": "711d4d79b6c0db31",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.608Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D1-EX-002": {
+      "hash": "20c58981a5a8781e",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.611Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D2-EX-001": {
+      "hash": "103ac7847fc4779c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.883Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D10-EX-001": {
+      "hash": "884ef1030a80e8a2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:45.978Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D3-EX-010": {
+      "hash": "6ee6c00c2c1f6cdb",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.046Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D3-EX-001": {
+      "hash": "b9d2a6b98bf0ff98",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.148Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D3-EX-002": {
+      "hash": "f9f29335032979a7",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.250Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D3-EX-003": {
+      "hash": "2daeea02d2a95dd2",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.423Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D4-EX-001": {
+      "hash": "a0bc8965d59cb0a9",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.455Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D5-EX-001": {
+      "hash": "f3bdd2ebc7d0a102",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.666Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D6-EX-010": {
+      "hash": "2084ac287384b0d4",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.861Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D6-EX-001": {
+      "hash": "e04bc31f9e75e2ca",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:46.994Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D7-EX-001": {
+      "hash": "2743c273aaf2e231",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:47.194Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D8-EX-001": {
+      "hash": "19fbaeea3e03e3e6",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:49.270Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D9-EX-010": {
+      "hash": "f2e6890dad0b754c",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:49.480Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D9-EX-001": {
+      "hash": "00337bc5de22a751",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:49.667Z",
+      "jdk": "25.0.4+7-LTS"
+    },
+    "exercise:D8-EX-010": {
+      "hash": "7bb7077686b61a72",
+      "ok": true,
+      "problems": [],
+      "verifiedAt": "2026-10-13T09:46:49.761Z",
+      "jdk": "25.0.4+7-LTS"
+    }
+  }
+}

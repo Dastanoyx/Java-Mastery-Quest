@@ -1,0 +1,156 @@
+# D10 — Localization coding exercises
+
+- id: D10-EX-001
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  title: Locale-aware invoice lines
+  difficulty: intermediate
+  kind: implement
+  prompt: |
+    Implement the three static methods of `Invoice`. The message bundles `InvoiceText` (base, English) and
+    `InvoiceText_fr` are given as `ListResourceBundle` classes — do not change them.
+
+    1. `line(locale, item, qty, unitPrice)` returns `"<qty> x <item> @ <unit price> = <line total>"`.
+       Format the quantity with `NumberFormat.getIntegerInstance(locale)` (so 1200 becomes `1,200` in
+       `en_US` and `1.200` in `de_DE`) and both amounts with `NumberFormat.getCurrencyInstance(locale)`.
+       Example: `line(Locale.US, "Coffee", 3, 2.5)` → `3 x Coffee @ $2.50 = $7.50`.
+    2. `summary(locale, lines, total)` loads `ResourceBundle.getBundle("InvoiceText", locale)`. If `lines`
+       is 0 it returns the `empty` message; otherwise it formats the `summary` pattern with a
+       `MessageFormat` for that locale, passing `lines` as argument `{0}` and the currency-formatted total
+       as `{1}`. Example: `summary(Locale.FRANCE, 2, 1234.5)` → `2 lignes, total 1 234,50 €` (with CLDR's
+       special spaces).
+    3. `parseAmount(locale, text)` parses a currency string such as `$1,234.50` with the locale's currency
+       format and returns it as a `double`. If the text cannot be parsed, throw an
+       `IllegalArgumentException` (wrap the checked `ParseException`).
+
+    The tests compare exact strings. German and French currency output contains U+00A0 (no-break space)
+    before `€`, and French grouping uses U+202F. You get these characters for free by using the JDK
+    formatters — never build the strings by hand.
+  fileName: Solution.java
+  starter: |
+    import java.text.*;
+    import java.util.*;
+
+    // Given: the message bundles (do not change them)
+    class InvoiceText extends ListResourceBundle {
+        public InvoiceText() { }
+        protected Object[][] getContents() {
+            return new Object[][] { { "summary", "{0} lines, total {1}" }, { "empty", "No items" } };
+        }
+    }
+    class InvoiceText_fr extends ListResourceBundle {
+        public InvoiceText_fr() { }
+        protected Object[][] getContents() {
+            return new Object[][] { { "summary", "{0} lignes, total {1}" } };
+        }
+    }
+
+    class Invoice {
+        static String line(Locale locale, String item, int qty, double unitPrice) {
+            // TODO 1
+            return "";
+        }
+
+        static String summary(Locale locale, int lines, double total) {
+            // TODO 2
+            return "";
+        }
+
+        static double parseAmount(Locale locale, String text) {
+            // TODO 3
+            return 0;
+        }
+    }
+
+    class Solution { }
+  solution: |
+    import java.text.*;
+    import java.util.*;
+
+    class InvoiceText extends ListResourceBundle {
+        public InvoiceText() { }
+        protected Object[][] getContents() {
+            return new Object[][] { { "summary", "{0} lines, total {1}" }, { "empty", "No items" } };
+        }
+    }
+    class InvoiceText_fr extends ListResourceBundle {
+        public InvoiceText_fr() { }
+        protected Object[][] getContents() {
+            return new Object[][] { { "summary", "{0} lignes, total {1}" } };
+        }
+    }
+
+    class Invoice {
+        static String line(Locale locale, String item, int qty, double unitPrice) {
+            NumberFormat count = NumberFormat.getIntegerInstance(locale);
+            NumberFormat money = NumberFormat.getCurrencyInstance(locale);
+            return count.format(qty) + " x " + item + " @ " + money.format(unitPrice)
+                + " = " + money.format(qty * unitPrice);
+        }
+
+        static String summary(Locale locale, int lines, double total) {
+            ResourceBundle text = ResourceBundle.getBundle("InvoiceText", locale);
+            if (lines == 0) return text.getString("empty");
+            String amount = NumberFormat.getCurrencyInstance(locale).format(total);
+            return new MessageFormat(text.getString("summary"), locale).format(new Object[] { lines, amount });
+        }
+
+        static double parseAmount(Locale locale, String text) {
+            try {
+                return NumberFormat.getCurrencyInstance(locale).parse(text).doubleValue();
+            } catch (ParseException e) {
+                throw new IllegalArgumentException("not an amount: " + text, e);
+            }
+        }
+    }
+
+    class Solution { }
+  harness: |
+    import java.util.Locale;
+    import java.util.function.Supplier;
+
+    public class Main {
+        static final String NBSP = " ", NNBSP = " ";
+        static void t(String name, boolean ok) { System.out.println((ok ? "PASS " : "FAIL ") + name); }
+        static void eq(String name, Object expected, Object actual) {
+            boolean ok = expected.equals(actual);
+            System.out.println((ok ? "PASS " : "FAIL ") + name + (ok ? "" : ": expected [" + expected + "] but got [" + actual + "]"));
+        }
+        static boolean throwsIAE(Supplier<?> s) {
+            try { s.get(); return false; } catch (IllegalArgumentException e) { return true; } catch (RuntimeException e) { return false; }
+        }
+        public static void main(String[] args) {
+            try {
+                eq("US line", "3 x Coffee @ $2.50 = $7.50", Invoice.line(Locale.US, "Coffee", 3, 2.5));
+                eq("US quantity grouping", "1,200 x Bolt @ $0.25 = $300.00", Invoice.line(Locale.US, "Bolt", 1200, 0.25));
+                eq("German line", "3 x Kaffee @ 2,50" + NBSP + "€ = 7,50" + NBSP + "€", Invoice.line(Locale.GERMANY, "Kaffee", 3, 2.5));
+                eq("German quantity grouping", "1.200 x Schraube @ 0,25" + NBSP + "€ = 300,00" + NBSP + "€",
+                    Invoice.line(Locale.GERMANY, "Schraube", 1200, 0.25));
+                eq("Japanese yen has no decimals", "2 x Tea @ ￥150 = ￥300", Invoice.line(Locale.JAPAN, "Tea", 2, 150));
+                eq("US summary", "2 lines, total $1,234.50", Invoice.summary(Locale.US, 2, 1234.5));
+                eq("French summary", "2 lignes, total 1" + NNBSP + "234,50" + NBSP + "€", Invoice.summary(Locale.FRANCE, 2, 1234.5));
+                eq("French empty invoice falls back to the base bundle", "No items", Invoice.summary(Locale.FRANCE, 0, 0));
+                eq("German summary: English text (no German bundle), German money", "3 lines, total 10,00" + NBSP + "€",
+                    Invoice.summary(Locale.GERMANY, 3, 10));
+                t("parse US amount", Invoice.parseAmount(Locale.US, "$1,234.50") == 1234.5);
+                t("parse German amount", Invoice.parseAmount(Locale.GERMANY, "1.234,50" + NBSP + "€") == 1234.5);
+                t("amount without currency symbol is rejected", throwsIAE(() -> Invoice.parseAmount(Locale.US, "1234.50")));
+            } catch (Throwable e) {
+                System.out.println("FAIL unexpected " + e);
+            }
+        }
+    }
+  explanation: |
+    All locale-specific details — grouping and decimal separators, currency symbol position, special
+    spaces and the yen's missing fraction digits — come from the JDK's CLDR-based `NumberFormat`s, so the
+    code never hard-codes them. `summary` shows the resource-bundle rules at work: for `fr_FR` the bundle
+    `InvoiceText_fr` is chosen, and its missing `empty` key is inherited from the base bundle through the
+    parent chain. For `de_DE` there is no German bundle, and none for the default locale `en_US` either, so
+    the base bundle supplies English text while the amount is still formatted in German. `MessageFormat`
+    built with the locale formats `{0}` as a localized number. `NumberFormat.parse` throws the checked
+    `ParseException` when the text does not start with something it can parse — here, a US amount without
+    the `$` sign.
+  hints:
+    - "Create the formatters with the `locale` parameter: `NumberFormat.getCurrencyInstance(locale)`."
+    - "`new MessageFormat(pattern, locale).format(new Object[] { lines, amount })`"
+    - "`NumberFormat.parse` returns a `Number` — call `doubleValue()`; catch `ParseException` and rethrow as `IllegalArgumentException`."

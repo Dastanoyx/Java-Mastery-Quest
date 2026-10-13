@@ -1,0 +1,1745 @@
+# D2 — Program Flow Control (D2.1)
+# D2-FLW-001 … 014 → lesson flow-decisions-switch, 015 … 022 → lesson flow-loops-branching,
+# 023 … 030 → additional items (switch patterns, reachability, labels, loops, unnamed patterns).
+
+# ───────────────────────── decisions, switch statements & expressions ─────────────────────────
+
+- id: D2-FLW-001
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [switch-statement, fallthrough, default, break, loop]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 1; i <= 4; i++) {
+                switch (i) {
+                    case 1:
+                        sb.append('a');
+                    case 2:
+                        sb.append('b');
+                        break;
+                    default:
+                        sb.append('d');
+                    case 4:
+                        sb.append('e');
+                }
+                sb.append('|');
+            }
+            System.out.println(sb);
+        }
+    }
+  options:
+    - key: a
+      text: "`ab|b|de|e|`"
+      correct: true
+      why: "i=1 enters at case 1 and falls into case 2 until break; i=2 prints only b; i=3 matches nothing, jumps to default and falls through into case 4; i=4 jumps straight to case 4."
+    - key: b
+      text: "`a|b|d|e|`"
+      why: This treats colon labels like arrow labels. A `:` switch keeps executing the following groups until a `break` (or the end of the switch).
+    - key: c
+      text: "`ab|b|d|e|`"
+      why: This assumes `default` ends the switch. Fallthrough ignores label kinds, so after `default` the code of `case 4` also runs.
+    - key: d
+      text: "`ab|b|de|de|`"
+      why: This assumes execution always passes through `default` first. For i=4 the switch jumps directly to `case 4`; `default` is chosen only when no label matches.
+    - key: e
+      text: Compilation fails because `default` must be the last label
+      why: "`default` may appear anywhere in a switch statement; its position only matters for fallthrough."
+  explanation: |
+    A switch statement with `:` labels jumps to the matching label (or to `default` when none matches) and then
+    executes every following statement, across other labels, until a `break` or the end of the block. The
+    `break` inside the switch leaves only the switch, so the loop continues and appends `|` every time.
+    Placing `default` in the middle is legal; it is still selected only when no constant matches (i=3 here).
+  rule: "A `:` switch falls through from the selected label until break or the end of the switch; default is selected only when no case matches, wherever it is written."
+  misconception: "\"default always runs last\" or \"each case label stops at the next label\"."
+  hint: For i=3, which label is selected, and where does execution stop?
+  java:
+    expect: { compiles: true, stdout: "ab|b|de|e|" }
+
+- id: D2-FLW-002
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [if-else, dangling-else, loop-body, braces]
+  prompt: What is the output of the following program? (Read the code, not the indentation.)
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int n = 0;
+            for (int i = 0; i < 4; i++)
+                if (i % 2 == 0)
+                    if (i > 1) n += 10;
+                else n += 1;
+            System.out.println(n);
+        }
+    }
+  options:
+    - key: a
+      text: "`11`"
+      correct: true
+      why: "The else belongs to `if (i > 1)`. For i=0 the inner test fails → +1; for i=2 → +10; odd values skip the outer if entirely."
+    - key: b
+      text: "`12`"
+      why: This pairs the else with the outer `if (i % 2 == 0)`, as the indentation suggests. An else always binds to the nearest preceding if that has no else.
+    - key: c
+      text: "`10`"
+      why: This ignores the else completely. It is part of the inner if statement and runs for i=0.
+    - key: d
+      text: "Compilation fails: 'else' without 'if'"
+      why: The whole nested if/else is one statement, so it is a legal brace-less body of the for loop and the else has an if to pair with.
+  explanation: |
+    Without braces, a for loop controls exactly one statement — here the entire nested `if` statement, including
+    its `else`. The `else` binds to the closest `if` that does not already have one, which is `if (i > 1)`,
+    regardless of how it is indented. So even numbers below 2 add 1, even numbers from 2 add 10, odd numbers add
+    nothing: 1 + 10 = 11.
+  rule: "An else belongs to the nearest preceding if without an else (JLS 14.5, dangling else); a brace-less loop body is one statement."
+  misconception: Indentation decides which if an else belongs to.
+  hint: Which `if` is closest to the `else` and still has no else of its own?
+  java:
+    expect: { compiles: true, stdout: "11" }
+
+- id: D2-FLW-003
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [switch-statement, selector-type, constant-expression, case-label]
+  prompt: Which of the following code fragments compile? Choose three.
+  options:
+    - key: a
+      text: "`long id = 7L; switch (id) { case 7: System.out.print(\"seven\"); }`"
+      why: "`long` is not a legal selector type for a constant switch; Java 25 rejects it (primitive patterns for long are only a preview feature)."
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              long id = 7L; switch (id) { case 7: System.out.print("seven"); }
+          } }
+        expect: { compiles: false, errorContains: "not compatible with switch selector type long" }
+    - key: b
+      text: "`final int LIMIT = 3; int n = 3; switch (n) { case 1, LIMIT -> System.out.print(\"hit\"); default -> { } }`"
+      correct: true
+      why: A final local initialised with a constant is a constant variable, so `LIMIT` is a valid case constant; several constants may share one arrow label.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              final int LIMIT = 3; int n = 3; switch (n) { case 1, LIMIT -> System.out.print("hit"); default -> { } }
+          } }
+        expect: { compiles: true, stdout: "hit" }
+    - key: c
+      text: "`byte b = 10; switch (b) { case 10: case 200: System.out.print(\"x\"); }`"
+      why: "Every case constant must be assignable to the selector type; 200 does not fit in a byte (possible lossy conversion from int to byte)."
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              byte b = 10; switch (b) { case 10: case 200: System.out.print("x"); }
+          } }
+        expect: { compiles: false, errorContains: "possible lossy conversion from int to byte" }
+    - key: d
+      text: "`String cmd = \"stop\"; switch (cmd) { case \"go\", \"start\": System.out.print(1); break; case \"stop\": System.out.print(2); }`"
+      correct: true
+      why: String is a legal selector type and a colon label may also list several comma-separated constants.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              String cmd = "stop"; switch (cmd) { case "go", "start": System.out.print(1); break; case "stop": System.out.print(2); }
+          } }
+        expect: { compiles: true, stdout: "2" }
+    - key: e
+      text: "`int limit = 3; int n = 3; switch (n) { case limit: System.out.print(\"hit\"); }`"
+      why: "`limit` is an ordinary (non-final) variable, so it is not a compile-time constant: constant expression required."
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              int limit = 3; int n = 3; switch (n) { case limit: System.out.print("hit"); }
+          } }
+        expect: { compiles: false, errorContains: "constant expression required" }
+    - key: f
+      text: "`Character c = 'x'; switch (c) { case 'x' -> System.out.print(\"x\"); case 'y' -> System.out.print(\"y\"); }`"
+      correct: true
+      why: Wrapper types of char, byte, short and int are legal selectors (unboxed); a constant-label switch statement does not have to be exhaustive.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              Character c = 'x'; switch (c) { case 'x' -> System.out.print("x"); case 'y' -> System.out.print("y"); }
+          } }
+        expect: { compiles: true, stdout: "x" }
+  explanation: |
+    A switch that uses only constant labels accepts `char`, `byte`, `short`, `int`, their wrappers, `String` and
+    enums. Each case constant must be a compile-time constant (a literal or a `final` variable initialised with a
+    constant expression), must be assignable to the selector type, and must be unique. `long`, `float`, `double`
+    and `boolean` selectors are rejected in Java 25, where switching on them belongs to the preview feature
+    "primitive types in patterns".
+  rule: "Constant switch: selector char/byte/short/int (+ wrappers), String or enum; labels are compile-time constants assignable to the selector type (JLS 14.11.1)."
+  misconception: Any integral type, and any variable with the right value, can be used in a switch.
+  hint: For each fragment, check the selector type first, then whether every label is a constant that fits.
+
+- id: D2-FLW-004
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [switch-expression, numeric-promotion, var, result-type]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            char c = 'b';
+            var r = switch (c) {
+                case 'a' -> 1;
+                case 'b' -> 'B';
+                default -> 2L;
+            };
+            var q = switch (c) {
+                case 'a' -> 'A';
+                default -> 66;
+            };
+            System.out.println(r);
+            System.out.println(q);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        66
+        B
+      correct: true
+      why: "The first switch mixes int, char and long results, so its type is long and 'B' becomes 66L. The second mixes char with the int constant 66, which fits in a char, so its type is char and prints B."
+    - key: b
+      text: |
+        B
+        B
+      why: This assumes each arm keeps its own type at run time. A switch expression has one static type, and in the first switch the long arm promotes every result to long.
+    - key: c
+      text: |
+        66
+        66
+      why: This applies "int and char give int" to the second switch. When the int arm is a constant representable as char, the result type is char.
+    - key: d
+      text: Compilation fails because the arms of a switch expression have different types
+      why: Numeric arms of different types are allowed; the result type is computed with rules similar to those of the conditional operator `?:`.
+  explanation: |
+    A standalone switch expression (here the target is `var`) whose arms are all numeric gets one numeric type:
+    if any arm is `double` → double; else `float`; else `long`; else, if one arm is `char` and the others are
+    `int` constants representable as `char`, the type is `char`; otherwise `int` (JLS §15.28.1). The first switch
+    is therefore `long` (prints 66) and the second is `char`, so the selected arm `default -> 66` produces the
+    character `B`.
+  rule: "Numeric switch expression type follows the ?: promotion rules: double > float > long > (char if int constants fit) > int (JLS 15.28.1)."
+  misconception: "A switch expression's value keeps the type of whichever arm was selected."
+  hint: Determine each switch expression's static type before you evaluate it.
+  java:
+    expect: { compiles: true, stdout: "66\nB" }
+
+- id: D2-FLW-005
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [if-else, assignment-in-condition, else-if]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            boolean done = false;
+            int count = 0;
+            if (done = true) count++;
+            if (done == false) count += 10;
+            else if (count > 0) count += 100;
+            else count += 1000;
+            System.out.println(done + " " + count);
+        }
+    }
+  options:
+    - key: a
+      text: "`true 101`"
+      correct: true
+      why: "`done = true` assigns true and the assignment's value (true) is the condition, so count becomes 1; then the else-if chain takes exactly one branch (+100)."
+    - key: b
+      text: "`false 10`"
+      why: This reads `=` as a comparison. In Java `=` is assignment; with a boolean variable, the assignment expression has type boolean and compiles.
+    - key: c
+      text: "`true 1101`"
+      why: An else-if chain stops at the first true condition; the final else does not run as well.
+    - key: d
+      text: Compilation fails because an assignment cannot be used as an if condition
+      why: "That is true only when the assigned type is not boolean (e.g. `if (x = 5)` with int x). Assigning a boolean yields a boolean value, which is a valid condition."
+  explanation: |
+    An if condition must have type `boolean` (or `Boolean`). An assignment is an expression whose value is the
+    assigned value, so `if (done = true)` compiles, stores `true` and always takes the then-branch. The same
+    mistake with an `int` (`if (x = 5)`) fails to compile because an int is not a boolean. An `else if` chain
+    evaluates conditions top to bottom and runs only the first branch whose condition is true.
+  rule: "The if condition must be of type boolean/Boolean; an assignment expression has the value and type of its left operand (JLS 15.26)."
+  misconception: "`if (flag = true)` is a comparison, or it never compiles."
+  hint: What is the value of the expression `done = true`?
+  java:
+    expect: { compiles: true, stdout: "true 101" }
+
+- id: D2-FLW-006
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [if-else, braces, else-without-if]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int stock = 0;
+            if (stock > 0)
+                System.out.println("ship");
+                System.out.println("notify");
+            else
+                System.out.println("backorder");
+        }
+    }
+  options:
+    - key: a
+      text: Line 7 does not compile
+      correct: true
+      why: "Without braces the if controls only line 5. Line 6 is an ordinary statement, so the else on line 7 has no if to belong to: 'else' without 'if'."
+    - key: b
+      text: Line 6 does not compile
+      why: A second statement after a brace-less if is perfectly legal on its own — it simply is not part of the if.
+    - key: c
+      text: It compiles and prints `backorder`
+      why: This trusts the indentation. The if body is only the first statement, which breaks the if/else pairing.
+    - key: d
+      text: It compiles and prints `notify` and then `backorder`
+      why: This correctly sees that `notify` is outside the if, but an else cannot follow an unrelated statement — the code never compiles.
+  explanation: |
+    A brace-less `if` controls exactly one statement. After `System.out.println("ship");` the if statement is
+    complete, `System.out.println("notify");` is the next statement of the block, and an `else` cannot start a
+    statement on its own. javac reports *'else' without 'if'* at the else. Always use braces when a branch has
+    more than one statement.
+  rule: "if (cond) Statement [else Statement] — each branch is a single statement unless a block {} is used (JLS 14.9)."
+  misconception: Indented lines under an if all belong to it.
+  hint: Where does the if statement end?
+  java:
+    expect: { compiles: false, errorContains: "'else' without 'if'", errorLine: 7 }
+
+- id: D2-FLW-007
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [pattern-switch, dominance, guard]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static String label(Object o) {
+            return switch (o) {
+                case Integer i when i > 100 -> "big";
+                case Integer i -> "int";
+                case CharSequence cs -> "chars";
+                case String s -> "string";
+                default -> "other";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(label(500) + " " + label("x"));
+        }
+    }
+  options:
+    - key: a
+      text: Line 5 does not compile
+      why: A guarded pattern never dominates an unguarded one, so `case Integer i` after the guarded case is legal (and required for Integers ≤ 100).
+    - key: b
+      text: Line 7 does not compile
+      correct: true
+      why: "`String` is a subtype of `CharSequence`, so every String is already matched by the unguarded `case CharSequence cs`: this case label is dominated by a preceding case label."
+    - key: c
+      text: It compiles and prints `big string`
+      why: Labels are not reordered by specificity. Since line 6 already catches every String, javac rejects line 7 instead of silently skipping it.
+    - key: d
+      text: It compiles and prints `big chars`
+      why: This correctly predicts which label would win for "x", but dominated labels are compile errors, not merely dead code.
+  explanation: |
+    Pattern labels are tried top to bottom, and javac rejects any label that can never be selected because an
+    earlier **unguarded** pattern matches everything it could match (*this case label is dominated by a
+    preceding case label*). `case CharSequence cs` dominates `case String s`. Guards are not analysed, so a
+    guarded label never dominates anything — that is why the guarded `Integer` case must come first.
+    Fix: move `case String s` above `case CharSequence cs`.
+  rule: "A case label is dominated (compile error) if an earlier unguarded pattern label matches every value it could match (JLS 14.11.1)."
+  misconception: The most specific pattern is chosen, as in overload resolution, so order does not matter.
+  hint: Can any String ever reach line 7?
+  java:
+    expect: { compiles: false, errorContains: "dominated by a preceding case label", errorLine: 7 }
+
+- id: D2-FLW-008
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [instanceof, pattern-variable, flow-scoping]
+  prompt: Which of the following methods compile? Choose three.
+  options:
+    - key: a
+      text: "`static int a(Object o) { if (o instanceof String s && s.length() > 2) return s.length(); return 0; }`"
+      correct: true
+      why: On the right of `&&` and in the then-statement the match is certain, so `s` is in scope there.
+      java:
+        source: |
+          public class Main {
+              static int a(Object o) { if (o instanceof String s && s.length() > 2) return s.length(); return 0; }
+              public static void main(String[] args) { System.out.println(a("java")); }
+          }
+        expect: { compiles: true, stdout: "4" }
+    - key: b
+      text: "`static int b(Object o) { if (o instanceof String s || s.isEmpty()) return 1; return 0; }`"
+      why: The right operand of `||` runs only when the match FAILED, so `s` is not in scope there (cannot find symbol).
+      java:
+        source: |
+          public class Main {
+              static int b(Object o) { if (o instanceof String s || s.isEmpty()) return 1; return 0; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: c
+      text: "`static int c(Object o) { if (!(o instanceof String s)) return -1; return s.length(); }`"
+      correct: true
+      why: The then-branch always returns, so after the if statement the pattern has definitely matched and `s` is in scope.
+      java:
+        source: |
+          public class Main {
+              static int c(Object o) { if (!(o instanceof String s)) return -1; return s.length(); }
+              public static void main(String[] args) { System.out.println(c("ab") + " " + c(1)); }
+          }
+        expect: { compiles: true, stdout: "2 -1" }
+    - key: d
+      text: "`static int d(Object o) { if (!(o instanceof String s)) { System.out.println(\"no\"); } return s.length(); }`"
+      why: The then-block can complete normally, so execution may reach the return without a match; `s` is not introduced after the if.
+      java:
+        source: |
+          public class Main {
+              static int d(Object o) { if (!(o instanceof String s)) { System.out.println("no"); } return s.length(); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: e
+      text: "`static int e(Object o) { if (o instanceof String s) { } else { return s.length(); } return 0; }`"
+      why: The else branch runs exactly when the match failed, so `s` is not in scope there.
+      java:
+        source: |
+          public class Main {
+              static int e(Object o) { if (o instanceof String s) { } else { return s.length(); } return 0; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: f
+      text: "`static int f(Object o) { while (!(o instanceof String s)) { o = String.valueOf(o); } return s.length(); }`"
+      correct: true
+      why: A while loop without break exits only when its condition is false, i.e. when the pattern matched, so `s` is in scope after the loop.
+      java:
+        source: |
+          public class Main {
+              static int f(Object o) { while (!(o instanceof String s)) { o = String.valueOf(o); } return s.length(); }
+              public static void main(String[] args) { System.out.println(f(12345)); }
+          }
+        expect: { compiles: true, stdout: "5" }
+  explanation: |
+    A pattern variable is in scope exactly where the compiler can prove the pattern matched (flow scoping,
+    JLS §6.3.1): the right side of `&&`, the then-part of `if (x instanceof T t)`, the else-part of
+    `if (!(x instanceof T t))`, and the statements **after** an `if (!(…))` whose then-part cannot complete
+    normally (return/throw) or after a `while (!(…))` loop with no `break`. It is never in scope on the right
+    of `||` or where the match is known to have failed.
+  rule: "Pattern variables are introduced only where the match is definitely true; after if(!(e instanceof T t)) only if the then-branch cannot complete normally (JLS 6.3.1)."
+  misconception: A pattern variable is in scope for the rest of the method once it has been declared.
+  hint: For each use of `s`, ask "can execution reach this point when the instanceof was false?"
+
+- id: D2-FLW-009
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [switch-statement, string-selector, null-selector, NullPointerException]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        static String level(String code) {
+            switch (code) {
+                case "E": return "error";
+                case "W": return "warning";
+                default:  return "info";
+            }
+        }
+        public static void main(String[] args) {
+            System.out.print(level("W") + " ");
+            System.out.print(level(null));
+        }
+    }
+  options:
+    - key: a
+      text: It prints `warning info`
+      why: "`default` is chosen when no constant matches a non-null value; it never receives null."
+    - key: b
+      text: "It prints `warning ` and then a `NullPointerException` is thrown"
+      correct: true
+      why: Switching on a null String throws NullPointerException before any label is considered, because the switch has no `case null`.
+    - key: c
+      text: It prints `warning null`
+      why: The switch never compares null with the labels — it fails as soon as it evaluates the selector.
+    - key: d
+      text: Compilation fails because a String switch needs a `case null` label
+      why: "`case null` is optional; without it a null selector compiles fine but throws NullPointerException at run time."
+  explanation: |
+    A switch on a reference-typed selector (`String`, a wrapper, an enum or any type in a pattern switch) throws
+    `NullPointerException` when the selector is null — unless the switch has a `case null` label (Java 21+).
+    `default` does **not** match null. Here the first call prints `warning `, then `level(null)` throws.
+  rule: "A switch throws NullPointerException for a null selector unless a case null label is present; default does not match null (JLS 14.11.3)."
+  misconception: "`default` catches every value that no case handles, including null."
+  hint: Does `default` ever see a null selector?
+  java:
+    expect: { compiles: true, stdoutContains: ["warning"], exception: java.lang.NullPointerException }
+
+- id: D2-FLW-010
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [switch-expression, exhaustiveness, enum, switch-statement]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    enum Light { RED, AMBER, GREEN }
+    public class Main {
+        static int seconds(Light l) {
+            return switch (l) { case RED -> 30; case AMBER -> 5; case GREEN -> 25; };
+        }
+        static String action(Light l) {
+            switch (l) { case RED -> { return "stop"; } case GREEN -> { return "go"; } }
+            return "wait";
+        }
+        static int bonus(int level) {
+            return switch (level) { case 1 -> 10; case 2 -> 20; case 3 -> 30; };
+        }
+        public static void main(String[] args) {
+            System.out.println(seconds(Light.AMBER) + action(Light.AMBER) + bonus(2));
+        }
+    }
+  options:
+    - key: a
+      text: Line 4 does not compile
+      why: A switch expression over an enum that lists every constant is exhaustive; no default is needed.
+    - key: b
+      text: Line 7 does not compile
+      why: A switch statement with only constant labels need not be exhaustive, even when it uses arrows; AMBER simply runs no case.
+    - key: c
+      text: Line 11 does not compile
+      correct: true
+      why: An int switch expression can never list every int value, so without `default` it does not cover all possible input values.
+    - key: d
+      text: It compiles and prints `5wait20`
+      why: This would be the output if `bonus` had a default; the int switch expression is rejected at compile time.
+  explanation: |
+    Every switch **expression** must be exhaustive. For an enum selector, listing all constants is enough, with no
+    `default`. For `int` or `String`
+    selectors only `default` can make it exhaustive. A switch **statement** must be exhaustive only when it uses
+    patterns or `case null`; arrows alone do not change that, so `action` compiles.
+  rule: "Switch expressions must be exhaustive: all enum constants, all permitted sealed subtypes, or a default/unconditional pattern (JLS 15.28.1)."
+  misconception: Arrow-form switch statements must be exhaustive, or enum switch expressions always need default.
+  hint: Which of the three switches is an expression over a type whose values cannot all be listed?
+  java:
+    expect: { compiles: false, errorContains: "does not cover all possible input values", errorLine: 11 }
+
+- id: D2-FLW-011
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: does-it-compile
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [switch-expression, yield, block]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static String grade(int score) {
+            return switch (score / 10) {
+                case 10, 9 -> "A";
+                case 8 -> {
+                    if (score % 10 >= 5) yield "B+";
+                    else yield "B";
+                }
+                case 7 -> {
+                    String g = "C";
+                    if (score % 10 >= 5) g += "+";
+                }
+                default -> "F";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(grade(85));
+        }
+    }
+  options:
+    - key: a
+      text: It prints `B+`
+      why: That would be the result for 85, but the program never runs — another arm is invalid.
+    - key: b
+      text: It prints `B`
+      why: 85 % 10 is 5, so the first yield would be taken anyway; more importantly, the program does not compile.
+    - key: c
+      text: Compilation fails because the `case 7` block can complete without yielding a value
+      correct: true
+      why: "A block arm of a switch expression must end every path with `yield` or `throw`; the case 7 block computes g but never yields it."
+    - key: d
+      text: Compilation fails because the `case 8` block contains two yield statements
+      why: A block may contain several yield statements as long as every path ends in one; if/else with a yield on each side is fine.
+  explanation: |
+    In a switch expression, an arrow followed by an expression yields that expression. An arrow followed by a
+    **block** must leave the block through `yield value;` or `throw` on every path. The `case 7` block falls off
+    its end, so javac reports *switch rule completes without providing a value*. Adding `yield g;` fixes it.
+  rule: "Every switch rule block of a switch expression must complete abruptly with yield or throw; it cannot complete normally (JLS 15.28.1)."
+  misconception: The last expression evaluated in a block arm is its value.
+  hint: What does the case 7 block hand back to the switch expression?
+  java:
+    expect: { compiles: false, errorContains: "completes without providing a value" }
+
+- id: D2-FLW-012
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [switch-statement, scope, local-variable, definite-assignment]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            for (int x = 1; x <= 2; x++) {
+                switch (x) {
+                    case 1:
+                        String msg = "one";
+                        System.out.print(msg + " ");
+                        break;
+                    case 2:
+                        msg = "two";
+                        System.out.print(msg + " ");
+                }
+            }
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`one two`"
+      correct: true
+      why: "The whole switch body is one block, so `msg` is in scope in the case 2 group; it is assigned there before it is read, so the code compiles."
+    - key: b
+      text: "Compilation fails: `msg` cannot be found in the case 2 group"
+      why: Case groups of a colon switch do not create their own scopes; a local declared in an earlier group is visible in later ones.
+    - key: c
+      text: "Compilation fails: variable `msg` might not have been initialized"
+      why: "That error would appear if case 2 read `msg` before assigning it. Here it assigns first, so definite assignment is satisfied."
+    - key: d
+      text: "`one one`"
+      why: Each iteration of the loop executes the switch block afresh; there is no value left over from the previous iteration — and case 2 assigns "two" anyway.
+  explanation: |
+    In a switch statement with `:` labels, all the case groups share one block. A local variable declared in one
+    group is therefore in scope in every later group — but its initializer runs only if execution actually passes
+    through the declaration. When execution jumps directly to `case 2`, `msg` is in scope but unassigned, so it
+    must be assigned before it is read. Arrow cases are different: each arrow body is its own scope.
+  rule: "The scope of a local declared in a switch block extends to the end of that block, across later case labels; definite assignment still applies (JLS 6.3, 16)."
+  misconception: Each case label starts a new scope, like a separate block.
+  hint: How many blocks does a colon-style switch body have?
+  java:
+    expect: { compiles: true, stdout: "one two" }
+
+- id: D2-FLW-013
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 180
+  tags: [record-pattern, unnamed-pattern, guard, null-component, java-22]
+  prompt: What is the output of the following program?
+  code: |
+    record Point(int x, int y) {}
+    record Move(String who, Point to) {}
+    public class Main {
+        static String f(Object o) {
+            return switch (o) {
+                case Move(var w, Point(var x, _)) when x < 0 -> w + " off-board";
+                case Move(String w, Point(_, int y)) -> w + " row " + y;
+                case Integer _, Long _ -> "number";
+                case Point _ -> "point";
+                default -> "other";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(f(new Move("K", new Point(-1, 4))) + ", " + f(new Move("Q", new Point(2, 7))));
+            System.out.println(f(5L) + ", " + f(new Point(0, 0)) + ", " + f(new Move("R", null)));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        K off-board, Q row 7
+        number, point, other
+      correct: true
+      why: "The guard sends K to the first case; Q fails the guard and matches the second; 5L matches `Long _`; the nested record pattern `Point(...)` never matches a null component, so Move(\"R\", null) reaches default."
+    - key: b
+      text: |
+        K row 4, Q row 7
+        number, point, other
+      why: Labels are tried top to bottom and the guard is true for x = -1, so K is handled by the first case, not the second.
+    - key: c
+      text: |
+        K off-board, Q row 7
+        number, point, R row 0
+      why: A record pattern does not substitute default values for a null component; `Point(_, int y)` simply does not match null.
+    - key: d
+      text: Compilation fails because `case Integer _, Long _` combines two patterns in one label
+      why: Since Java 22 (JEP 456) one case label may list several patterns, provided none of them declares a named binding variable.
+  explanation: |
+    Record patterns deconstruct and test in one step; nested patterns are matched component by component. A
+    nested **record** pattern never matches `null`, so `Move("R", null)` fails both Move cases and falls to
+    `default` — no exception. The unnamed pattern `_` (JEP 456, final since Java 22) ignores a component, and a
+    label such as `case Integer _, Long _` may group several patterns because none binds a name. The guard
+    (`when x < 0`) is evaluated only after the pattern matched.
+  rule: "Record patterns match only non-null records and recursively match components; _ ignores a component; multiple patterns per label only without bindings (JLS 14.30, JEP 456)."
+  misconception: "A null record component makes the pattern throw NullPointerException or bind default values."
+  hint: Does `Point(_, int y)` match a null Point?
+  java:
+    expect: { compiles: true, stdout: "K off-board, Q row 7\nnumber, point, other" }
+
+- id: D2-FLW-014
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 120
+  tags: [pattern-switch, switch-statement, exhaustiveness, overloading]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static void log(Object o) {
+            switch (o) {
+                case String s -> System.out.println("text " + s);
+                case Integer i -> System.out.println("int " + i);
+            }
+        }
+        static void log(int code) {
+            switch (code) {
+                case 1 -> System.out.println("one");
+                case 2 -> System.out.println("two");
+            }
+        }
+        public static void main(String[] args) {
+            log("hi");
+            log(2);
+        }
+    }
+  options:
+    - key: a
+      text: Line 3 does not compile
+      correct: true
+      why: "A switch statement that uses patterns must be exhaustive; Object values other than String and Integer are not covered (no default)."
+    - key: b
+      text: Line 9 does not compile
+      why: A switch statement with only constant labels is never required to be exhaustive, arrows or not.
+    - key: c
+      text: It compiles and prints `text hi` and `two`
+      why: Statements were exempt from exhaustiveness only before patterns; a pattern switch statement must be exhaustive.
+    - key: d
+      text: It compiles and throws a `MatchException` when an unmatched value is passed
+      why: The check is at compile time — javac reports that the switch statement does not cover all possible input values.
+  explanation: |
+    Exhaustiveness is required for every switch **expression** and for every switch **statement** that uses
+    pattern labels or `case null` (an "enhanced" switch statement). The first `log` switches on `Object` with
+    type patterns, so it needs `default` or `case Object o`. The second is an old-style constant switch on `int`,
+    which may legitimately cover only some values.
+  rule: "An enhanced switch statement (patterns, case null, or a selector type not allowed in classic switches) must be exhaustive (JLS 14.11.2)."
+  misconception: Only switch expressions must be exhaustive.
+  hint: Which of the two switch statements uses patterns?
+  java:
+    expect: { compiles: false, errorContains: "does not cover all possible input values", errorLine: 3 }
+
+# ───────────────────────── loops, labels & reachability ─────────────────────────
+
+- id: D2-FLW-015
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [enhanced-for, loop-variable, reference-semantics]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder[] parts = { new StringBuilder("a"), new StringBuilder("b") };
+            for (StringBuilder sb : parts) {
+                sb.append('!');
+                sb = new StringBuilder("z");
+                sb.append('?');
+            }
+            int[] nums = {1, 2, 3};
+            for (int n : nums) n *= 2;
+            System.out.println(parts[0] + "" + parts[1] + " " + nums[0] + nums[1] + nums[2]);
+        }
+    }
+  options:
+    - key: a
+      text: "`a!b! 123`"
+      correct: true
+      why: The loop variable is a copy of each element reference, so append('!') mutates the array's objects; reassigning sb and doubling n change only the copies.
+    - key: b
+      text: "`z?z? 246`"
+      why: This treats the loop variable as an alias of the array slot. Assigning to it never writes back into the array.
+    - key: c
+      text: "`ab 123`"
+      why: The copy is a copy of the reference, not of the StringBuilder object; calling a mutating method through it changes the shared object.
+    - key: d
+      text: "`a!b! 246`"
+      why: "For an int array the loop variable holds a copy of the primitive value; `n *= 2` changes only that copy."
+  explanation: |
+    In `for (T x : array)` the variable `x` receives a copy of each element. For primitives that is a copy of the
+    value; for objects it is a copy of the reference. Calling a mutating method through the copy affects the
+    object stored in the array, but assigning a new object (or a new value) to the loop variable only changes the
+    local copy.
+  rule: "The enhanced for loop assigns each element to a fresh local variable (JLS 14.14.2); assignments to it do not affect the array or collection."
+  misconception: The enhanced-for variable is a reference to the array slot.
+  hint: What exactly is copied into `sb` and `n` on each iteration?
+  java:
+    expect: { compiles: true, stdout: "a!b! 123" }
+
+- id: D2-FLW-016
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: trace
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [for-loop, continue, update, loop-variable]
+  prompt: What does this program print?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int total = 0;
+            for (int i = 0; i < 6; i += 2) {
+                if (i == 2) continue;
+                total += i;
+                i--;
+            }
+            System.out.println(total);
+        }
+    }
+  options:
+    - key: a
+      text: "`10`"
+      correct: true
+      why: "i takes the values 0, 1, 2, 4, 5: the body's i-- and the update's i += 2 together add 1, except at i=2 where continue skips i-- but still runs the update. 0+1+4+5 = 10."
+    - key: b
+      text: "`4`"
+      why: This ignores the `i--` in the body; modifying the loop variable inside a for body is legal and changes the sequence.
+    - key: c
+      text: "`9`"
+      why: "This assumes `continue` also skips the update, so i would stay at 2 — but then the loop would never end; in fact continue jumps to the update."
+    - key: d
+      text: The loop never terminates
+      why: "`continue` in a basic for loop transfers control to the update expression, so i goes from 2 to 4 and the loop progresses."
+  explanation: |
+    A basic for loop runs: init once; then test → body → update, repeatedly. `continue` ends the current body and
+    goes to the **update**, not directly to the test. Trace: i=0 (total 0, i→-1, update→1), i=1 (total 1, i→0,
+    update→2), i=2 (continue, update→4), i=4 (total 5, i→3, update→5), i=5 (total 10, i→4, update→6), test fails.
+  rule: "In a basic for statement, continue completes the body and then the ForUpdate runs before the condition is re-evaluated (JLS 14.14.1.2)."
+  misconception: "`continue` skips the update expression of a for loop."
+  hint: Write down i after the body and after the update for each iteration.
+  java:
+    expect: { compiles: true, stdout: "10" }
+
+- id: D2-FLW-017
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [while, do-while, post-increment, empty-statement]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int a = 5, runsA = 0;
+            while (a < 5) { runsA++; a++; }
+            int b = 5, runsB = 0;
+            do { runsB++; b++; } while (b < 5);
+            int c = 0;
+            while (c++ < 3);
+            System.out.println(runsA + " " + runsB + " " + c);
+        }
+    }
+  options:
+    - key: a
+      text: "`0 1 4`"
+      correct: true
+      why: "while tests first (0 runs), do-while runs once before testing, and c++ < 3 is evaluated four times (0, 1, 2 pass; 3 fails), each one incrementing c."
+    - key: b
+      text: "`0 0 3`"
+      why: A do-while body always runs at least once; and the failing comparison still performs its post-increment.
+    - key: c
+      text: "`1 1 4`"
+      why: A while loop tests its condition before the first iteration; 5 < 5 is false, so the body never runs.
+    - key: d
+      text: "`0 1 3`"
+      why: The last evaluation of `c++ < 3` compares 3 and fails, but the increment to 4 still happens.
+  explanation: |
+    `while` and `for` test before each iteration, so their bodies may run zero times; `do … while` tests after the
+    body, so it runs at least once. `while (c++ < 3);` has an empty statement as body: the condition alone does
+    the work, and because `c++` yields the old value, the final failing test still increments `c` to 4.
+  rule: "while: test before body; do-while: body then test, so ≥ 1 iteration (JLS 14.12, 14.13); x++ yields the old value."
+  misconception: A do-while loop whose condition is false from the start never runs.
+  hint: Count how many times each condition is evaluated.
+  java:
+    expect: { compiles: true, stdout: "0 1 4" }
+
+- id: D2-FLW-018
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [labels, break, continue, nested-loops, enhanced-for]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int[][] grid = { {1, 2, 3}, {4, -1, 6}, {7, 8, 0} };
+            int sum = 0;
+            rows:
+            for (int[] row : grid) {
+                for (int v : row) {
+                    if (v < 0) continue rows;
+                    if (v == 0) break rows;
+                    sum += v;
+                }
+                sum += 100;
+            }
+            System.out.println(sum);
+        }
+    }
+  options:
+    - key: a
+      text: "`125`"
+      correct: true
+      why: "Row 0 adds 6 and the +100. Row 1 adds 4, then `continue rows` abandons the row (no +100). Row 2 adds 7 and 8, then `break rows` leaves both loops: 106 + 4 + 15 = 125."
+    - key: b
+      text: "`225`"
+      why: "`continue rows` does not just leave the inner loop — it also skips the rest of the outer body, including `sum += 100`."
+    - key: c
+      text: "`331`"
+      why: This treats the labelled jumps as unlabelled ones that only affect the inner loop.
+    - key: d
+      text: Compilation fails because a label cannot be applied to an enhanced for loop
+      why: Any statement can be labelled; a label on an enhanced for loop is a valid target for both break and continue.
+  explanation: |
+    `continue label` ends the current iteration of the **labelled** loop: the remainder of every enclosed loop body
+    and of the labelled loop's body is skipped, and the labelled loop proceeds with its next element.
+    `break label` terminates the labelled statement completely. Unlabelled forms affect only the innermost loop.
+  rule: "break L exits the statement labelled L; continue L starts the next iteration of the loop labelled L (JLS 14.15, 14.16)."
+  misconception: "A labelled continue only leaves the inner loop, after which the outer body continues."
+  hint: After `continue rows`, is `sum += 100` executed for that row?
+  java:
+    expect: { compiles: true, stdout: "125" }
+
+- id: D2-FLW-019
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [reachability, unreachable-statement, constant-expression, while, if]
+  prompt: Each fragment is the complete body of `main`. Which of them compile? Choose three.
+  options:
+    - key: a
+      text: "`while (false) { System.out.println(\"x\"); }`"
+      why: The body of a while loop whose condition is the constant false is unreachable, which is a compile error.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              while (false) { System.out.println("x"); }
+          } }
+        expect: { compiles: false, errorContains: "unreachable statement" }
+    - key: b
+      text: "`if (false) { System.out.println(\"x\"); }`"
+      correct: true
+      why: The if statement is deliberately exempt from the reachability rules so that constant flags can switch code off.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              if (false) { System.out.println("x"); }
+          } }
+        expect: { compiles: true, stdout: "" }
+    - key: c
+      text: "`final boolean DEBUG = false; while (DEBUG) { System.out.println(\"x\"); }`"
+      why: A final local initialised with a constant is a constant variable, so `DEBUG` is still the constant false and the body is unreachable.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              final boolean DEBUG = false; while (DEBUG) { System.out.println("x"); }
+          } }
+        expect: { compiles: false, errorContains: "unreachable statement" }
+    - key: d
+      text: "`boolean debug = false; while (debug) { System.out.println(\"x\"); }`"
+      correct: true
+      why: A non-final variable is not a constant expression; the compiler does not track its value, so the body is considered reachable.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              boolean debug = false; while (debug) { System.out.println("x"); }
+          } }
+        expect: { compiles: true, stdout: "" }
+    - key: e
+      text: "`do { System.out.println(\"x\"); } while (false);`"
+      correct: true
+      why: The body of a do-while is reached before the condition is ever evaluated, so it runs once; a constant false condition is fine.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              do { System.out.println("x"); } while (false);
+          } }
+        expect: { compiles: true, stdout: "x" }
+    - key: f
+      text: "`for (int i = 0; ; i++) { } System.out.println(\"done\");`"
+      why: A for loop without a condition and without a break cannot complete normally, so the statement after it is unreachable.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (int i = 0; ; i++) { } System.out.println("done");
+          } }
+        expect: { compiles: false, errorContains: "unreachable statement" }
+  explanation: |
+    JLS §14.22 defines reachability conservatively, evaluating only **constant expressions**. A while or for body
+    is unreachable when the condition is the constant `false`; a loop whose condition is absent or constant `true`
+    can complete normally only through a reachable `break`. `if` is the deliberate exception: `if (false)` compiles
+    so that constant debug flags work like conditional compilation.
+  rule: "while(false)/for(;false;) bodies are unreachable; a loop with no condition or a constant-true condition completes normally only via break; if is exempt (JLS 14.22)."
+  misconception: The compiler treats if(false) and while(false) the same way, or tracks ordinary variables' values.
+  hint: Which conditions are constant expressions, and which statement is exempt from the rule?
+
+- id: D2-FLW-020
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 150
+  tags: [definite-assignment, loops, constant-expression]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int a;
+            for (;;) { a = 1; break; }
+            int b;
+            int n = 3;
+            while (n > 0) { b = n; n--; }
+            int c;
+            do { c = 2; } while (n > 5);
+            System.out.println(a + c);
+            System.out.println(b);
+        }
+    }
+  options:
+    - key: a
+      text: Line 10 does not compile
+      why: "`a` is assigned before the only break that leaves `for (;;)`, and a do-while body always runs once, so both a and c are definitely assigned."
+    - key: b
+      text: Line 11 does not compile
+      correct: true
+      why: "`n > 0` is not a constant expression, so the compiler must assume the while body may run zero times; b might not have been initialized."
+    - key: c
+      text: Line 4 does not compile
+      why: "`for (;;)` with a break is a legal loop; the statement after it is reachable through the break."
+    - key: d
+      text: It compiles and prints `3` and `1`
+      why: At run time b would indeed be 1, but definite assignment is a compile-time analysis that ignores actual values.
+  explanation: |
+    Definite assignment (JLS chapter 16) is a static analysis. After `for (;;) { a = 1; break; }` the only way out
+    is the break, which follows the assignment. A do-while body executes before its condition, so `c` is assigned.
+    For `while (n > 0)` the condition is not constant, so the compiler assumes the body may be skipped and `b` is
+    not definitely assigned: *variable b might not have been initialized* on line 11.
+  rule: "A variable is definitely assigned after a loop only if it is assigned on every path out of the loop; only constant conditions are evaluated (JLS 16.2.10–16.2.12)."
+  misconception: The compiler knows that `n = 3` makes the while loop run.
+  hint: Which loops are guaranteed by the compiler — not by the values — to execute their body?
+  java:
+    expect: { compiles: false, errorContains: "might not have been initialized", errorLine: 11 }
+
+- id: D2-FLW-021
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: multi
+  format: select-valid
+  difficulty: foundation
+  estSeconds: 150
+  tags: [for-loop, loop-variable-scope, declarations, var]
+  prompt: Each fragment is the complete body of `main`. Which of them compile? Choose three.
+  options:
+    - key: a
+      text: "`for (int i = 0, j = 10; i < j; i++, j--) { }`"
+      correct: true
+      why: The init part may declare several variables of one type, and the update part may contain several comma-separated expressions.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (int i = 0, j = 10; i < j; i++, j--) { }
+          } }
+        expect: { compiles: true, stdout: "" }
+    - key: b
+      text: "`for (int i = 0, long j = 0; i < 3; i++) { }`"
+      why: One local variable declaration has a single type; mixing `int` and `long` in the init part is a syntax error.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (int i = 0, long j = 0; i < 3; i++) { }
+          } }
+        expect: { compiles: false }
+    - key: c
+      text: "`for (int i = 0; i < 3; i++) { } System.out.println(i);`"
+      why: A variable declared in the for header is scoped to the loop; after the loop, `i` cannot be found.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (int i = 0; i < 3; i++) { } System.out.println(i);
+          } }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: d
+      text: "`int i; for (i = 0; i < 3; i++) { } System.out.println(i);`"
+      correct: true
+      why: Here i is declared before the loop and the init part is only an assignment, so i is still in scope (and holds 3) after the loop.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              int i; for (i = 0; i < 3; i++) { } System.out.println(i);
+          } }
+        expect: { compiles: true, stdout: "3" }
+    - key: e
+      text: "`for (int i = 0; i < 3; i++) { int i = 5; }`"
+      why: The loop variable is still in scope inside the body, and a local may not be redeclared while it is in scope.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (int i = 0; i < 3; i++) { int i = 5; }
+          } }
+        expect: { compiles: false, errorContains: "already defined" }
+    - key: f
+      text: "`for (var i = 0, j = 1; i < 3; i++) { }`"
+      why: "`var` may declare only one variable per declaration: 'var' is not allowed in a compound declaration."
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              for (var i = 0, j = 1; i < 3; i++) { }
+          } }
+        expect: { compiles: false, errorContains: "compound declaration" }
+    - key: g
+      text: "`int k = 0; for (System.out.print(\"go \"); k < 2; k++, System.out.print(k)) { }`"
+      correct: true
+      why: Instead of a declaration, the init part may be a list of expression statements; method calls are allowed in both init and update.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) {
+              int k = 0; for (System.out.print("go "); k < 2; k++, System.out.print(k)) { }
+          } }
+        expect: { compiles: true, stdout: "go 12" }
+  explanation: |
+    The init part of a basic for loop is either one local variable declaration (one type, possibly several
+    variables) or a comma-separated list of expression statements; the update part is always a list of expression
+    statements. Variables declared in the header are scoped to the loop (header and body) and cannot be
+    redeclared in the body. `var` works in a for header, but only for a single variable.
+  rule: "for (ForInit; Expr; ForUpdate): ForInit is one LocalVariableDeclaration or a StatementExpressionList; its variables are scoped to the for statement (JLS 14.14.1, 6.3)."
+  misconception: "A for header may declare variables of different types, and its variables survive the loop."
+  hint: Check each header against "one declaration, one type" and each later use against the loop's scope.
+
+- id: D2-FLW-022
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [reachability, missing-return, infinite-loop, can-complete-normally]
+  prompt: Which of the following methods fail to compile? Choose two.
+  options:
+    - key: a
+      text: "`static int f() { while (true) { } }`"
+      why: An infinite loop with no break cannot complete normally, so the method can never fall off its end — no return is needed.
+      java:
+        source: |
+          public class Main {
+              static int f() { while (true) { } }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: b
+      text: "`static int g(int n) { while (true) { if (n > 10) return n; n *= 2; } }`"
+      why: Leaving through return does not make the while statement complete normally; there is no break, so the end of the method is unreachable.
+      java:
+        source: |
+          public class Main {
+              static int g(int n) { while (true) { if (n > 10) return n; n *= 2; } }
+              public static void main(String[] args) { System.out.println(g(3)); }
+          }
+        expect: { compiles: true, stdout: "12" }
+    - key: c
+      text: "`static int h(int n) { for (;;) { if (n > 10) break; n *= 2; } }`"
+      correct: true
+      why: "The reachable break lets the loop complete normally, after which the method falls off its end: missing return statement."
+      java:
+        source: |
+          public class Main {
+              static int h(int n) { for (;;) { if (n > 10) break; n *= 2; } }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "missing return statement" }
+    - key: d
+      text: "`static int k(int n) { do { n++; } while (true); }`"
+      why: A do-while with constant true condition and no break cannot complete normally, exactly like while (true).
+      java:
+        source: |
+          public class Main {
+              static int k(int n) { do { n++; } while (true); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: e
+      text: "`static int m(int n) { if (true) return n; }`"
+      correct: true
+      why: "Because if is exempt from constant evaluation, an if-then statement can always complete normally; javac reports missing return statement."
+      java:
+        source: |
+          public class Main {
+              static int m(int n) { if (true) return n; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "missing return statement" }
+  explanation: |
+    A non-void method fails with *missing return statement* if its body can complete normally. A `while (true)`,
+    `do … while (true)` or condition-less `for` loop can complete normally only if it contains a reachable `break`
+    that targets it — `return` inside does not count. The `if` statement, by contrast, is analysed as if its
+    condition were unknown, so `if (true) return n;` still lets execution "fall off" the method as far as javac
+    is concerned.
+  rule: "A method body that can complete normally needs a return; infinite loops without a break cannot complete normally, but an if-then always can (JLS 8.4.7, 14.22)."
+  misconception: "`if (true) return x;` is treated like an unconditional return."
+  hint: For each method, ask whether javac thinks the end of the body is reachable.
+
+# ───────────────────────── additional items ─────────────────────────
+
+- id: D2-FLW-023
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: does-it-compile
+  difficulty: expert
+  estSeconds: 180
+  tags: [sealed, exhaustiveness, guard, enum, pattern-switch]
+  prompt: Does this program compile? If not, what is the reason?
+  code: |
+    sealed interface Vehicle permits Car, Truck, Bike {}
+    record Car(int seats) implements Vehicle {}
+    record Truck(double tons) implements Vehicle {}
+    enum Bike implements Vehicle { ROAD, MOUNTAIN }
+
+    public class Main {
+        static int toll(Vehicle v) {
+            return switch (v) {
+                case Car c when c.seats() > 5 -> 8;
+                case Car c -> 5;
+                case Truck t when t.tons() > 10 -> 30;
+                case Truck t when t.tons() <= 10 -> 15;
+                case Bike.ROAD, Bike.MOUNTAIN -> 0;
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(toll(new Car(7)) + toll(new Truck(3)) + toll(Bike.ROAD));
+        }
+    }
+  options:
+    - key: a
+      text: It compiles and prints `23`
+      why: That is what the program would print if `Truck` were covered by an unguarded case; as written it is rejected.
+    - key: b
+      text: Compilation fails because `Truck` is covered only by guarded cases, so the switch is not exhaustive
+      correct: true
+      why: "The compiler does not evaluate guards: two complementary guards still leave Truck uncovered. Making the last Truck case unguarded fixes it."
+    - key: c
+      text: Compilation fails because enum constants cannot be case labels when the selector type is `Vehicle`
+      why: "Since Java 21, qualified enum constants such as `Bike.ROAD` may label a switch whose selector type is a supertype of the enum, and listing all constants covers the enum."
+    - key: d
+      text: Compilation fails because a switch over an interface type always needs a `default`
+      why: For a sealed interface, covering every permitted subtype (here Car, Truck and every Bike constant) is enough.
+  explanation: |
+    A switch over a sealed type is exhaustive when its unguarded labels cover every permitted subtype. An enum
+    subtype may be covered either by `case Bike b` or by listing all its constants (qualified, because the
+    selector is `Vehicle`). Guarded labels never count toward exhaustiveness, because javac does not reason
+    about the boolean conditions — so `when t.tons() > 10` plus `when t.tons() <= 10` still leaves `Truck`
+    uncovered: *the switch expression does not cover all possible input values*.
+  rule: "Exhaustiveness over a sealed hierarchy considers only unguarded patterns (and all constants of an enum subtype); guards are ignored."
+  misconception: "Guards that are logically complementary make a switch exhaustive."
+  hint: Which permitted subtype is covered only by `when` labels?
+  java:
+    expect: { compiles: false, errorContains: "does not cover all possible input values" }
+
+- id: D2-FLW-024
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 150
+  tags: [switch-expression, yield, return, contextual-keyword]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static int yield = 1;
+        static int parse(String s) {
+            int r = switch (s) {
+                case "one" -> yield;
+                case "two" -> {
+                    int yield = 2;
+                    yield yield;
+                }
+                case "" -> {
+                    return -1;
+                }
+                default -> Integer.parseInt(s);
+            };
+            return r;
+        }
+        public static void main(String[] args) {
+            System.out.println(parse("one") + parse("two") + parse(""));
+        }
+    }
+  options:
+    - key: a
+      text: Line 2 does not compile
+      why: "`yield` is a contextual keyword, not a reserved word, so it is still a legal field or variable name."
+    - key: b
+      text: Line 8 does not compile
+      why: "`yield yield;` is a yield statement whose value is the local variable named yield — legal, if confusing."
+    - key: c
+      text: Line 11 does not compile
+      correct: true
+      why: "A switch expression must produce a value or throw; `return` cannot jump out of it: attempt to return out of a switch expression."
+    - key: d
+      text: It compiles and prints `2`
+      why: This assumes `return -1` leaves parse() from inside the switch expression; javac rejects any return, break or continue that would leave a switch expression.
+  explanation: |
+    Inside a switch expression, a block arm hands its value back with `yield`, never with `return` (*attempt to
+    return out of a switch expression*); `break` and `continue` that would leave the expression are illegal too.
+    `yield` is a contextual keyword: it acts as a statement keyword only at the start of a statement such as
+    `yield value;`, so `yield` as a field name, a local variable name and even `yield yield;` all compile.
+    Inside a switch **statement**, by contrast, `return` is allowed.
+  rule: "A switch expression completes only by yielding a value or throwing; return/break/continue may not transfer control out of it (JLS 15.28.1); yield is a contextual keyword (JLS 3.9)."
+  misconception: "`return` inside a switch expression arm returns from the enclosing method."
+  hint: Which jump statements may leave a switch expression?
+  java:
+    expect: { compiles: false, errorContains: "attempt to return out of a switch expression", errorLine: 11 }
+
+- id: D2-FLW-025
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 210
+  tags: [pattern-switch, dominance, guard, constant-label, default]
+  prompt: "Given `Object o` and `Integer n`, which of these switch expressions compile? Choose three."
+  options:
+    - key: a
+      text: "`switch (n) { case 42 -> \"answer\"; case Integer i -> \"int\"; }`"
+      correct: true
+      why: A constant label may precede a type pattern of the same type; `case Integer i` is unconditional for an Integer selector, so the switch is exhaustive.
+      java:
+        source: |
+          public class Main {
+              static String f(Integer n) { return switch (n) { case 42 -> "answer"; case Integer i -> "int"; }; }
+              public static void main(String[] args) { System.out.println(f(42) + f(7)); }
+          }
+        expect: { compiles: true, stdout: "answerint" }
+    - key: b
+      text: "`switch (n) { case Integer i -> \"int\"; case 42 -> \"answer\"; }`"
+      why: The unguarded `case Integer i` already matches 42, so the constant label after it is dominated.
+      java:
+        source: |
+          public class Main {
+              static String f(Integer n) { return switch (n) { case Integer i -> "int"; case 42 -> "answer"; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "dominated" }
+    - key: c
+      text: "`switch (o) { case Integer i when i > 0 -> \"pos\"; case Integer i -> \"int\"; default -> \"other\"; }`"
+      correct: true
+      why: Guarded case first, unguarded case of the same type after it — the guarded label does not dominate anything.
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { case Integer i when i > 0 -> "pos"; case Integer i -> "int"; default -> "other"; }; }
+              public static void main(String[] args) { System.out.println(f(1) + f(-1) + f("x")); }
+          }
+        expect: { compiles: true, stdout: "posintother" }
+    - key: d
+      text: "`switch (o) { default -> \"other\"; case String s -> \"str\"; }`"
+      why: "`default` matches every remaining value, so a pattern label after it is dominated; patterns must come before default."
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { default -> "other"; case String s -> "str"; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "dominated" }
+    - key: e
+      text: "`switch (o) { case CharSequence cs -> \"cs\"; case String s -> \"str\"; default -> \"x\"; }`"
+      why: Every String is a CharSequence, so `case String s` can never be selected and is a dominance error.
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { case CharSequence cs -> "cs"; case String s -> "str"; default -> "x"; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "dominated" }
+    - key: f
+      text: "`switch (o) { case Integer i when i > 0 -> \"pos\"; case Integer i when i > 10 -> \"big\"; default -> \"x\"; }`"
+      correct: true
+      why: Guards are not analysed, so the second label is not considered dominated even though it can never be selected at run time.
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { case Integer i when i > 0 -> "pos"; case Integer i when i > 10 -> "big"; default -> "x"; }; }
+              public static void main(String[] args) { System.out.println(f(50) + f(-5)); }
+          }
+        expect: { compiles: true, stdout: "posx" }
+  explanation: |
+    Dominance is checked label by label, top to bottom. A label is dominated if a preceding **unguarded** pattern
+    matches all of its values (a supertype, or the same type), or if it follows `default` — in a pattern switch,
+    `default` must come after every pattern label. Constant labels may appear *before* a type pattern of the same
+    type but not after it. Guards are opaque to the compiler: a guarded label never dominates, even when its
+    condition makes a later label unreachable in practice.
+  rule: "A label is dominated if an earlier unguarded pattern matches all its values; pattern labels must precede default; constants must precede a matching type pattern (JLS 14.11.1)."
+  misconception: "The compiler reasons about guard conditions when checking dominance."
+  hint: For each later label, ask whether an earlier unguarded label (or default) already catches all of its values.
+
+- id: D2-FLW-026
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [case-null, default, null-selector, pattern-switch, switch-statement]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        static String a(String s) {
+            return switch (s) {
+                case "x" -> "X";
+                case null, default -> "fallback";
+            };
+        }
+        static String b(Object o) {
+            return switch (o) {
+                case null -> "null";
+                case String s when s.isEmpty() -> "empty";
+                default -> "obj";
+            };
+        }
+        static String c(Integer n) {
+            switch (n) {
+                case null: return "none";
+                case 1: return "one";
+                default: return "many";
+            }
+        }
+        public static void main(String[] args) {
+            System.out.println(a(null) + " " + a("x") + " " + b(null) + " " + b("") + " " + c(null) + " " + c(7));
+        }
+    }
+  options:
+    - key: a
+      text: "`fallback X null empty none many`"
+      correct: true
+      why: "`case null, default` handles null and every unmatched value together; `case null` works in pattern switches and in constant switches on reference types alike."
+    - key: b
+      text: Compilation fails because `case null` cannot be combined with `default` in one label
+      why: "`case null, default` is precisely the one allowed combination of null with default (Java 21+)."
+    - key: c
+      text: Compilation fails because `case null` is only allowed in a switch that uses type patterns
+      why: Any switch whose selector is a reference type may have `case null`, including a classic colon-style switch with constant labels.
+    - key: d
+      text: "A `NullPointerException` is thrown by `a(null)`"
+      why: "A switch throws NPE for null only when it has no `case null` label; `case null, default` provides one."
+  explanation: |
+    Since Java 21 any switch over a reference type may contain `case null`, either alone or as the special
+    combined label `case null, default`. With such a label the switch no longer throws `NullPointerException` for
+    a null selector. Adding `case null` to a switch statement makes it an "enhanced" switch, which must be
+    exhaustive — `c` satisfies that with its `default`.
+  rule: "case null (alone or as case null, default) may appear in any switch with a reference-typed selector; without it a null selector throws NPE (JLS 14.11.1, 14.11.3)."
+  misconception: "`case null` is a pattern-switch-only feature, or default handles null."
+  hint: Which switches have a label that matches null?
+  java:
+    expect: { compiles: true, stdout: "fallback X null empty none many" }
+
+- id: D2-FLW-027
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [pattern-switch, fallthrough, colon-labels, arrow-labels]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static void show(Object o) {
+            switch (o) {
+                case Integer i:
+                    System.out.print("int ");
+                case String s:
+                    System.out.print("string " + s);
+                    break;
+                default:
+                    System.out.print("other ");
+            }
+        }
+        public static void main(String[] args) {
+            show(1);
+        }
+    }
+  options:
+    - key: a
+      text: Line 6 does not compile
+      correct: true
+      why: "Execution could fall through from the Integer group into `case String s`, where `s` would be unbound: illegal fall-through to a pattern."
+    - key: b
+      text: It compiles and prints `int string null`
+      why: Classic fallthrough is not allowed into a label that declares pattern variables, precisely because they would be unbound; the code is rejected.
+    - key: c
+      text: It compiles and prints `int `
+      why: Colon-style pattern switches do not stop automatically at the next label; javac instead forbids the fallthrough.
+    - key: d
+      text: Line 9 does not compile
+      why: Falling through into `default` (which binds nothing) would be fine, and here the String group ends with break anyway.
+  explanation: |
+    Pattern labels can be written with `:` as well as `->`. With `:`, the normal fallthrough rules apply — but
+    falling into a label that declares pattern variables is a compile error (*illegal fall-through to a
+    pattern*), because those variables would not be initialised. Add `break;` after `int `, or use arrow labels,
+    which never fall through.
+  rule: "It is a compile error if a statement group can fall through into a case label that declares pattern variables (JLS 14.11.1)."
+  misconception: Fallthrough works the same way for pattern labels as for constant labels.
+  hint: If the Integer group falls through, what would `s` refer to?
+  java:
+    expect: { compiles: false, errorContains: "illegal fall-through to a pattern", errorLine: 6 }
+
+- id: D2-FLW-028
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 180
+  tags: [reachability, labels, nested-loops, for-loop]
+  prompt: What is the result of compiling this class?
+  code: |
+    public class Main {
+        static int search(int n, int limit) {
+            outer:
+            for (int k = 1; ; k++) {
+                for (int m = 1; ; m++) {
+                    if (m * n > limit) break outer;
+                    if (m * n % k == 0) continue outer;
+                }
+                System.out.println("next k");
+            }
+            return -1;
+        }
+        public static void main(String[] args) {
+            System.out.println(search(3, 20));
+        }
+    }
+  options:
+    - key: a
+      text: Line 9 does not compile
+      correct: true
+      why: "The inner loop has no condition and no break that targets it (both jumps target `outer`), so it cannot complete normally and line 9 is unreachable."
+    - key: b
+      text: Line 11 does not compile
+      why: The outer loop has no condition, but `break outer` is a reachable break that exits it, so the return after it is reachable.
+    - key: c
+      text: Line 7 does not compile
+      why: A labelled continue may target any enclosing loop, not just the innermost one.
+    - key: d
+      text: The class compiles
+      why: "Every jump in the inner loop leaves it, but none of them lets it complete normally, so the statement after it is an unreachable statement — a compile error, not a warning."
+  explanation: |
+    A loop with no condition can complete normally only if a reachable `break` **targets that loop**. Here
+    `break outer` and `continue outer` both target the outer loop: they transfer control out of the inner loop,
+    but the inner `for` statement itself never completes normally. The statement following it is therefore
+    unreachable. The outer loop does have a `break outer`, so the `return -1` after it is reachable.
+  rule: "A for statement without a condition can complete normally only if it contains a reachable break that exits it (JLS 14.22); jumps to outer labels do not count."
+  misconception: Any break inside a loop lets that loop complete normally.
+  hint: Which loop does each jump target?
+  java:
+    expect: { compiles: false, errorContains: "unreachable statement", errorLine: 9 }
+
+- id: D2-FLW-029
+  objective: D2.1
+  lesson: flow-loops-branching
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 120
+  tags: [for-loop, update-expressions, do-while, block]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int i = 0, j = 10, steps = 0;
+            for (; i < j; i += 3, j -= 2) steps++;
+            System.out.println(i + " " + j + " " + steps);
+            int k = 5;
+            do k -= 2; while (k > 0);
+            { System.out.println("k=" + k); }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        6 6 2
+        k=-1
+      correct: true
+      why: "Both updates run after every body: (0,10) → (3,8) → (6,6), where 6 < 6 fails after 2 steps. The do-while body runs for k = 5, 3, 1 and stops at -1; the block after it is an ordinary block that runs once."
+    - key: b
+      text: |
+        9 4 3
+        k=-1
+      why: The condition is re-tested after the update; at (6,6) the test i < j is already false, so there is no third step.
+    - key: c
+      text: |
+        6 6 2
+        k=1
+      why: The do-while tests after the body; with k = 1 the test 1 > 0 is true, so the body runs once more and k ends at -1.
+    - key: d
+      text: Compilation fails because a do-while body without braces cannot be followed by while
+      why: Like other loops, a do statement's body can be any single statement, so `do k -= 2; while (k > 0);` is legal; the semicolon after the condition is required.
+  explanation: |
+    The update part of a for loop may contain several comma-separated expression statements; all of them run
+    after each body, before the condition. A do-while has the form `do Statement while (Expression);` — the body
+    may be a single statement and the final semicolon is mandatory. The braces on the last line form a plain
+    block, which simply runs once after the loop.
+  rule: "for: ForUpdate is a comma-separated list of expressions run after each iteration; do Statement while (Expression); requires the trailing semicolon (JLS 14.13, 14.14.1)."
+  misconception: A do-while needs braces, or the for condition is checked between the update expressions.
+  hint: Write down (i, j) after every update, and k after every do-while iteration.
+  java:
+    expect: { compiles: true, stdout: "6 6 2\nk=-1" }
+
+- id: D2-FLW-030
+  objective: D2.1
+  lesson: flow-decisions-switch
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [unnamed-pattern, underscore, java-22, record-pattern, pattern-switch]
+  prompt: "Given `record Point(int x, int y) {}` and `Object o`, which of these switch expressions compile? Choose three."
+  options:
+    - key: a
+      text: "`switch (o) { case Integer _, Long _ -> \"integral\"; default -> \"other\"; }`"
+      correct: true
+      why: Several patterns may share one label when none of them declares a named variable; `_` declares nothing.
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { case Integer _, Long _ -> "integral"; default -> "other"; }; }
+              public static void main(String[] args) { System.out.println(f(1L) + " " + f(1.0)); }
+          }
+        expect: { compiles: true, stdout: "integral other" }
+    - key: b
+      text: "`switch (o) { case Integer i, Long l -> \"integral\"; default -> \"other\"; }`"
+      why: With named bindings, only one of i or l would be initialised, so grouping patterns that declare variables is illegal.
+      java:
+        source: |
+          public class Main {
+              static String f(Object o) { return switch (o) { case Integer i, Long l -> "integral"; default -> "other"; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false }
+    - key: c
+      text: "`switch (o) { case Point(int x, _) -> x; default -> 0; }`"
+      correct: true
+      why: The unnamed pattern `_` may replace a component pattern in a record pattern; it matches any value of that component.
+      java:
+        source: |
+          record Point(int x, int y) {}
+          public class Main {
+              static int f(Object o) { return switch (o) { case Point(int x, _) -> x; default -> 0; }; }
+              public static void main(String[] args) { System.out.println(f(new Point(3, 4))); }
+          }
+        expect: { compiles: true, stdout: "3" }
+    - key: d
+      text: "`switch (o) { case Integer i -> i; case _ -> 0; }`"
+      why: "The unnamed pattern is allowed only nested inside a record pattern; a top-level `case _` is rejected (use default or `case Object _`)."
+      java:
+        source: |
+          public class Main {
+              static int f(Object o) { return switch (o) { case Integer i -> i; case _ -> 0; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "underscore not allowed here" }
+    - key: e
+      text: "`switch (o) { case String _ -> _.length(); default -> 0; }`"
+      why: "`_` declares a variable that can never be read; using it as an expression is a compile error."
+      java:
+        source: |
+          public class Main {
+              static int f(Object o) { return switch (o) { case String _ -> _.length(); default -> 0; }; }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false }
+    - key: f
+      text: "`switch (o) { case Point(var x, var _) -> x; default -> 0; }`"
+      correct: true
+      why: "`var _` is an unnamed pattern variable with an inferred type; like `_` it matches the component without binding it."
+      java:
+        source: |
+          record Point(int x, int y) {}
+          public class Main {
+              static int f(Object o) { return switch (o) { case Point(var x, var _) -> x; default -> 0; }; }
+              public static void main(String[] args) { System.out.println(f(new Point(5, 6))); }
+          }
+        expect: { compiles: true, stdout: "5" }
+  explanation: |
+    JEP 456 (final since Java 22) adds unnamed variables and patterns. In a switch, `Type _` is a type pattern
+    that binds nothing, `_` alone is an unnamed pattern usable only as a nested component of a record pattern,
+    and `var _` is equivalent to it. Because unnamed patterns bind nothing, several of them may be grouped in one
+    case label (`case Integer _, Long _`). An unnamed variable can never be referenced.
+  rule: "JEP 456: _ may replace a nested pattern or a binding name; it binds nothing and cannot be read; a case label may group patterns only if none declares a named variable (JLS 14.30.1)."
+  misconception: "`_` is an ordinary identifier, or `case _` is a catch-all label."
+  hint: Where may `_` stand on its own, and what happens if a grouped pattern declares a name?

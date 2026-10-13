@@ -1,0 +1,188 @@
+# D6 — stream pipeline coding exercises
+
+- id: D6-EX-010
+  objective: D6.1
+  lesson: streams-pipelines
+  title: Employee reports with composed comparators and primitive streams
+  difficulty: advanced
+  kind: implement
+  prompt: |
+    The file declares `record Employee(String name, String dept, int salary, int years)` — keep it as given;
+    `dept` is `null` for contractors. Implement the four `public static` methods of `Reports` as stream
+    pipelines (no loops), using method references where they fit. None of them may modify the input list.
+
+    1. `List<String> seniorNames(List<Employee> staff, int minYears)` — the employees with
+       `years >= minYears`, ordered by **salary, highest first**, then by **name in natural (case-sensitive)
+       `String` order**, mapped to their upper-case name.
+    2. `OptionalDouble averageSalary(List<Employee> staff, String dept)` — the average salary of the employees
+       of `dept` (`dept` itself is never `null`), or an **empty** `OptionalDouble` if there are none.
+    3. `String salaryStats(List<Employee> staff)` — computed in a single pass:
+       `"n=<count> min=<min> max=<max> sum=<sum>"`, e.g. `"n=3 min=3500 max=9000 sum=19700"`. For an empty
+       list return exactly `"n=0"`.
+    4. `List<String> directory(List<Employee> staff)` — one entry `dept + "/" + name` per employee, with `"-"`
+       in place of a `null` dept, ordered by department in natural order with **`null` departments last**,
+       then by name.
+  fileName: Reports.java
+  starter: |
+    import java.util.*;
+    import java.util.stream.*;
+
+    record Employee(String name, String dept, int salary, int years) { }
+
+    public class Reports {
+
+        public static List<String> seniorNames(List<Employee> staff, int minYears) {
+            // TODO: filter, sort (salary high -> low, then name A -> Z), map to upper-case names
+            return List.of();
+        }
+
+        public static OptionalDouble averageSalary(List<Employee> staff, String dept) {
+            // TODO: use a primitive stream
+            return OptionalDouble.of(0);
+        }
+
+        public static String salaryStats(List<Employee> staff) {
+            // TODO: one pass with IntSummaryStatistics
+            return "";
+        }
+
+        public static List<String> directory(List<Employee> staff) {
+            // TODO: department A -> Z with null departments last, then name A -> Z
+            return List.of();
+        }
+    }
+  solution: |
+    import java.util.*;
+    import java.util.stream.*;
+
+    record Employee(String name, String dept, int salary, int years) { }
+
+    public class Reports {
+
+        public static List<String> seniorNames(List<Employee> staff, int minYears) {
+            return staff.stream()
+                    .filter(e -> e.years() >= minYears)
+                    .sorted(Comparator.comparingInt(Employee::salary).reversed()   // reverses ONLY the salary key
+                            .thenComparing(Employee::name))
+                    .map(Employee::name)
+                    .map(String::toUpperCase)
+                    .toList();
+        }
+
+        public static OptionalDouble averageSalary(List<Employee> staff, String dept) {
+            return staff.stream()
+                    .filter(e -> dept.equals(e.dept()))
+                    .mapToInt(Employee::salary)
+                    .average();
+        }
+
+        public static String salaryStats(List<Employee> staff) {
+            IntSummaryStatistics st = staff.stream().mapToInt(Employee::salary).summaryStatistics();
+            if (st.getCount() == 0) return "n=0";          // min/max would be Integer.MAX_VALUE/MIN_VALUE
+            return "n=%d min=%d max=%d sum=%d".formatted(st.getCount(), st.getMin(), st.getMax(), st.getSum());
+        }
+
+        public static List<String> directory(List<Employee> staff) {
+            return staff.stream()
+                    .sorted(Comparator.comparing(Employee::dept, Comparator.nullsLast(Comparator.naturalOrder()))
+                            .thenComparing(Employee::name))
+                    .map(e -> (e.dept() == null ? "-" : e.dept()) + "/" + e.name())
+                    .toList();
+        }
+    }
+  harness: |
+    import java.util.*;
+
+    public class Main {
+        static final List<Employee> STAFF = List.of(
+                new Employee("Mona", "ENG", 7200, 6),
+                new Employee("ali", "OPS", 5100, 2),
+                new Employee("Zied", "ENG", 9000, 9),
+                new Employee("Ines", null, 4000, 1),
+                new Employee("Karim", "ENG", 7200, 5),
+                new Employee("Bea", "OPS", 6100, 8),
+                new Employee("Adam", null, 3500, 3),
+                new Employee("Lina", "HR", 5500, 4));
+
+        static void check(String name, boolean ok, Object detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+
+        public static void main(String[] args) {
+            test("seniorNames filters and sorts", () -> {
+                var r = Reports.seniorNames(STAFF, 4);
+                check("seniorNames filters and sorts",
+                        List.of("ZIED", "KARIM", "MONA", "BEA", "LINA").equals(r), r + ", expected [ZIED, KARIM, MONA, BEA, LINA]");
+            });
+            test("seniorNames boundary and empty input", () -> {
+                var all = Reports.seniorNames(STAFF, 1).size();
+                var none = Reports.seniorNames(STAFF, 10);
+                var empty = Reports.seniorNames(List.of(), 0);
+                check("seniorNames boundary and empty input", all == 8 && none.isEmpty() && empty.isEmpty(),
+                        "minYears 1 -> " + all + " names (expected 8), minYears 10 -> " + none + ", empty list -> " + empty);
+            });
+            test("input list is not modified", () -> {
+                var copy = new ArrayList<>(STAFF);
+                Reports.seniorNames(copy, 0);
+                Reports.directory(copy);
+                check("input list is not modified", copy.equals(STAFF), copy.stream().map(Employee::name).toList());
+            });
+            test("averageSalary of a department", () -> {
+                var eng = Reports.averageSalary(STAFF, "ENG");
+                var hr = Reports.averageSalary(STAFF, "HR");
+                check("averageSalary of a department",
+                        eng.isPresent() && eng.getAsDouble() == 7800.0 && hr.isPresent() && hr.getAsDouble() == 5500.0,
+                        "ENG " + eng + ", HR " + hr);
+            });
+            test("averageSalary of an unknown department is empty", () -> {
+                var none = Reports.averageSalary(STAFF, "LEGAL");
+                var emptyStaff = Reports.averageSalary(List.of(), "ENG");
+                check("averageSalary of an unknown department is empty", none.isEmpty() && emptyStaff.isEmpty(),
+                        none + " / " + emptyStaff);
+            });
+            test("salaryStats", () -> {
+                var r = Reports.salaryStats(STAFF);
+                check("salaryStats", "n=8 min=3500 max=9000 sum=47600".equals(r),
+                        "\"" + r + "\", expected \"n=8 min=3500 max=9000 sum=47600\"");
+            });
+            test("salaryStats of nobody", () -> {
+                var r = Reports.salaryStats(List.of());
+                check("salaryStats of nobody", "n=0".equals(r), "\"" + r + "\", expected \"n=0\"");
+            });
+            test("directory with null departments last", () -> {
+                var r = Reports.directory(STAFF);
+                var expected = List.of("ENG/Karim", "ENG/Mona", "ENG/Zied", "HR/Lina", "OPS/Bea", "OPS/ali", "-/Adam", "-/Ines");
+                check("directory with null departments last", expected.equals(r), r + ", expected " + expected);
+            });
+            test("directory of nobody", () -> {
+                var r = Reports.directory(List.of());
+                check("directory of nobody", r.isEmpty(), r);
+            });
+        }
+    }
+  explanation: |
+    `sorted(...)` takes a `Comparator`, and the `Comparator` factory and default methods compose from left to
+    right. `comparingInt(Employee::salary).reversed()` reverses only the salary order; `thenComparing(Employee::name)`
+    is then applied, ascending, to employees with equal salaries. The tempting
+    `comparing(Employee::salary).thenComparing(Employee::name).reversed()` reverses the **whole** comparator,
+    so ties come out Z → A (MONA before KARIM). `String`'s natural order compares UTF-16 code units, so
+    `"Bea"` sorts before `"ali"`.
+
+    `mapToInt` switches to an `IntStream`. Its `average()` returns an `OptionalDouble` that is empty when no
+    element matched — not the same thing as an average of 0. `summaryStatistics()` gathers count, min, max and
+    sum in one pass; on an empty stream `getMin()` is `Integer.MAX_VALUE` and `getMax()` is
+    `Integer.MIN_VALUE`, which is why the empty case needs its own result.
+
+    `Comparator.comparing(Employee::dept)` alone throws `NullPointerException` as soon as it compares a `null`
+    key; the two-argument `comparing(keyExtractor, Comparator.nullsLast(Comparator.naturalOrder()))` orders
+    `null` keys after all others. A stream never modifies its source, and `Stream.toList()` returns an
+    unmodifiable list — whereas `staff.sort(...)` would mutate the caller's list, or throw
+    `UnsupportedOperationException` on a `List.of(...)`.
+  hints:
+    - "`Comparator.comparingInt(Employee::salary).reversed().thenComparing(Employee::name)`: `reversed()` applies to the whole comparator built so far, so its position matters."
+    - "`mapToInt(Employee::salary)` gives an `IntStream`: `average()` already returns an `OptionalDouble`, and `summaryStatistics()` returns count, min, max and sum in one pass."
+    - "`Comparator.comparing(Employee::dept, Comparator.nullsLast(Comparator.naturalOrder()))` sorts by a key that may be `null`; add `.thenComparing(Employee::name)` for ties."

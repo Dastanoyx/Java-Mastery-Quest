@@ -1,0 +1,203 @@
+- id: D7-EX-001
+  objective: D7.1
+  lesson: pkg-modules-services
+  title: A mini ServiceLoader — provider resolution rules
+  difficulty: advanced
+  kind: implement
+  prompt: |
+    `ServiceLoader` turns a provider class into a service instance with a precise rule. Re-implement that rule
+    with reflection in the class `MiniLoader`:
+
+    1. `static <S> S instantiate(Class<S> service, Class<?> impl)`
+       - **Provider method first.** If `impl` *declares* a method `provider()` with no parameters that is
+         `public` **and** `static`, it is the provider method. Its return type must be `service` or a subtype
+         (otherwise throw `ServiceConfigurationError`). Invoke it and return the result. A `provider()` that is
+         not both public and static is ignored.
+       - **Otherwise the constructor.** `impl` must be a subtype of `service` and have a **public** no-arg
+         constructor; otherwise throw `ServiceConfigurationError`. Create and return a new instance.
+       - If the provider method or constructor itself throws, throw a `ServiceConfigurationError` whose
+         `getCause()` is the original exception.
+    2. `static <S> Iterable<S> load(Class<S> service, List<Class<?>> impls)` returns a **lazy** `Iterable`:
+       nothing is instantiated when `load` is called or when `iterator()` is called — each provider is
+       instantiated (with `instantiate`) only when `next()` reaches it, in list order. A bad provider therefore
+       fails only when the iteration reaches it.
+
+    `ServiceConfigurationError` is `java.util.ServiceConfigurationError` (an `Error`, with constructors
+    `(String)` and `(String, Throwable)`). The test classes live in the same (unnamed) package as your code.
+  fileName: Solution.java
+  starter: |
+    import java.lang.reflect.*;
+    import java.util.*;
+
+    class MiniLoader {
+
+        static <S> S instantiate(Class<S> service, Class<?> impl) {
+            // TODO 1: provider() method first, then the public no-arg constructor
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        static <S> Iterable<S> load(Class<S> service, List<Class<?>> impls) {
+            // TODO 2: a lazy Iterable that calls instantiate(...) from next()
+            throw new UnsupportedOperationException("TODO");
+        }
+    }
+
+    class Solution { }
+  solution: |
+    import java.lang.reflect.*;
+    import java.util.*;
+
+    class MiniLoader {
+
+        static <S> S instantiate(Class<S> service, Class<?> impl) {
+            Method factory = providerMethod(impl);
+            try {
+                if (factory != null) {
+                    if (!service.isAssignableFrom(factory.getReturnType()))
+                        throw new ServiceConfigurationError(impl.getName() + ".provider() does not return a " + service.getName());
+                    return service.cast(factory.invoke(null));
+                }
+                if (!service.isAssignableFrom(impl))
+                    throw new ServiceConfigurationError(impl.getName() + " is not a subtype of " + service.getName());
+                Constructor<?> ctor;
+                try {
+                    ctor = impl.getConstructor();               // public constructors only
+                } catch (NoSuchMethodException e) {
+                    throw new ServiceConfigurationError(impl.getName() + " has no public no-arg constructor");
+                }
+                return service.cast(ctor.newInstance());
+            } catch (InvocationTargetException e) {             // the provider itself threw
+                throw new ServiceConfigurationError(impl.getName() + " failed: " + e.getCause(), e.getCause());
+            } catch (ReflectiveOperationException e) {
+                throw new ServiceConfigurationError(impl.getName() + " cannot be instantiated", e);
+            }
+        }
+
+        private static Method providerMethod(Class<?> impl) {
+            try {
+                Method m = impl.getDeclaredMethod("provider");  // declared, not inherited
+                int mod = m.getModifiers();
+                return Modifier.isPublic(mod) && Modifier.isStatic(mod) ? m : null;
+            } catch (NoSuchMethodException e) {
+                return null;
+            }
+        }
+
+        static <S> Iterable<S> load(Class<S> service, List<Class<?>> impls) {
+            List<Class<?>> providers = List.copyOf(impls);
+            return () -> new Iterator<S>() {
+                private int next = 0;
+
+                @Override public boolean hasNext() { return next < providers.size(); }
+
+                @Override public S next() {
+                    if (!hasNext()) throw new NoSuchElementException();
+                    return instantiate(service, providers.get(next++));
+                }
+            };
+        }
+    }
+
+    class Solution { }
+  harness: |
+    import java.util.*;
+    import java.util.function.Supplier;
+
+    interface Codec { String name(); }
+
+    class Png implements Codec {
+        public Png() { }
+        public String name() { return "png"; }
+    }
+    class Jpeg {                                   // not a Codec, private constructor, but a provider method
+        private Jpeg() { throw new AssertionError("constructor must not be used"); }
+        public static Codec provider() { return () -> "jpeg-factory"; }
+    }
+    class Webp implements Codec {                  // both: the provider method wins
+        public Webp() { }
+        public String name() { return "webp-ctor"; }
+        public static Codec provider() { return () -> "webp-factory"; }
+    }
+    class Inst implements Codec {                  // provider() is not static: ignored
+        public Inst() { }
+        public String name() { return "inst-ctor"; }
+        public Codec provider() { return () -> "inst-factory"; }
+    }
+    class Plain { public Plain() { } }             // not a Codec, no provider method
+    class Hidden implements Codec {                // constructor is not public
+        Hidden() { }
+        public String name() { return "hidden"; }
+    }
+    class WrongType {                              // provider() returns the wrong type
+        public static String provider() { return "nope"; }
+    }
+    class Boom implements Codec {
+        public Boom() { throw new IllegalStateException("boom"); }
+        public String name() { return "boom"; }
+    }
+    class Counting implements Codec {
+        static int created = 0;
+        public Counting() { created++; }
+        public String name() { return "counting"; }
+    }
+
+    public class Main {
+        static void t(String name, Supplier<Boolean> test) {
+            boolean ok;
+            String detail = "";
+            try { ok = test.get(); }
+            catch (Throwable e) { ok = false; detail = ": " + e; }
+            System.out.println((ok ? "PASS " : "FAIL ") + name + detail);
+        }
+        static boolean fails(Runnable r) {
+            try { r.run(); return false; } catch (ServiceConfigurationError e) { return true; }
+        }
+        public static void main(String[] args) {
+            t("constructor provider", () -> MiniLoader.instantiate(Codec.class, Png.class).name().equals("png"));
+            t("provider() method used, private constructor ignored", () -> MiniLoader.instantiate(Codec.class, Jpeg.class).name().equals("jpeg-factory"));
+            t("provider() method wins over constructor", () -> MiniLoader.instantiate(Codec.class, Webp.class).name().equals("webp-factory"));
+            t("non-static provider() ignored", () -> MiniLoader.instantiate(Codec.class, Inst.class).name().equals("inst-ctor"));
+            t("non-subtype rejected", () -> fails(() -> MiniLoader.instantiate(Codec.class, Plain.class)));
+            t("non-public constructor rejected", () -> fails(() -> MiniLoader.instantiate(Codec.class, Hidden.class)));
+            t("provider() with wrong return type rejected", () -> fails(() -> MiniLoader.instantiate(Codec.class, WrongType.class)));
+            t("failure wrapped with cause", () -> {
+                try { MiniLoader.instantiate(Codec.class, Boom.class); return false; }
+                catch (ServiceConfigurationError e) { return e.getCause() instanceof IllegalStateException; }
+            });
+            t("load is lazy", () -> {
+                Counting.created = 0;
+                Iterable<Codec> it = MiniLoader.load(Codec.class, List.of(Counting.class, Counting.class));
+                Iterator<Codec> i = it.iterator();
+                boolean none = Counting.created == 0;
+                i.next();
+                return none && Counting.created == 1 && i.hasNext();
+            });
+            t("load keeps list order", () -> {
+                List<String> names = new ArrayList<>();
+                for (Codec c : MiniLoader.load(Codec.class, List.of(Png.class, Jpeg.class, Webp.class))) names.add(c.name());
+                return names.equals(List.of("png", "jpeg-factory", "webp-factory"));
+            });
+            t("bad provider fails only when reached", () -> {
+                Iterator<Codec> i = MiniLoader.load(Codec.class, List.of(Png.class, Plain.class)).iterator();
+                boolean first = i.next().name().equals("png");
+                return first && fails(i::next);
+            });
+            t("exhausted iterator throws NoSuchElementException", () -> {
+                Iterator<Codec> i = MiniLoader.load(Codec.class, List.of()).iterator();
+                try { i.next(); return false; } catch (NoSuchElementException e) { return true; }
+            });
+        }
+    }
+  explanation: |
+    This is the rule `ServiceLoader` applies to providers in named modules (and javac checks for `provides ...
+    with` directives): a declared `public static` no-arg `provider()` method takes precedence, and then the
+    class need not implement the service or have an accessible constructor; otherwise the class must implement
+    the service and have a public no-arg constructor. `getDeclaredMethod` finds only methods declared by the
+    class itself, `getConstructor` only public constructors. Exceptions thrown by the provider arrive wrapped
+    in `InvocationTargetException`, whose cause is passed on. Laziness mirrors `ServiceLoader`, which
+    instantiates a provider only when the iterator (or `Provider.get()`) reaches it.
+  hints:
+    - "`impl.getDeclaredMethod(\"provider\")` throws `NoSuchMethodException` if there is none; check `Modifier.isPublic` and `Modifier.isStatic`."
+    - "`service.isAssignableFrom(x)` answers \"is x the service type or a subtype?\"."
+    - "`impl.getConstructor()` returns only a public no-arg constructor; `getDeclaredConstructor()` would also find private ones."
+    - "Return `() -> new Iterator<S>() { ... }` from `load`: the lambda implements `Iterable.iterator()`, and `next()` calls `instantiate`."

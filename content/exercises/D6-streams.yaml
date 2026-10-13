@@ -1,0 +1,160 @@
+- id: D6-EX-001
+  objective: D6.2
+  lesson: streams-gatherers
+  title: Two custom gatherers — parcel batching and read-until-error
+  difficulty: advanced
+  kind: implement
+  prompt: |
+    Implement two reusable intermediate operations as **Stream Gatherers** (final since Java 24, JEP 485).
+
+    1. `Gatherer<Integer, ?, List<Integer>> batchByWeight(int maxWeight)` — a shipping service loads parcels
+       (their weights, in arrival order) into trucks. Emit consecutive parcels as one `List<Integer>` per truck
+       so that each truck's total weight is **at most `maxWeight`**; when the next parcel does not fit, the
+       current truck leaves and a new one starts. A parcel heavier than `maxWeight` travels **alone** in its own
+       truck. The last, partly filled truck must be emitted too; an empty stream emits nothing. If
+       `maxWeight < 1`, throw `IllegalArgumentException` **when the gatherer is created**. Emitted lists must
+       not change afterwards. The gatherer must stay lazy — it should not read the whole stream before emitting.
+    2. `<T> Gatherer<T, ?, T> takeUntilInclusive(Predicate<? super T> stop)` — passes elements through up to
+       **and including** the first element that matches `stop`, then **stops pulling** from upstream (like
+       `takeWhile`, but keeping the matching element). If nothing matches, every element passes.
+
+    Both are sequential gatherers: use `Gatherer.ofSequential(...)`. Remember that the integrator's boolean
+    return value means "send me more elements".
+  fileName: Solution.java
+  starter: |
+    import java.util.*;
+    import java.util.function.*;
+    import java.util.stream.*;
+
+    class Solution {
+        static Gatherer<Integer, ?, List<Integer>> batchByWeight(int maxWeight) {
+            // TODO: validate maxWeight, keep the current truck as state, emit full trucks, flush the last one
+            return Gatherer.<Integer, List<Integer>>of((state, parcel, downstream) -> downstream.push(List.of(parcel)));
+        }
+
+        static <T> Gatherer<T, ?, T> takeUntilInclusive(Predicate<? super T> stop) {
+            // TODO: push each element; after pushing the first match, tell upstream to stop
+            return Gatherer.<T, T>of((state, element, downstream) -> downstream.push(element));
+        }
+    }
+  solution: |
+    import java.util.*;
+    import java.util.function.*;
+    import java.util.stream.*;
+
+    class Solution {
+        static Gatherer<Integer, ?, List<Integer>> batchByWeight(int maxWeight) {
+            if (maxWeight < 1) throw new IllegalArgumentException("maxWeight must be at least 1: " + maxWeight);
+
+            class Truck {                         // mutable state, one instance per stream evaluation
+                List<Integer> parcels = new ArrayList<>();
+                int weight;
+            }
+
+            return Gatherer.ofSequential(
+                    Truck::new,
+                    (truck, parcel, downstream) -> {
+                        if (!truck.parcels.isEmpty() && truck.weight + parcel > maxWeight) {
+                            List<Integer> full = List.copyOf(truck.parcels);   // immutable snapshot
+                            truck.parcels = new ArrayList<>();
+                            truck.weight = 0;
+                            if (!downstream.push(full)) return false;          // downstream is done
+                        }
+                        truck.parcels.add(parcel);
+                        truck.weight += parcel;
+                        return true;
+                    },
+                    (truck, downstream) -> {
+                        if (!truck.parcels.isEmpty()) downstream.push(List.copyOf(truck.parcels));
+                    });
+        }
+
+        static <T> Gatherer<T, ?, T> takeUntilInclusive(Predicate<? super T> stop) {
+            Objects.requireNonNull(stop);
+            return Gatherer.ofSequential(
+                    (state, element, downstream) -> downstream.push(element) && !stop.test(element));
+        }
+    }
+  harness: |
+    import java.util.*;
+    import java.util.concurrent.atomic.*;
+    import java.util.stream.*;
+
+    public class Main {
+        static void check(String name, boolean ok, Object actual) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + actual);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+
+        public static void main(String[] args) {
+            test("batches consecutive parcels", () -> {
+                var r = Stream.of(4, 3, 2, 5, 1, 1).gather(Solution.batchByWeight(6)).toList();
+                check("batches consecutive parcels", List.of(List.of(4), List.of(3, 2), List.of(5, 1), List.of(1)).equals(r), r);
+            });
+            test("exact fit and heavy parcel", () -> {
+                var exact = Stream.of(2, 2, 2).gather(Solution.batchByWeight(6)).toList();
+                var heavy = Stream.of(1, 9, 1).gather(Solution.batchByWeight(5)).toList();
+                check("exact fit and heavy parcel",
+                        List.of(List.of(2, 2, 2)).equals(exact) && List.of(List.of(1), List.of(9), List.of(1)).equals(heavy),
+                        exact + " / " + heavy);
+            });
+            test("empty stream emits nothing", () -> {
+                var r = Stream.<Integer>empty().gather(Solution.batchByWeight(10)).toList();
+                check("empty stream emits nothing", r.isEmpty(), r);
+            });
+            test("invalid maxWeight rejected at creation", () -> {
+                boolean thrown = false;
+                try { Solution.batchByWeight(0); } catch (IllegalArgumentException e) { thrown = true; }
+                check("invalid maxWeight rejected at creation", thrown, "no IllegalArgumentException from batchByWeight(0)");
+            });
+            test("batching stays lazy", () -> {
+                AtomicInteger pulled = new AtomicInteger();
+                var r = IntStream.rangeClosed(1, 1_000).boxed()
+                        .peek(x -> pulled.incrementAndGet())
+                        .gather(Solution.batchByWeight(10))
+                        .limit(2)
+                        .toList();
+                check("batching stays lazy",
+                        List.of(List.of(1, 2, 3, 4), List.of(5)).equals(r) && pulled.get() < 10,
+                        r + " after pulling " + pulled.get() + " elements");
+            });
+            test("takeUntilInclusive keeps the match", () -> {
+                var r = Stream.of("INFO start", "WARN slow", "ERROR db down", "INFO retry")
+                        .gather(Solution.takeUntilInclusive(s -> s.startsWith("ERROR"))).toList();
+                check("takeUntilInclusive keeps the match", List.of("INFO start", "WARN slow", "ERROR db down").equals(r), r);
+            });
+            test("takeUntilInclusive without a match", () -> {
+                var r = Stream.of(1, 2, 3).gather(Solution.takeUntilInclusive(x -> x > 5)).toList();
+                var first = Stream.of(7, 8).gather(Solution.takeUntilInclusive(x -> x > 5)).toList();
+                check("takeUntilInclusive without a match", List.of(1, 2, 3).equals(r) && List.of(7).equals(first), r + " / " + first);
+            });
+            test("takeUntilInclusive stops pulling", () -> {
+                AtomicInteger pulled = new AtomicInteger();
+                var r = IntStream.rangeClosed(1, 1_000).boxed()
+                        .peek(x -> pulled.incrementAndGet())
+                        .gather(Solution.takeUntilInclusive(x -> x == 3))
+                        .toList();
+                check("takeUntilInclusive stops pulling", List.of(1, 2, 3).equals(r) && pulled.get() == 3,
+                        r.size() + " elements " + r.subList(0, Math.min(r.size(), 5)) + "... after pulling "
+                        + pulled.get() + " source elements");
+            });
+        }
+    }
+  explanation: |
+    `batchByWeight` is a **stateful** gatherer: the initializer creates a fresh `Truck` per stream evaluation,
+    the integrator decides for every parcel whether the current truck must leave first, and the **finisher**
+    pushes the last partial truck after the source is exhausted (an empty stream leaves the truck empty, so
+    nothing is pushed). Pushing `List.copyOf(...)` and starting a new list keeps emitted batches immutable.
+    Validating `maxWeight` in the factory method (outside the lambdas) makes the error appear at creation, like
+    `Gatherers.windowFixed(0)`. Returning `false` when `downstream.push(...)` returns `false` propagates
+    short-circuiting from operations such as `limit`.
+    `takeUntilInclusive` needs no state. Its integrator pushes the element and returns `false` as soon as the
+    element matches, which tells the stream to stop pulling — that is why only three source elements are read.
+    Pushing first and testing afterwards is what makes the matching element itself part of the output.
+  hints:
+    - "Use `Gatherer.ofSequential(initializer, integrator, finisher)` with a small mutable state class holding the current list and its total weight."
+    - "Flush the current truck *before* adding a parcel that would overflow it — but only if the truck is not empty, so a heavy parcel still gets a truck of its own."
+    - "In `takeUntilInclusive`, return `downstream.push(element) && !stop.test(element)`: `false` means \"no more elements, please\"."

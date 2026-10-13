@@ -1,0 +1,131 @@
+# D9 — Java I/O coding exercises
+
+- id: D9-EX-001
+  objective: D9.3
+  lesson: io-nio2
+  title: ERROR-line scanner with NIO.2
+  difficulty: intermediate
+  kind: implement
+  prompt: |
+    Implement two static methods of `LogScanner` using `java.nio.file`:
+
+    1. `List<String> errors(Path dir)` returns every line that contains `ERROR` in the **regular files
+       whose name ends with `.log` directly inside `dir`** — ignore other files, sub-directories (and their
+       contents) and directories that happen to be named `*.log`.
+    2. Each entry has the form `fileName:lineNumber: line`, with **1-based** line numbers, e.g.
+       `db.log:2: ERROR timeout`.
+    3. Results are ordered by file name, then by line number. (`Files.list` returns entries in no
+       particular order.) If `dir` does not exist, let the `NoSuchFileException` propagate. Remember to
+       close the stream returned by `Files.list`.
+    4. `int writeReport(Path report, List<String> lines)` writes one entry per line to `report`, creating
+       any missing parent directories and replacing an existing file. It returns the number of lines
+       written.
+  fileName: Solution.java
+  starter: |
+    import java.io.IOException;
+    import java.nio.file.*;
+    import java.util.*;
+    import java.util.stream.Stream;
+
+    class LogScanner {
+        /** Every line containing "ERROR" in the regular *.log files directly inside dir, as "file:line: text". */
+        static List<String> errors(Path dir) throws IOException {
+            // TODO 1-3
+            return List.of();
+        }
+
+        /** Writes the lines to report (creating missing parent directories, replacing an existing file). */
+        static int writeReport(Path report, List<String> lines) throws IOException {
+            // TODO 4
+            return 0;
+        }
+    }
+
+    class Solution { }
+  solution: |
+    import java.io.IOException;
+    import java.nio.file.*;
+    import java.util.*;
+    import java.util.stream.Stream;
+
+    class LogScanner {
+        static List<String> errors(Path dir) throws IOException {
+            List<Path> logs;
+            try (Stream<Path> entries = Files.list(dir)) {
+                logs = entries.filter(Files::isRegularFile)
+                              .filter(p -> p.getFileName().toString().endsWith(".log"))
+                              .sorted(Comparator.comparing(p -> p.getFileName().toString()))
+                              .toList();
+            }
+            List<String> result = new ArrayList<>();
+            for (Path log : logs) {
+                List<String> lines = Files.readAllLines(log);
+                for (int i = 0; i < lines.size(); i++) {
+                    if (lines.get(i).contains("ERROR")) {
+                        result.add(log.getFileName() + ":" + (i + 1) + ": " + lines.get(i));
+                    }
+                }
+            }
+            return result;
+        }
+
+        static int writeReport(Path report, List<String> lines) throws IOException {
+            Path parent = report.toAbsolutePath().getParent();
+            if (parent != null) Files.createDirectories(parent);
+            Files.write(report, lines);
+            return lines.size();
+        }
+    }
+
+    class Solution { }
+  harness: |
+    import java.nio.file.*;
+    import java.util.*;
+
+    public class Main {
+        static void t(String name, boolean ok) { System.out.println((ok ? "PASS " : "FAIL ") + name); }
+        public static void main(String[] args) {
+            try {
+                Path dir = Files.createTempDirectory("logs");
+                Files.writeString(dir.resolve("db.log"), "INFO start\nERROR timeout\nINFO retry\nERROR down\n");
+                Files.writeString(dir.resolve("app.log"), "ERROR boot failed\nINFO ok\n");
+                Files.writeString(dir.resolve("notes.txt"), "ERROR not a log\n");
+                Files.createDirectories(dir.resolve("sub"));
+                Files.writeString(dir.resolve("sub/deep.log"), "ERROR nested\n");
+                Files.createDirectories(dir.resolve("archive.log"));
+                List<String> errs = LogScanner.errors(dir);
+                t("finds the 3 ERROR lines of the top-level .log files", errs.size() == 3);
+                t("sorted by file name, 1-based line numbers, exact format",
+                    errs.equals(List.of("app.log:1: ERROR boot failed", "db.log:2: ERROR timeout", "db.log:4: ERROR down")));
+                t("ignores non-.log files, subdirectories and directories named *.log",
+                    errs.stream().noneMatch(s -> s.contains("not a log") || s.contains("nested")));
+                Path empty = Files.createDirectories(dir.resolve("empty"));
+                t("empty directory gives an empty list", LogScanner.errors(empty).isEmpty());
+                boolean threw = false;
+                try { LogScanner.errors(dir.resolve("missing")); } catch (NoSuchFileException e) { threw = true; }
+                t("missing directory throws NoSuchFileException", threw);
+                Path report = dir.resolve("out/reports/errors.txt");
+                int n = LogScanner.writeReport(report, errs);
+                t("writeReport returns the number of lines", n == 3);
+                t("writeReport creates missing parent directories", Files.isRegularFile(report));
+                t("report contains one entry per line", Files.exists(report) && Files.readAllLines(report).equals(errs));
+                LogScanner.writeReport(report, List.of("only"));
+                t("writeReport replaces an existing report", Files.exists(report) && Files.readAllLines(report).equals(List.of("only")));
+            } catch (Throwable e) {
+                System.out.println("FAIL unexpected " + e);
+            }
+        }
+    }
+  explanation: |
+    `Files.list` returns a lazily populated `Stream<Path>` backed by an open directory stream, so it is
+    consumed inside try-with-resources and collected into a list before the files are read. Filtering
+    with `Files::isRegularFile` excludes directories (even one named `archive.log`), and sorting by file
+    name makes the output deterministic. `Files.readAllLines` gives the lines without terminators, and the
+    loop index supplies 1-based line numbers. `Files.createDirectories` creates every missing parent and
+    tolerates existing ones, and `Files.write(path, lines)` uses `CREATE`, `TRUNCATE_EXISTING` and `WRITE`
+    by default, so an existing report is replaced.
+  hints:
+    - "`try (Stream<Path> entries = Files.list(dir)) { ... .toList(); }` — collect inside the try."
+    - "Filter with `Files::isRegularFile` and `p.getFileName().toString().endsWith(\".log\")`."
+    - "Sort with `Comparator.comparing(p -> p.getFileName().toString())`."
+    - "`Files.createDirectories(report.toAbsolutePath().getParent())` before `Files.write(report, lines)`."

@@ -1,0 +1,166 @@
+- id: D4-EX-001
+  objective: D4.1
+  lesson: exc-try-with-resources
+  title: Relay over two channels with try-with-resources
+  difficulty: intermediate
+  kind: repair
+  prompt: |
+    A relay sends one message over a **primary** and a **backup** channel. `Channel` (already in
+    `Solution.java`, do not change it) simulates the network and records every event in `Channel.log`:
+
+    - `new Channel(name)` throws `IOException("cannot open " + name)` when the name starts with `!`;
+    - `send(msg)` throws `IOException("blank message on " + name)` when the message is blank;
+    - `close()` throws `IOException("close failed " + name)` when the name ends with `~`.
+
+    The current `relay` uses a hand-written `try/finally`. It closes the channels in the wrong order and it
+    silently loses failures that happen while closing. Rewrite `relay(String msg, String primary, String backup)`
+    with **one try-with-resources statement** so that:
+
+    1. `primary` is opened first, then `backup`; the message is sent on `primary`, then on `backup`.
+    2. Channels are closed in reverse order (`backup` first), and only channels that were actually opened.
+    3. The method returns `"OK"` when nothing failed.
+    4. If any `IOException` occurs (open, send **or close**), it returns `"FAIL " + e.getMessage()`, followed —
+       if the exception has suppressed exceptions — by `" +suppressed: "` and their messages in
+       `getSuppressed()` order, separated by `", "`.
+       Example: `FAIL blank message on a +suppressed: close failed b~`.
+    5. `relay` never throws.
+  fileName: Solution.java
+  starter: |
+    import java.io.Closeable;
+    import java.io.IOException;
+    import java.util.ArrayList;
+    import java.util.List;
+
+    // Simulated network channel: do not change this class.
+    class Channel implements Closeable {
+        static final List<String> log = new ArrayList<>();
+        private final String name;
+
+        Channel(String name) throws IOException {
+            if (name.startsWith("!")) throw new IOException("cannot open " + name);
+            this.name = name;
+            log.add("open " + name);
+        }
+
+        void send(String msg) throws IOException {
+            if (msg.isBlank()) throw new IOException("blank message on " + name);
+            log.add("send " + name);
+        }
+
+        @Override
+        public void close() throws IOException {
+            log.add("close " + name);
+            if (name.endsWith("~")) throw new IOException("close failed " + name);
+        }
+    }
+
+    class Solution {
+        // TODO: rewrite with a single try-with-resources statement
+        static String relay(String msg, String primary, String backup) {
+            Channel a = null, b = null;
+            try {
+                a = new Channel(primary);
+                b = new Channel(backup);
+                a.send(msg);
+                b.send(msg);
+                return "OK";
+            } catch (IOException e) {
+                return "FAIL " + e.getMessage();
+            } finally {
+                try {
+                    if (a != null) a.close();
+                    if (b != null) b.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
+    }
+  solution: |
+    import java.io.Closeable;
+    import java.io.IOException;
+    import java.util.ArrayList;
+    import java.util.List;
+
+    // Simulated network channel: do not change this class.
+    class Channel implements Closeable {
+        static final List<String> log = new ArrayList<>();
+        private final String name;
+
+        Channel(String name) throws IOException {
+            if (name.startsWith("!")) throw new IOException("cannot open " + name);
+            this.name = name;
+            log.add("open " + name);
+        }
+
+        void send(String msg) throws IOException {
+            if (msg.isBlank()) throw new IOException("blank message on " + name);
+            log.add("send " + name);
+        }
+
+        @Override
+        public void close() throws IOException {
+            log.add("close " + name);
+            if (name.endsWith("~")) throw new IOException("close failed " + name);
+        }
+    }
+
+    class Solution {
+        static String relay(String msg, String primary, String backup) {
+            try (Channel a = new Channel(primary); Channel b = new Channel(backup)) {
+                a.send(msg);
+                b.send(msg);
+                return "OK";
+            } catch (IOException e) {
+                StringBuilder sb = new StringBuilder("FAIL ").append(e.getMessage());
+                Throwable[] suppressed = e.getSuppressed();
+                for (int i = 0; i < suppressed.length; i++) {
+                    sb.append(i == 0 ? " +suppressed: " : ", ").append(suppressed[i].getMessage());
+                }
+                return sb.toString();
+            }
+        }
+    }
+  harness: |
+    import java.util.List;
+    public class Main {
+        static void check(String name, String expected, List<String> expectedLog, String msg, String p, String b) {
+            Channel.log.clear();
+            try {
+                String got = Solution.relay(msg, p, b);
+                if (!expected.equals(got))
+                    System.out.println("FAIL " + name + ": expected \"" + expected + "\" but got \"" + got + "\"");
+                else if (!expectedLog.equals(Channel.log))
+                    System.out.println("FAIL " + name + ": expected events " + expectedLog + " but were " + Channel.log);
+                else System.out.println("PASS " + name);
+            } catch (Throwable t) {
+                System.out.println("FAIL " + name + ": relay threw " + t);
+            }
+        }
+        public static void main(String[] args) {
+            check("happy path closes in reverse order", "OK",
+                List.of("open a", "open b", "send a", "send b", "close b", "close a"), "hi", "a", "b");
+            check("primary cannot be opened", "FAIL cannot open !a",
+                List.of(), "hi", "!a", "b");
+            check("backup cannot be opened: only primary is closed", "FAIL cannot open !b",
+                List.of("open a", "close a"), "hi", "a", "!b");
+            check("send fails and close fails: close is suppressed", "FAIL blank message on a +suppressed: close failed b~",
+                List.of("open a", "open b~", "close b~", "close a"), " ", "a", "b~");
+            check("body ok, both closes fail: first close failure is primary", "FAIL close failed b~ +suppressed: close failed a~",
+                List.of("open a~", "open b~", "send a~", "send b~", "close b~", "close a~"), "hi", "a~", "b~");
+            check("body ok, primary close fails", "FAIL close failed a~",
+                List.of("open a~", "open b", "send a~", "send b", "close b", "close a~"), "hi", "a~", "b");
+        }
+    }
+  explanation: |
+    try-with-resources opens the resources left to right and closes the successfully opened ones right to left,
+    **before** the `catch` runs — so the hand-written `finally` (wrong order, swallowed close failures) disappears.
+    When the body throws and a `close()` also throws, the body's exception stays primary and the close failure
+    is attached with `addSuppressed`. When the body succeeds, even after `return "OK"` was evaluated, the first
+    failing `close()` becomes the exception that propagates — it replaces the pending return — and later close
+    failures are suppressed into it. A resource whose constructor throws is never closed, and the ones after it
+    are never created. Because `Channel.close()` declares `IOException`, the implicit close call needs the
+    `catch (IOException e)`.
+  hints:
+    - "Declare both channels in one header: `try (Channel a = new Channel(primary); Channel b = new Channel(backup)) { ... }`."
+    - An exception from close() is caught by the catch clause of the same try-with-resources statement, even when the body already executed `return`.
+    - "`e.getSuppressed()` returns an array (empty if there are none); build the suffix only when it is non-empty."

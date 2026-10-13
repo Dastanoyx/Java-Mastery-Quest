@@ -1,0 +1,69 @@
+# Exam-readiness model configuration (docs/LEARNING_METHODOLOGY.md §5).
+# A level is reached only when EVERY gate of that level (and of all lower levels) passes.
+# Percentages are 0–100. Edit, then restart the app — no reseed needed.
+
+# Below these sample sizes the estimate is labelled "preliminary".
+minimumEvidence:
+  attempts: 150
+  firstAttempts: 80
+  dueReviews: 30
+  fullMocks: 1
+
+# How the 0–100 readiness index is composed (weights sum to 1). The index is informative only;
+# the level is decided by the gates below.
+indexWeights:
+  coverage: 0.15
+  unseenAccuracy: 0.25
+  weakestDomain: 0.15
+  retention: 0.15
+  recentMocks: 0.20
+  hardAccuracy: 0.10
+
+recentMockWindowDays: 45
+retentionWindowDays: 60
+
+levels:
+  - id: exploring
+    label: Exploring
+    gates: {}
+  - id: foundations
+    label: Building Foundations
+    gates:
+      coveragePercent: 25
+      attempts: 40
+  - id: competence
+    label: Developing Competence
+    gates:
+      coveragePercent: 60
+      unseenAccuracyPercent: 55
+      firstAttempts: 60
+  - id: advanced
+    label: Advanced Practice
+    gates:
+      coveragePercent: 90
+      unseenAccuracyPercent: 65
+      weakestDomainPercent: 50
+      retentionPercent: 70
+      dueReviews: 20
+  - id: near_ready
+    label: Near Exam Ready
+    gates:
+      coveragePercent: 100
+      unseenAccuracyPercent: 72
+      weakestDomainPercent: 60
+      retentionPercent: 80
+      hardAccuracyPercent: 60
+      fullMocksAtOrAbovePass: 1
+  - id: consistently_ready
+    label: Consistently Exam Ready
+    gates:
+      coveragePercent: 100
+      unseenAccuracyPercent: 78
+      weakestDomainPercent: 70
+      retentionPercent: 85
+      hardAccuracyPercent: 65
+      # Three most recent full mocks, all at or above the personal target, on mostly different questions.
+      recentFullMocksAtOrAboveTarget: 3
+      maxMockQuestionOverlapPercent: 40
+      maxTimeUsedPercent: 85
+      maxUnresolvedConfidentMistakes: 5

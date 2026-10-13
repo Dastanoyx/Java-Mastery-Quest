@@ -1,0 +1,415 @@
+# Extra D8.3 questions — concurrent collections and parallel streams (second content pass).
+# Nondeterministic behaviour is only ever asked as "which statements are guaranteed"; the java checks verify
+# the deterministic parts only.
+
+- id: D8-PCX-001
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [parallel-streams, sequential, isParallel, peek, laziness]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.stream.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder sb = new StringBuilder();
+            Stream<String> s = Stream.of("a", "b", "c", "d").parallel()
+                    .peek(sb::append)
+                    .map(String::toUpperCase);
+            System.out.print(s.isParallel() + " ");
+            s = s.sequential();
+            System.out.print(s.isParallel() + " ");
+            s.forEach(sb::append);
+            System.out.println(sb);
+        }
+    }
+  options:
+    - key: a
+      text: "`true false aAbBcCdD`"
+      correct: true
+      why: The last parallel()/sequential() call decides the mode of the whole pipeline. It runs sequentially, and each element flows through peek and then forEach before the next one starts.
+    - key: b
+      text: "`true false abcdABCD`"
+      why: Streams are lazy and process element by element. peek does not finish all elements before forEach starts.
+    - key: c
+      text: "`true true aAbBcCdD`"
+      why: sequential() switches the whole pipeline back to sequential, so isParallel() returns false after it.
+    - key: d
+      text: The letters may appear in any order, because the `peek` stage was declared on a parallel stream
+      why: There is no per-stage mode. Execution mode is a property of the whole pipeline, set by the last parallel() or sequential() call before the terminal operation.
+  explanation: |
+    `parallel()` and `sequential()` do not split a pipeline into parallel and sequential parts. They only
+    set a flag on the **whole** pipeline, and the **last** call before the terminal operation wins. Here
+    `sequential()` comes last, so everything, including the earlier `peek`, runs on the calling thread in
+    encounter order. Because streams are lazy, each element passes through `peek`, `map` and `forEach`
+    before the next element starts, which gives `aAbBcCdD`. The shared `StringBuilder` is safe here only
+    because nothing runs in parallel.
+  rule: "java.util.stream.BaseStream: parallel() and sequential() set the execution mode of the entire pipeline; the most recent call before the terminal operation determines it."
+  misconception: "\"Stages declared after parallel() run in parallel and stages after sequential() run sequentially.\""
+  hint: Is "parallel" a property of a stage or of the whole pipeline?
+  examEligible: true
+  java:
+    expect: { compiles: true, stdout: "true false aAbBcCdD" }
+
+- id: D8-PCX-002
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 180
+  tags: [ConcurrentModificationException, CopyOnWriteArrayList, ArrayList, fail-fast, for-each, remove-object]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            List<Integer> cow = new CopyOnWriteArrayList<>(List.of(1, 2, 3));
+            for (Integer i : cow) cow.add(i * 10);
+            System.out.println(cow);
+            List<Integer> list = new ArrayList<>(List.of(1, 2, 3, 4));
+            for (Integer i : list) {
+                if (i == 3) list.remove(i);
+            }
+            System.out.println(list);
+            for (Integer i : list) {
+                if (i == 1) list.remove(i);
+            }
+            System.out.println(list);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        It prints `[1, 2, 3, 10, 20, 30]` and `[1, 2, 4]`, then a `ConcurrentModificationException` is thrown
+      correct: true
+      why: The copy-on-write iterator walks a snapshot, so the added elements are not visited. Removing the second-to-last ArrayList element makes hasNext() return false before the next modCount check. Removing the first element does not, so the next call to next() fails.
+    - key: b
+      text: A `ConcurrentModificationException` is thrown by the first loop
+      why: CopyOnWriteArrayList iterators never throw ConcurrentModificationException. They iterate over the array that existed when the iterator was created.
+    - key: c
+      text: The first loop never terminates, because every iteration adds a new element
+      why: The for-each loop iterates over a snapshot of [1, 2, 3], so it sees only three elements no matter how many are added.
+    - key: d
+      text: |
+        It prints `[1, 2, 3, 10, 20, 30]`, then a `ConcurrentModificationException` is thrown by the second loop
+      why: After 3 is removed the size is 3 and the cursor is 3, so hasNext() returns false and the loop ends without calling next() again. Removing the second-to-last element escapes the fail-fast check.
+    - key: e
+      text: |
+        It prints `[1, 2, 3, 10, 20, 30]`, `[1, 2, 4]` and `[2, 4]`
+      why: Removing the first element leaves elements still to visit, so next() runs again, sees the changed modCount and throws.
+  explanation: |
+    `CopyOnWriteArrayList` copies its array on every write, and its iterator keeps walking the **snapshot**
+    taken when it was created. So adding inside a for-each is safe and the new elements are not visited.
+    `ArrayList`'s iterator is **fail-fast**: `next()` throws `ConcurrentModificationException` if the list was
+    structurally modified, but `hasNext()` only compares the cursor with the size. Removing the
+    second-to-last element makes `hasNext()` false, so no exception occurs. Removing the first element leaves
+    more elements, so the next `next()` throws. Also note that `list.remove(i)` with an `Integer` argument
+    calls `remove(Object)`, not `remove(int index)`.
+  rule: "ArrayList iterators are fail-fast on a best-effort basis (checked in next(), not hasNext()); CopyOnWriteArrayList iterators traverse an immutable snapshot and never throw ConcurrentModificationException."
+  misconception: "\"Modifying an ArrayList inside a for-each loop always throws ConcurrentModificationException.\""
+  hint: Which iterator method checks for modification, and does it get called again after each removal?
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.util.ConcurrentModificationException, stdout: "[1, 2, 3, 10, 20, 30]\n[1, 2, 4]\n" }
+
+- id: D8-PCX-003
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [ConcurrentHashMap, merge, compute, atomicity, synchronizedMap, parallel-streams]
+  prompt: |
+    In each option, `counts` starts empty and is updated with
+    `IntStream.range(0, 10_000).parallel().forEach(i -> /* update */);`. Afterwards
+    `counts.get("n")` is printed. Which options are **guaranteed** to print `10000`? Choose three.
+  options:
+    - key: a
+      text: "`counts` is a `ConcurrentHashMap`; update: `counts.merge(\"n\", 1, Integer::sum)`"
+      correct: true
+      why: ConcurrentHashMap.merge performs the read, the remapping function and the write as one atomic operation per key.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.concurrent.*;
+          import java.util.stream.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Map<String, Integer> counts = new ConcurrentHashMap<>();
+                  IntStream.range(0, 10_000).parallel().forEach(i -> counts.merge("n", 1, Integer::sum));
+                  System.out.println(counts.get("n"));
+              }
+          }
+        expect: { compiles: true, stdout: "10000" }
+    - key: b
+      text: "`counts` is a `ConcurrentHashMap`; update: `counts.put(\"n\", counts.getOrDefault(\"n\", 0) + 1)`"
+      why: Each call is thread-safe on its own, but get-then-put is a check-then-act sequence. Two threads can read the same value and one increment is lost.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.concurrent.*;
+          import java.util.stream.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Map<String, Integer> counts = new ConcurrentHashMap<>();
+                  IntStream.range(0, 10_000).parallel().forEach(i -> counts.put("n", counts.getOrDefault("n", 0) + 1));
+                  System.out.println(counts.get("n") <= 10_000);
+              }
+          }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`counts` is a `ConcurrentHashMap`; update: `counts.compute(\"n\", (k, v) -> v == null ? 1 : v + 1)`"
+      correct: true
+      why: compute is atomic per key in ConcurrentHashMap, so no increment can be lost.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.concurrent.*;
+          import java.util.stream.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Map<String, Integer> counts = new ConcurrentHashMap<>();
+                  IntStream.range(0, 10_000).parallel().forEach(i -> counts.compute("n", (k, v) -> v == null ? 1 : v + 1));
+                  System.out.println(counts.get("n"));
+              }
+          }
+        expect: { compiles: true, stdout: "10000" }
+    - key: d
+      text: "`counts` is `Collections.synchronizedMap(new HashMap<>())`; update: `counts.merge(\"n\", 1, Integer::sum)`"
+      correct: true
+      why: The synchronized wrapper runs each map method, including merge, while holding its single lock, so merge is atomic here too (just less scalable).
+      java:
+        source: |
+          import java.util.*;
+          import java.util.stream.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Map<String, Integer> counts = Collections.synchronizedMap(new HashMap<>());
+                  IntStream.range(0, 10_000).parallel().forEach(i -> counts.merge("n", 1, Integer::sum));
+                  System.out.println(counts.get("n"));
+              }
+          }
+        expect: { compiles: true, stdout: "10000" }
+    - key: e
+      text: "`counts` is a plain `HashMap`; update: `counts.merge(\"n\", 1, Integer::sum)`"
+      why: HashMap is not thread-safe at all. Concurrent merges can lose updates or even fail with an exception, so no result is guaranteed.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.stream.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Map<String, Integer> counts = new HashMap<>();
+                  try {
+                      IntStream.range(0, 10_000).parallel().forEach(i -> counts.merge("n", 1, Integer::sum));
+                  } catch (RuntimeException e) { }
+                  System.out.println("ran");
+              }
+          }
+        expect: { compiles: true, stdout: "ran" }
+  explanation: |
+    A thread-safe map makes each **single** method call safe. It does not make a **sequence** of calls atomic.
+    `ConcurrentHashMap.merge` and `compute` do the whole read-modify-write for a key atomically (a, c). The
+    `Collections.synchronizedMap` wrapper gets the same effect by running every method under one lock (d).
+    `get` followed by `put` (b) is a race even on a `ConcurrentHashMap`, and a plain `HashMap` (e) gives no
+    guarantee at all. Wrong options may still print 10000 on a given run, which is why only a guarantee
+    counts.
+  rule: "ConcurrentHashMap.compute/merge/computeIfAbsent are performed atomically; compound actions built from separate get and put calls are not atomic."
+  misconception: "\"If the map is a ConcurrentHashMap, any code that uses it is thread-safe.\""
+  hint: Is the read and the write one method call or two?
+  examEligible: true
+
+- id: D8-PCX-004
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags: [parallel-streams, forEachOrdered, sorted, unordered, encounter-order]
+  prompt: Which statements are **guaranteed** to print `12345`? Choose three.
+  options:
+    - key: a
+      text: "`IntStream.rangeClosed(1, 5).parallel().forEachOrdered(System.out::print);`"
+      correct: true
+      why: The range is ordered, and forEachOrdered processes elements in encounter order even on a parallel stream.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { IntStream.rangeClosed(1, 5).parallel().forEachOrdered(System.out::print); System.out.println(); } }
+        expect: { compiles: true, stdout: "12345" }
+    - key: b
+      text: "`Stream.of(5, 3, 1, 4, 2).parallel().sorted().forEach(System.out::print);`"
+      why: sorted() establishes an encounter order, but forEach on a parallel stream is free to ignore it. Any permutation may be printed.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { Stream.of(5, 3, 1, 4, 2).parallel().sorted().forEach(x -> { }); System.out.println("ran"); } }
+        expect: { compiles: true, stdout: "ran" }
+    - key: c
+      text: "`Set.of(1, 2, 3, 4, 5).parallelStream().sorted().forEachOrdered(System.out::print);`"
+      correct: true
+      why: Set.of has no encounter order, but sorted() imposes one, and forEachOrdered respects it.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Set.of(1, 2, 3, 4, 5).parallelStream().sorted().forEachOrdered(System.out::print); System.out.println(); } }
+        expect: { compiles: true, stdout: "12345" }
+    - key: d
+      text: "`System.out.print(List.of(1, 2, 3, 4, 5).parallelStream().unordered().map(String::valueOf).collect(Collectors.joining()));`"
+      why: unordered() tells the pipeline that encounter order no longer matters, so collect is no longer required to keep it. It often still prints 12345, but that is not guaranteed.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { String s = List.of(1, 2, 3, 4, 5).parallelStream().unordered().map(String::valueOf).collect(Collectors.joining()); System.out.println(s.length()); } }
+        expect: { compiles: true, stdout: "5" }
+    - key: e
+      text: "`IntStream.rangeClosed(1, 5).parallel().boxed().toList().forEach(System.out::print);`"
+      correct: true
+      why: toList() keeps encounter order, and the final forEach is List.forEach, a plain sequential loop over the list, not a stream operation.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { IntStream.rangeClosed(1, 5).parallel().boxed().toList().forEach(System.out::print); System.out.println(); } }
+        expect: { compiles: true, stdout: "12345" }
+  explanation: |
+    Whether a parallel pipeline prints in order depends on two things: does the stream **have** an encounter
+    order, and does the terminal operation **respect** it? `rangeClosed` and `List` are ordered, `Set.of` is
+    not, and `sorted()` imposes an order (c). `forEachOrdered`, `collect` and `toList` respect the order. Stream
+    `forEach` does not (b), and `unordered()` explicitly drops the order (d). In (e) the printing is done by
+    `List.forEach` after the stream has finished, which is sequential.
+  rule: "java.util.stream: forEach on a parallel stream is explicitly nondeterministic; forEachOrdered, collect and toList respect encounter order when the stream has one; sorted() imposes an encounter order and unordered() removes it."
+  misconception: "\"Calling sorted() is enough to make a parallel pipeline print in order.\""
+  hint: For each option, check whether there is an encounter order and whether the terminal step respects it.
+  examEligible: true
+
+- id: D8-PCX-005
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [groupingByConcurrent, toConcurrentMap, ConcurrentMap, duplicate-keys, IllegalStateException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+    import java.util.stream.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = List.of("ant", "bee", "cat", "ape", "bat", "cow");
+            ConcurrentMap<Character, Long> byLetter = words.parallelStream()
+                .collect(Collectors.groupingByConcurrent(w -> w.charAt(0), Collectors.counting()));
+            System.out.print(new TreeMap<>(byLetter) + " ");
+            ConcurrentMap<Integer, Integer> lens = words.parallelStream()
+                .collect(Collectors.toConcurrentMap(String::length, w -> 1, Integer::sum));
+            System.out.println(lens);
+            Map<Integer, String> byLen = words.parallelStream()
+                .collect(Collectors.toConcurrentMap(String::length, w -> w));
+            System.out.println(byLen.size());
+        }
+    }
+  options:
+    - key: a
+      text: It prints `{a=2, b=2, c=2} {3=6}`, then an `IllegalStateException` is thrown
+      correct: true
+      why: groupingByConcurrent counts per first letter, and toConcurrentMap with a merge function adds up the six 1s. Without a merge function, the duplicate key 3 throws IllegalStateException.
+    - key: b
+      text: It prints `{a=2, b=2, c=2} {3=6}` and then `1`
+      why: Concurrent collectors do not silently keep one value. Without a merge function, a duplicate key is an error, exactly as with toMap.
+    - key: c
+      text: It prints `{a=2, b=2, c=2} {3=1}`, then an `IllegalStateException` is thrown
+      why: The merge function Integer::sum combines the values of equal keys, so the count for key 3 is 6, not 1.
+    - key: d
+      text: Compilation fails because `groupingByConcurrent` returns a `Map`, not a `ConcurrentMap`
+      why: groupingByConcurrent and toConcurrentMap are declared to return a ConcurrentMap (a ConcurrentHashMap by default), so the assignments compile.
+  explanation: |
+    `Collectors.groupingByConcurrent` and `Collectors.toConcurrentMap` are the concurrent versions of
+    `groupingBy` and `toMap`. They return a `ConcurrentMap`, and all threads insert into that one map, which
+    avoids merging partial maps. The content rules are the same as for the non-concurrent versions. A merge
+    function decides what happens to duplicate keys. Without one, a duplicate key throws
+    `IllegalStateException`. Wrapping the result in a `TreeMap` makes the print order deterministic.
+  rule: "Collectors.toConcurrentMap(keyMapper, valueMapper) throws IllegalStateException on duplicate keys; the three-argument form merges them with the given function. Both concurrent collectors return a ConcurrentMap."
+  misconception: "\"Concurrent collectors tolerate duplicate keys because several threads may insert the same key.\""
+  hint: How many words have length 3, and is there a merge function in the last collector?
+  examEligible: true
+  java:
+    expect: { compiles: true, exception: java.lang.IllegalStateException, stdout: "{a=2, b=2, c=2} {3=6}\n" }
+
+- id: D8-PCX-006
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [parallel-streams, findAny, findFirst, count, determinism]
+  prompt: |
+    Which statements about the output of this program are **guaranteed**? Choose three.
+  code: |
+    import java.util.stream.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            var any   = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).findAny();
+            var first = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).findFirst();
+            long n    = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).count();
+            System.out.println(any.getAsInt() + " " + first.getAsInt() + " " + n);
+        }
+    }
+  options:
+    - key: a
+      text: The second number printed is always `42`
+      correct: true
+      why: findFirst must return the first matching element in encounter order, and IntStream.range is ordered, even in parallel.
+    - key: b
+      text: The third number printed is always `10`
+      correct: true
+      why: Exactly ten values in 0..999 end in 42. count() is a reduction and gives the same result in parallel.
+    - key: c
+      text: The first number printed is always one of `42`, `142`, `242`, …, `942`
+      correct: true
+      why: findAny may return any matching element, but it must be a matching element of the stream.
+    - key: d
+      text: The first number printed is always `42`
+      why: That is the findFirst guarantee. findAny on a parallel stream may return whichever match a worker thread finds first, for example 342.
+    - key: e
+      text: The third number may vary between runs, because parallel threads can count the same element twice
+      why: Each element belongs to exactly one chunk of the split source, so it is counted exactly once. count() is deterministic.
+  explanation: |
+    `findFirst()` respects encounter order, so on an ordered source it returns the same element as a sequential
+    stream would. `findAny()` is allowed to return **any** matching element and, in parallel, often does not
+    return the first one. That freedom makes it cheaper. Reductions such as `count()` give a deterministic
+    result, because the stream framework partitions the source so that each element is processed once. When an
+    exact element is needed, use `findFirst()`. When any match will do, `findAny()` is the better choice in
+    parallel.
+  rule: "Stream.findAny: the behavior is explicitly nondeterministic and may select any element; findFirst returns the first element in encounter order if the stream has one."
+  misconception: "\"findAny and findFirst always return the same element unless the source is unordered.\""
+  hint: Which of the three terminal operations is allowed to ignore encounter order?
+  examEligible: true
+  java:
+    source: |
+      import java.util.stream.*;
+
+      public class Main {
+          public static void main(String[] args) {
+              var any   = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).findAny();
+              var first = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).findFirst();
+              long n    = IntStream.range(0, 1000).parallel().filter(i -> i % 100 == 42).count();
+              // only the guaranteed parts are checked: any ends in 42, first is 42, n is 10
+              System.out.println((any.getAsInt() % 100) + " " + first.getAsInt() + " " + n);
+          }
+      }
+    optionCheck: false
+    expect: { compiles: true, stdout: "42 42 10" }

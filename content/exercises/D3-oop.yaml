@@ -1,0 +1,406 @@
+- id: D3-EX-001
+  objective: D3.2
+  lesson: oop-constructors
+  title: A validated, normalised record
+  difficulty: intermediate
+  kind: implement
+  prompt: |
+    Implement the record `Email(String local, String domain)` so that:
+
+    1. A **compact canonical constructor** rejects a `null` or blank `local` or `domain` with an
+       `IllegalArgumentException`.
+    2. The `domain` is stored in lower case (`"Example.COM"` → `"example.com"`), the `local` part unchanged.
+    3. A second constructor `Email(String address)` accepts `"name@host"`, splits on the **last** `@`
+       and delegates to the canonical constructor. An address with no `@` must throw
+       `IllegalArgumentException` *before* any delegation happens (Java 25 lets you validate before `this(...)`).
+    4. Add a method `String address()` returning `local + "@" + domain`.
+  fileName: Solution.java
+  starter: |
+    record Email(String local, String domain) {
+        // TODO 1-2: compact canonical constructor
+
+        // TODO 3: Email(String address)
+
+        // TODO 4: address()
+    }
+
+    class Solution { }
+  solution: |
+    record Email(String local, String domain) {
+        Email {
+            if (local == null || local.isBlank() || domain == null || domain.isBlank())
+                throw new IllegalArgumentException("local and domain are required");
+            domain = domain.toLowerCase();
+        }
+
+        Email(String address) {
+            int at = address == null ? -1 : address.lastIndexOf('@');
+            if (at < 0) throw new IllegalArgumentException("missing @");
+            this(address.substring(0, at), address.substring(at + 1));
+        }
+
+        String address() { return local + "@" + domain; }
+    }
+
+    class Solution { }
+  harness: |
+    import java.util.function.Supplier;
+    public class Main {
+        static void t(String name, boolean ok) { System.out.println((ok ? "PASS " : "FAIL ") + name); }
+        static boolean throwsIAE(Supplier<?> s) {
+            try { s.get(); return false; } catch (IllegalArgumentException e) { return true; }
+              catch (RuntimeException e) { return false; }
+        }
+        public static void main(String[] args) {
+            try {
+                Email e = new Email("Yassin", "Example.COM");
+                t("domain lower-cased", e.domain().equals("example.com"));
+                t("local unchanged", e.local().equals("Yassin"));
+                t("address()", e.address().equals("Yassin@example.com"));
+                t("blank local rejected", throwsIAE(() -> new Email(" ", "x.org")));
+                t("null domain rejected", throwsIAE(() -> new Email("a", null)));
+                Email p = new Email("first.last@Mail.Example.org");
+                t("parsing constructor", p.local().equals("first.last") && p.domain().equals("mail.example.org"));
+                Email q = new Email("odd@name@host.io");
+                t("splits on last @", q.local().equals("odd@name") && q.domain().equals("host.io"));
+                t("missing @ rejected", throwsIAE(() -> new Email("no-at-sign")));
+                t("records equal by value", new Email("a", "B.com").equals(new Email("a@b.com")));
+            } catch (Throwable ex) {
+                System.out.println("FAIL unexpected " + ex);
+            }
+        }
+    }
+  explanation: |
+    The compact constructor validates and normalises the *parameters*; the compiler assigns the fields after
+    its body. The parsing constructor uses a Java 25 prologue to validate the string before delegating
+    with `this(...)`; before Java 25 you would have needed a static helper method inside the `this(...)` call.
+  hints:
+    - In a compact constructor you write `domain = domain.toLowerCase();` — assign the parameter, not `this.domain`.
+    - "`lastIndexOf('@')` returns -1 when there is no @."
+    - The validation in `Email(String)` can be an `if` statement placed before `this(...)`.
+
+- id: D3-EX-002
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  title: Repair a leaky invoice into an immutable class
+  difficulty: intermediate
+  kind: repair
+  prompt: |
+    `Invoice` looks read-only — it has no setters — but callers can still change it: it keeps the caller's
+    list and array, hands out its internal array, can be subclassed, and `withLine` modifies the object it is
+    called on. Repair it so that an `Invoice` can never change after construction:
+
+    1. Nobody can subclass `Invoice`, and every field is `private final`.
+    2. The constructor rejects a `null` number with a `NullPointerException` and rejects `lines` and `amounts`
+       of different sizes with an `IllegalArgumentException`.
+    3. Changing the list or array that was passed to the constructor afterwards has no effect on the invoice
+       (copy in).
+    4. `lines()` returns a list that cannot be modified (`UnsupportedOperationException`); `amounts()` returns
+       an array whose modification has no effect on the invoice (copy out).
+    5. `withLine(line, amount)` returns a **new** `Invoice` with the extra line; the original is unchanged.
+
+    Keep the method names and signatures. `total()` returns the sum of all amounts (in cents).
+  fileName: Solution.java
+  starter: |
+    import java.util.*;
+
+    class Invoice {
+        private String number;
+        private List<String> lines;
+        private int[] amounts;
+
+        Invoice(String number, List<String> lines, int[] amounts) {
+            this.number = number;
+            this.lines = lines;
+            this.amounts = amounts;
+        }
+
+        String number() { return number; }
+        List<String> lines() { return lines; }
+        int[] amounts() { return amounts; }
+
+        int total() {
+            int t = 0;
+            for (int a : amounts) t += a;
+            return t;
+        }
+
+        Invoice withLine(String line, int amount) {
+            lines.add(line);
+            amounts = Arrays.copyOf(amounts, amounts.length + 1);
+            amounts[amounts.length - 1] = amount;
+            return this;
+        }
+    }
+
+    class Solution { }
+  solution: |
+    import java.util.*;
+
+    final class Invoice {
+        private final String number;
+        private final List<String> lines;
+        private final int[] amounts;
+
+        Invoice(String number, List<String> lines, int[] amounts) {
+            this.number = Objects.requireNonNull(number, "number");
+            if (lines.size() != amounts.length)
+                throw new IllegalArgumentException("lines and amounts differ in size");
+            this.lines = List.copyOf(lines);     // unmodifiable, independent copy
+            this.amounts = amounts.clone();      // copy in
+        }
+
+        String number() { return number; }
+        List<String> lines() { return lines; }   // safe to share: unmodifiable
+        int[] amounts() { return amounts.clone(); }  // copy out
+
+        int total() {
+            int t = 0;
+            for (int a : amounts) t += a;
+            return t;
+        }
+
+        Invoice withLine(String line, int amount) {
+            List<String> l = new ArrayList<>(lines);
+            l.add(line);
+            int[] a = Arrays.copyOf(amounts, amounts.length + 1);
+            a[amounts.length] = amount;
+            return new Invoice(number, l, a);
+        }
+    }
+
+    class Solution { }
+  harness: |
+    import java.lang.reflect.*;
+    import java.util.*;
+    public class Main {
+        interface Test { boolean run() throws Exception; }
+        static void t(String name, Test test) {
+            try { System.out.println((test.run() ? "PASS " : "FAIL ") + name); }
+            catch (Throwable e) { System.out.println("FAIL " + name + ": threw " + e); }
+        }
+        static Invoice sample() {
+            return new Invoice("INV-7", new ArrayList<>(List.of("design", "hosting")), new int[] {50_000, 1_200});
+        }
+        public static void main(String[] args) {
+            t("class cannot be subclassed", () -> Modifier.isFinal(Invoice.class.getModifiers()));
+            t("all fields private final", () -> {
+                for (Field f : Invoice.class.getDeclaredFields()) {
+                    if (f.isSynthetic()) continue;
+                    int m = f.getModifiers();
+                    if (!Modifier.isPrivate(m) || !Modifier.isFinal(m)) return false;
+                }
+                return true;
+            });
+            t("total", () -> sample().total() == 51_200);
+            t("copy in: caller's list", () -> {
+                List<String> lines = new ArrayList<>(List.of("a"));
+                Invoice inv = new Invoice("N", lines, new int[] {1});
+                lines.add("b");
+                return inv.lines().equals(List.of("a"));
+            });
+            t("copy in: caller's array", () -> {
+                int[] amounts = {10, 20};
+                Invoice inv = new Invoice("N", new ArrayList<>(List.of("a", "b")), amounts);
+                amounts[0] = 999;
+                return inv.total() == 30;
+            });
+            t("lines() cannot be modified", () -> {
+                Invoice inv = sample();
+                try { inv.lines().add("hack"); } catch (UnsupportedOperationException e) { return inv.lines().size() == 2; }
+                return false;
+            });
+            t("copy out: amounts()", () -> {
+                Invoice inv = sample();
+                inv.amounts()[0] = 0;
+                return inv.total() == 51_200 && inv.amounts()[0] == 50_000;
+            });
+            t("withLine returns a new invoice", () -> {
+                Invoice inv = sample();
+                Invoice more = inv.withLine("support", 800);
+                return more != inv && more.total() == 52_000
+                    && more.lines().equals(List.of("design", "hosting", "support"));
+            });
+            t("withLine leaves the original unchanged", () -> {
+                Invoice inv = sample();
+                inv.withLine("support", 800);
+                return inv.total() == 51_200 && inv.lines().size() == 2 && inv.amounts().length == 2;
+            });
+            t("size mismatch rejected", () -> {
+                try { new Invoice("N", new ArrayList<>(List.of("a")), new int[] {1, 2}); return false; }
+                catch (IllegalArgumentException e) { return true; }
+            });
+            t("null number rejected", () -> {
+                try { new Invoice(null, new ArrayList<>(), new int[0]); return false; }
+                catch (NullPointerException e) { return true; }
+            });
+        }
+    }
+  explanation: |
+    `final` on the class prevents a subclass from adding mutable state or overriding accessors, and
+    `private final` fields cannot be reassigned. `final` alone does not freeze the *objects* the fields refer
+    to, so mutable inputs are copied on the way in (`List.copyOf`, `clone()`) and mutable state is copied on
+    the way out. `List.copyOf` returns an unmodifiable, independent copy, so it can be returned directly;
+    the `int[]` must be cloned every time it leaves the object. `withLine` builds new collections and calls
+    the constructor, so the original instance is untouched — the same "wither" style used by records and
+    `java.time`. `Collections.unmodifiableList(lines)` would not be enough: it is only a read-only view of
+    the caller's list.
+  hints:
+    - "Copy in: `List.copyOf(lines)` and `amounts.clone()` in the constructor. Copy out: `amounts.clone()` in `amounts()`."
+    - Validate with `Objects.requireNonNull(number)` and compare `lines.size()` with `amounts.length` before storing anything.
+    - "`withLine` should copy into a new `ArrayList` and `Arrays.copyOf(...)`, then `return new Invoice(...)`."
+
+- id: D3-EX-003
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  title: Closed shape hierarchy with exhaustive switches
+  difficulty: advanced
+  kind: implement
+  prompt: |
+    A drawing tool models shapes with records (already in `Solution.java`; corner points are never `null`):
+
+    ```java
+    record Point(int x, int y) {}
+    interface Shape {}
+    record Circle(Point center, int radius) implements Shape {}
+    record Rect(Point corner1, Point corner2) implements Shape {}
+    record Group(String name, List<Shape> members) implements Shape {}
+    ```
+
+    1. **Seal** `Shape` so that only `Circle`, `Rect` and `Group` can implement it.
+    2. Implement `double area(Shape s)` as a switch expression **without `default`**, using record patterns:
+       - `Circle`: `Math.PI * r * r`
+       - `Rect`: `|x2 − x1| × |y2 − y1|` (the corners may be given in any order)
+       - `Group`: the sum of its members' areas (`0` for an empty group; groups may be nested)
+    3. Implement `String describe(Shape s)` as a switch expression **without `default`**:
+
+    | Shape | Result |
+    |---|---|
+    | `null` | `"nothing"` |
+    | `Circle` with radius `0` | `"dot at (x,y)"`, e.g. `"dot at (3,-1)"` |
+    | other `Circle` | `"circle r=" + radius` |
+    | `Rect` whose width equals its height | `"square " + width` |
+    | other `Rect` | `"rect " + width + "x" + height` |
+    | `Group` with no members | `"empty " + name` |
+    | other `Group` | `name + " (" + memberCount + " shapes)"` |
+
+    Without `sealed`, a switch over `Shape` with no `default` does not compile — that is the point of step 1.
+  fileName: Solution.java
+  starter: |
+    import java.util.List;
+
+    record Point(int x, int y) {}
+
+    // TODO 1: seal this interface
+    interface Shape {}
+
+    record Circle(Point center, int radius) implements Shape {}
+    record Rect(Point corner1, Point corner2) implements Shape {}
+    record Group(String name, List<Shape> members) implements Shape {}
+
+    class Solution {
+        // TODO 2: switch expression with record patterns, no default
+        static double area(Shape s) {
+            return 0;
+        }
+
+        // TODO 3: switch expression with case null, guards and record patterns, no default
+        static String describe(Shape s) {
+            return "TODO";
+        }
+    }
+  solution: |
+    import java.util.List;
+
+    record Point(int x, int y) {}
+
+    sealed interface Shape permits Circle, Rect, Group {}
+
+    record Circle(Point center, int radius) implements Shape {}
+    record Rect(Point corner1, Point corner2) implements Shape {}
+    record Group(String name, List<Shape> members) implements Shape {}
+
+    class Solution {
+        static double area(Shape s) {
+            return switch (s) {
+                case Circle(_, int r) -> Math.PI * r * r;
+                case Rect(Point(var x1, var y1), Point(var x2, var y2)) -> Math.abs(x2 - x1) * Math.abs(y2 - y1);
+                case Group(_, var members) -> {
+                    double sum = 0;
+                    for (Shape m : members) sum += area(m);
+                    yield sum;
+                }
+            };
+        }
+
+        static String describe(Shape s) {
+            return switch (s) {
+                case null -> "nothing";
+                case Circle(Point(var x, var y), int r) when r == 0 -> "dot at (" + x + "," + y + ")";
+                case Circle(_, int r) -> "circle r=" + r;
+                case Rect(Point(var x1, var y1), Point(var x2, var y2)) -> {
+                    int w = Math.abs(x2 - x1), h = Math.abs(y2 - y1);
+                    yield w == h ? "square " + w : "rect " + w + "x" + h;
+                }
+                case Group(var name, var members) when members.isEmpty() -> "empty " + name;
+                case Group(var name, var members) -> name + " (" + members.size() + " shapes)";
+            };
+        }
+    }
+  harness: |
+    import java.util.List;
+    import java.util.function.Supplier;
+    public class Main {
+        static void eq(String name, Object expected, Supplier<Object> actual) {
+            try {
+                Object got = actual.get();
+                if (expected.equals(got)) System.out.println("PASS " + name);
+                else System.out.println("FAIL " + name + ": expected " + expected + " but got " + got);
+            } catch (Throwable t) {
+                System.out.println("FAIL " + name + ": threw " + t);
+            }
+        }
+        static void near(String name, double expected, Supplier<Double> actual) {
+            try {
+                double got = actual.get();
+                if (Math.abs(expected - got) < 1e-9) System.out.println("PASS " + name);
+                else System.out.println("FAIL " + name + ": expected " + expected + " but got " + got);
+            } catch (Throwable t) {
+                System.out.println("FAIL " + name + ": threw " + t);
+            }
+        }
+        public static void main(String[] args) {
+            Shape c2 = new Circle(new Point(0, 0), 2);
+            Shape r = new Rect(new Point(5, 5), new Point(1, 2));
+            Shape sq = new Rect(new Point(0, 0), new Point(4, 4));
+            Shape inner = new Group("inner", List.of(sq));
+            Shape outer = new Group("outer", List.of(r, inner, new Circle(new Point(1, 1), 0)));
+            eq("Shape is sealed", true, () -> Shape.class.isSealed());
+            eq("exactly three permitted subtypes", 3,
+                () -> Shape.class.isSealed() ? Shape.class.getPermittedSubclasses().length : 0);
+            near("circle area", 4 * Math.PI, () -> Solution.area(c2));
+            near("rect area with corners in any order", 12.0, () -> Solution.area(r));
+            near("nested group area", 28.0, () -> Solution.area(outer));
+            near("empty group area", 0.0, () -> Solution.area(new Group("none", List.of())));
+            eq("describe null", "nothing", () -> Solution.describe(null));
+            eq("describe dot", "dot at (3,-1)", () -> Solution.describe(new Circle(new Point(3, -1), 0)));
+            eq("describe circle", "circle r=2", () -> Solution.describe(c2));
+            eq("describe square", "square 4", () -> Solution.describe(sq));
+            eq("describe rect", "rect 4x3", () -> Solution.describe(r));
+            eq("describe empty group", "empty layer", () -> Solution.describe(new Group("layer", List.of())));
+            eq("describe group", "outer (3 shapes)", () -> Solution.describe(outer));
+        }
+    }
+  explanation: |
+    Sealing `Shape` tells the compiler the complete list of implementations, so a switch that covers `Circle`,
+    `Rect` and `Group` with unguarded patterns is exhaustive without `default` — and adding a fourth shape later
+    turns every incomplete switch into a compile error instead of a runtime surprise. Records are implicitly
+    final, so they are valid permitted subtypes without extra modifiers, and `permits` could even be omitted
+    because all subtypes are in the same file. Nested record patterns (`Rect(Point(var x1, var y1), …)`)
+    deconstruct in one step, `_` (Java 22+) skips unused components, and guarded cases (`when r == 0`,
+    `when members.isEmpty()`) come before the unguarded case of the same record because guards never count
+    toward exhaustiveness. `case null` is needed because a switch without it throws `NullPointerException`.
+  hints:
+    - "`sealed interface Shape permits Circle, Rect, Group {}` — records are already final."
+    - "Nested record patterns bind the corner coordinates directly: `case Rect(Point(var x1, var y1), Point(var x2, var y2)) -> ...`."
+    - For `Group`, a block arm can loop over the members, call `area` recursively and finish with `yield sum;`.

@@ -1,0 +1,1499 @@
+# D5.1 — arrays, List/Set/Deque/Map, sequenced collections, sorting, equals/hashCode, generics
+
+# ───────────── arrays ─────────────
+
+- id: D5-ARR-001
+  objective: D5.1
+  lesson: coll-arrays
+  type: multi
+  format: select-valid
+  difficulty: foundation
+  estSeconds: 90
+  tags: [arrays, declaration, initialization]
+  prompt: Which of these lines compile when placed inside a method? Choose three.
+  options:
+    - key: a
+      text: "`int[] a = new int[3];`"
+      correct: true
+      why: A dimension expression with no initializer — the standard creation form.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[] a = new int[3]; System.out.println(a.length); } }
+        expect: { compiles: true, stdout: "3" }
+    - key: b
+      text: "`int[] b = new int[2]{1, 2};`"
+      why: A creation expression may have a dimension or an initializer, never both.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[] b = new int[2]{1, 2}; } }
+        expect: { compiles: false, errorContains: "array creation with both dimension expression and initialization is illegal" }
+    - key: c
+      text: "`int c[] = {1, 2};`"
+      correct: true
+      why: Brackets may follow the variable name, and the `{...}` shorthand is allowed in a declaration.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int c[] = {1, 2}; System.out.println(c.length); } }
+        expect: { compiles: true, stdout: "2" }
+    - key: d
+      text: "`int[] d = new int[];`"
+      why: Without an initializer the dimension is required (array dimension missing).
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[] d = new int[]; } }
+        expect: { compiles: false, errorContains: "array dimension missing" }
+    - key: e
+      text: "`int[][] e = new int[2][];`"
+      correct: true
+      why: Only the first dimension is required; the rows start as null.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[][] e = new int[2][]; System.out.println(e[0]); } }
+        expect: { compiles: true, stdout: "null" }
+    - key: f
+      text: "`var f = {1, 2};`"
+      why: The array initializer shorthand needs an explicit array type to target; `var` cannot provide it.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var f = {1, 2}; } }
+        expect: { compiles: false, errorContains: "array initializer needs an explicit target-type" }
+  explanation: |
+    An array creation needs exactly one of: a dimension (`new int[3]`) or an initializer (`new int[]{1, 2}`).
+    The bare `{...}` shorthand works only in a declaration with an explicit array type. For multidimensional
+    arrays only the leftmost dimension is mandatory.
+  rule: "JLS 15.10.1 / 10.6: an array creation expression has either dimension expressions or an array initializer; the initializer shorthand is only allowed in a declaration (or with new)."
+  misconception: "`var` can infer the type from `{1, 2}` like it does from `new int[]{1, 2}`."
+  hint: Count dimensions vs initializers in each creation expression.
+
+- id: D5-ARR-002
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [arrays, covariance, ArrayStoreException]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            Object[] items = new String[2];
+            items[0] = "ok";
+            items[1] = Integer.valueOf(1);
+            System.out.println(items[0] + " " + items[1]);
+        }
+    }
+  options:
+    - key: a
+      text: An `ArrayStoreException` is thrown at line 5
+      correct: true
+      why: The array object is really a String[], and every store into a reference array is type-checked at runtime.
+    - key: b
+      text: "`ok 1`"
+      why: The static type Object[] lets the code compile, but the runtime component type is String, so the store fails.
+    - key: c
+      text: Compilation fails at line 3 because `String[]` cannot be assigned to `Object[]`
+      why: Arrays are covariant — a String[] is an Object[].
+    - key: d
+      text: A `ClassCastException` is thrown at line 5
+      why: The JVM uses a dedicated exception for bad array stores, ArrayStoreException.
+  explanation: |
+    Arrays are **covariant**: since `String` is a subtype of `Object`, `String[]` is a subtype of `Object[]`,
+    so line 3 compiles. Line 5 also compiles (the static type is `Object[]`), but the array object knows its
+    component type is `String`, and the runtime store check throws `ArrayStoreException: java.lang.Integer`.
+  rule: "JLS 10.5: an assignment to an element of a reference array whose runtime component type is not compatible with the value throws ArrayStoreException."
+  misconception: If it compiles, storing into an Object[] always works.
+  hint: What is the array's runtime type, as opposed to the variable's type?
+  java:
+    expect: { compiles: true, exception: java.lang.ArrayStoreException }
+
+- id: D5-ARR-003
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [Arrays.asList, write-through, UnsupportedOperationException]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Integer[] arr = {3, 1, 2};
+            List<Integer> list = Arrays.asList(arr);
+            Collections.sort(list);
+            arr[0] = 9;
+            System.out.print(list + " ");
+            try {
+                list.remove(Integer.valueOf(2));
+            } catch (UnsupportedOperationException e) {
+                System.out.print("UOE ");
+            }
+            System.out.println(Arrays.toString(arr));
+        }
+    }
+  options:
+    - key: a
+      text: "`[9, 2, 3] UOE [9, 2, 3]`"
+      correct: true
+      why: Sorting the list sorts the backing array; the later write to arr[0] shows through the list; remove is not supported by the fixed-size list.
+    - key: b
+      text: "`[1, 2, 3] UOE [9, 2, 3]`"
+      why: Arrays.asList does not copy — the list and the array share the same storage, so arr[0] = 9 is visible via the list.
+    - key: c
+      text: "`[9, 2, 3] [9, 3]`"
+      why: The list is fixed-size; remove(Object) throws UnsupportedOperationException even if the element exists.
+    - key: d
+      text: "`[9, 1, 2] UOE [9, 1, 2]`"
+      why: Collections.sort works on an Arrays.asList list (it only uses set), so the array was sorted to [1, 2, 3] first.
+  explanation: |
+    `Arrays.asList` returns a fixed-size list **backed by** the array. `Collections.sort` only needs `set`, which
+    is supported and writes through: the array becomes `[1, 2, 3]`. `arr[0] = 9` is visible through the list:
+    `[9, 2, 3]`. Any size-changing operation such as `remove` throws `UnsupportedOperationException`.
+  rule: "Arrays.asList(T...) returns a fixed-size list backed by the specified array; changes to the list write through to the array and vice versa."
+  misconception: Arrays.asList makes an independent copy, or it is fully immutable like List.of.
+  hint: Is the list a copy or a view?
+  java:
+    expect: { compiles: true, stdout: "[9, 2, 3] UOE [9, 2, 3]" }
+
+- id: D5-ARR-004
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [arrays, multidimensional, ragged, defaults]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            int[][] grid = { {1, 2, 3}, {4}, new int[2] };
+            System.out.println(grid.length + " " + grid[1].length + " " + grid[2][1]
+                + " " + Arrays.deepToString(grid));
+        }
+    }
+  options:
+    - key: a
+      text: "`3 1 0 [[1, 2, 3], [4], [0, 0]]`"
+      correct: true
+      why: Three rows; row 1 has one element; new int[2] is filled with default zeros; deepToString prints nested arrays.
+    - key: b
+      text: "`3 3 0 [[1, 2, 3], [4], [0, 0]]`"
+      why: Rows of a ragged array have their own lengths; grid[1] is {4}, length 1.
+    - key: c
+      text: "`6 1 0 [[1, 2, 3], [4], [0, 0]]`"
+      why: grid.length is the number of rows (top-level elements), not the total number of ints.
+    - key: d
+      text: "`3 1 null [[1, 2, 3], [4], [null, null]]`"
+      why: Elements of an int array default to 0, not null.
+  explanation: |
+    A two-dimensional array is an array of row arrays, and each row can have its own length. `grid.length`
+    is 3 (rows), `grid[1].length` is 1, and the third row created with `new int[2]` contains default zeros.
+  rule: "JLS 10: multidimensional arrays are arrays of arrays; JLS 4.12.5: array components are initialized to default values."
+  hint: Count rows, not elements.
+  java:
+    expect: { compiles: true, stdout: "3 1 0 [[1, 2, 3], [4], [0, 0]]" }
+
+- id: D5-ARR-005
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: concept
+  difficulty: expert
+  estSeconds: 90
+  tags: [Arrays.binarySearch, unsorted, undefined]
+  prompt: What can be said about the value printed by this program?
+  code: |
+    import java.util.Arrays;
+    public class Main {
+        public static void main(String[] args) {
+            int[] data = {40, 10, 30, 20};
+            System.out.println(Arrays.binarySearch(data, 20));
+        }
+    }
+  options:
+    - key: a
+      text: The result is undefined because the array is not sorted
+      correct: true
+      why: binarySearch requires a sorted array; on unsorted input the Javadoc explicitly says the result is undefined.
+    - key: b
+      text: It always prints `3`, the index of 20
+      why: A binary search does not scan every element; it may never look at index 3.
+    - key: c
+      text: It always prints `-3`
+      why: That happens to be what the current implementation returns here, but the API makes no promise — another implementation (or JDK) could return something else.
+    - key: d
+      text: An `IllegalArgumentException` is thrown because the array is not sorted
+      why: binarySearch does not check whether the array is sorted (that would take linear time).
+  explanation: |
+    `Arrays.binarySearch` assumes the array is sorted. If it is not, "the results are undefined" — the method
+    neither checks nor throws. On today's JDK this particular call prints `-3` (it inspects the middle
+    elements and concludes "not found"), but the exam's answer is that the result cannot be relied upon.
+  rule: "Arrays.binarySearch: the array must be sorted (as by Arrays.sort) prior to making this call; if it is not sorted, the results are undefined."
+  misconception: binarySearch finds any element that exists in the array.
+  hint: Read the precondition in the Javadoc.
+  java:
+    expect: { compiles: true }
+    optionCheck: false
+
+- id: D5-ARR-006
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [Arrays.binarySearch, insertion-point]
+  prompt: What is the output?
+  code: |
+    import java.util.Arrays;
+    public class Main {
+        public static void main(String[] args) {
+            int[] even = {2, 4, 6, 8};
+            System.out.println(Arrays.binarySearch(even, 6) + " "
+                + Arrays.binarySearch(even, 5) + " "
+                + Arrays.binarySearch(even, 1) + " "
+                + Arrays.binarySearch(even, 9));
+        }
+    }
+  options:
+    - key: a
+      text: "`2 -3 -1 -5`"
+      correct: true
+      why: "6 is at index 2. 5 would be inserted at 2 → -(2)-1 = -3; 1 at 0 → -1; 9 at 4 → -5."
+    - key: b
+      text: "`2 -2 0 -4`"
+      why: The not-found value is -(insertionPoint) - 1, so it is always negative, even for insertion point 0.
+    - key: c
+      text: "`2 -1 -1 -1`"
+      why: binarySearch encodes the insertion point in the negative result; it does not just return -1.
+    - key: d
+      text: "`3 -3 -1 -5`"
+      why: Indexes are zero-based; 6 is the third element, at index 2.
+  explanation: |
+    For a sorted array, `binarySearch` returns the index of the key if present; otherwise
+    `-(insertionPoint) - 1`, where the insertion point is the index at which the key would be inserted to keep
+    the array sorted (`length` if it is greater than every element). The "−1" guarantees a negative result.
+  rule: "Arrays.binarySearch returns index of the search key if found; otherwise (-(insertion point) - 1)."
+  misconception: Not-found always returns -1.
+  hint: Work out the insertion point first, then apply -(ip) - 1.
+  java:
+    expect: { compiles: true, stdout: "2 -3 -1 -5" }
+
+- id: D5-ARR-007
+  objective: D5.1
+  lesson: coll-arrays
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [Arrays.compare, Arrays.mismatch, deepEquals]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            int[] a = {1, 2, 3};
+            int[] b = {1, 2, 4};
+            int[][] m1 = {{1}, {2}};
+            int[][] m2 = {{1}, {2}};
+            System.out.println(Arrays.compare(a, b) + " " + Arrays.mismatch(a, b) + " "
+                + Arrays.equals(m1, m2) + " " + Arrays.deepEquals(m1, m2));
+        }
+    }
+  options:
+    - key: a
+      text: "`-1 2 false true`"
+      correct: true
+      why: "compare: first difference 3 < 4 → negative; mismatch: first differing index 2; equals compares rows by identity (Object.equals); deepEquals compares contents."
+    - key: b
+      text: "`-1 2 true true`"
+      why: Arrays.equals(Object[], Object[]) calls equals on each row, and int[] uses identity equals; the rows are distinct objects.
+    - key: c
+      text: "`1 2 false true`"
+      why: a is lexicographically smaller (3 < 4), so compare returns a negative value.
+    - key: d
+      text: "`-1 3 false true`"
+      why: mismatch returns the zero-based index of the first difference, which is 2.
+  explanation: |
+    `Arrays.compare` compares lexicographically: the first mismatching element decides (3 vs 4 ⇒ negative).
+    `Arrays.mismatch` returns the index of that element (2), or -1 if the arrays are equal. For nested arrays,
+    `Arrays.equals` compares elements with `equals`, which for arrays is identity — so it is `false`;
+    `Arrays.deepEquals` recurses into the rows.
+  rule: "Arrays.equals(Object[],Object[]) uses element equals(); Arrays.deepEquals compares nested arrays by content; Arrays.mismatch returns the first differing index or -1."
+  misconception: Arrays.equals compares nested arrays deeply.
+  hint: What does int[].equals(int[]) do?
+  java:
+    expect: { compiles: true, stdout: "-1 2 false true" }
+
+- id: D5-ARR-008
+  objective: D5.1
+  lesson: coll-arrays
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [arrays, declaration, covariance, primitive-arrays]
+  prompt: Which statements compile? Choose two.
+  options:
+    - key: a
+      text: "`int a[], b; b = new int[2];`"
+      why: "`int a[], b;` declares a as int[] but b as a plain int, so assigning an array to b fails."
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int a[], b; b = new int[2]; } }
+        expect: { compiles: false, errorContains: "int[] cannot be converted to int" }
+    - key: b
+      text: "`int[] c, d[]; d = new int[2][];`"
+      correct: true
+      why: c is int[] and d is int[][] (the extra brackets after d add a dimension), so the assignment is fine.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[] c, d[]; d = new int[2][]; System.out.println(d.length); } }
+        expect: { compiles: true, stdout: "2" }
+    - key: c
+      text: "`Object o = new int[]{1};`"
+      correct: true
+      why: Every array is an Object, including primitive arrays.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { Object o = new int[]{1}; System.out.println(o instanceof int[]); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: d
+      text: "`Object[] e = new int[1];`"
+      why: Covariance applies only to reference component types; int is not an Object, so int[] is not an Object[].
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { Object[] e = new int[1]; } }
+        expect: { compiles: false, errorContains: "int[] cannot be converted to java.lang.Object[]" }
+    - key: e
+      text: "`long[] f = new int[2];`"
+      why: Widening int to long applies to values, not to array types; int[] and long[] are unrelated.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { long[] f = new int[2]; } }
+        expect: { compiles: false, errorContains: "int[] cannot be converted to long[]" }
+    - key: f
+      text: "`int[][] g = new int[][3];`"
+      why: The leftmost dimension must be specified; later ones may be omitted, not earlier ones.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int[][] g = new int[][3]; } }
+        expect: { compiles: false, errorContains: "expected" }
+  explanation: |
+    Brackets after a variable name apply only to that variable: `int a[], b;` gives an `int[]` and an `int`;
+    `int[] c, d[];` gives an `int[]` and an `int[][]`. Any array is an `Object`, but only arrays of reference
+    types are covariant (`String[]` → `Object[]`); primitive arrays are never converted to other array types.
+  rule: "JLS 10.2: brackets may appear after the type or after the declarator; JLS 4.10.3: array subtyping applies to reference component types only."
+  misconception: "`int a[], b;` declares two arrays, like `int[] a, b;`."
+  hint: Determine the exact type of every variable first.
+
+# ───────────── lists ─────────────
+
+- id: D5-LST-001
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [List.remove, overloading, boxing]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<Integer> list = new ArrayList<>(List.of(3, 2, 1, 0));
+            list.remove(1);
+            list.remove(Integer.valueOf(1));
+            list.add(1, 5);
+            System.out.println(list);
+        }
+    }
+  options:
+    - key: a
+      text: "`[3, 5, 0]`"
+      correct: true
+      why: "remove(1) removes the element at index 1 (the 2) → [3, 1, 0]; remove(Integer.valueOf(1)) removes the value 1 → [3, 0]; add(1, 5) inserts at index 1."
+    - key: b
+      text: "`[3, 5, 2, 0]`"
+      why: The first call is remove(int index) — exact match without boxing — so it removes the 2 at index 1, not the value 1.
+    - key: c
+      text: "`[5, 2, 0]`"
+      why: Only one value-based removal happens; remove(1) is by index.
+    - key: d
+      text: "`[3, 5, 1, 0]`"
+      why: The second call explicitly passes an Integer, so remove(Object) runs and removes the value 1.
+  explanation: |
+    `List<Integer>` has two `remove` overloads. With an `int` argument, phase-1 overload resolution (no boxing)
+    already finds `remove(int index)`. With an `Integer` argument, `remove(Object)` applies. `add(int, E)`
+    inserts and shifts the rest right.
+  rule: "List.remove(int index) vs List.remove(Object o); overload resolution prefers the method that applies without boxing (JLS 15.12.2)."
+  misconception: remove(1) on a List<Integer> removes the value 1.
+  hint: Which overload applies to an int literal without boxing?
+  java:
+    expect: { compiles: true, stdout: "[3, 5, 0]" }
+
+- id: D5-LST-002
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [ConcurrentModificationException, for-each, iterator]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> tasks = new ArrayList<>(List.of("plan", "code", "test", "ship"));
+            for (String t : tasks) {
+                if (t.equals("test")) tasks.remove(t);
+            }
+            System.out.println(tasks);
+        }
+    }
+  options:
+    - key: a
+      text: "`[plan, code, ship]`"
+      correct: true
+      why: Removing the second-to-last element drops the size to 3 while the cursor is 3, so hasNext() returns false and the loop ends before next() can detect the modification.
+    - key: b
+      text: A `ConcurrentModificationException` is thrown
+      why: CME is thrown by next(), but next() is never called again — hasNext() already returns false after this particular removal.
+    - key: c
+      text: "`[plan, code, test, ship]`"
+      why: The removal does happen; list.remove(Object) removed "test".
+    - key: d
+      text: "`[plan, code]`"
+      why: Only "test" matches the condition; "ship" is never even visited, so it stays in the list.
+  explanation: |
+    ArrayList's iterator keeps a cursor. After returning `"test"` (index 2) the cursor is 3. Removing an element
+    makes `size()` 3, so `hasNext()` (`cursor != size`) is false and the loop exits normally — no
+    `ConcurrentModificationException`, and `"ship"` is never visited. Removing any other element would make the
+    next `next()` call detect the modification and throw. Use `removeIf` or `Iterator.remove()` instead.
+  rule: "ArrayList iterators are fail-fast on a best-effort basis: a structural modification not made through the iterator causes the next call to next() to throw ConcurrentModificationException."
+  misconception: Removing inside a for-each loop always throws ConcurrentModificationException.
+  hint: Track the iterator's cursor and the list size after the removal.
+  java:
+    expect: { compiles: true, stdout: "[plan, code, ship]" }
+
+- id: D5-LST-003
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [unmodifiableList, List.copyOf, views]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> src = new ArrayList<>(List.of("x", "y"));
+            List<String> a = Collections.unmodifiableList(src);
+            List<String> b = List.copyOf(src);
+            List<String> c = new ArrayList<>(src);
+            src.set(0, "z");
+            src.add("w");
+            System.out.println(a + " " + b + " " + c);
+        }
+    }
+  options:
+    - key: a
+      text: "`[z, y, w] [x, y] [x, y]`"
+      correct: true
+      why: unmodifiableList is a read-only view that reflects changes to src; List.copyOf and new ArrayList are independent copies.
+    - key: b
+      text: "`[x, y] [x, y] [x, y]`"
+      why: Collections.unmodifiableList does not copy — it wraps src, so later changes show through.
+    - key: c
+      text: "`[z, y, w] [z, y, w] [x, y]`"
+      why: List.copyOf creates an immutable snapshot at the time of the call.
+    - key: d
+      text: An `UnsupportedOperationException` is thrown
+      why: The modifications are made on src, a normal ArrayList; only the wrapper itself rejects changes.
+  explanation: |
+    `Collections.unmodifiableList` returns an unmodifiable **view**: you cannot change the list through it, but
+    it always shows the current contents of the backing list. `List.copyOf` and the `ArrayList` copy constructor
+    take snapshots at the time of the call.
+  rule: "Collections.unmodifiableList returns an unmodifiable view of the specified list; List.copyOf returns an unmodifiable List containing the elements of the given collection."
+  misconception: Unmodifiable means the contents can never change.
+  hint: Which of the three keeps a reference to src?
+  java:
+    expect: { compiles: true, stdout: "[z, y, w] [x, y] [x, y]" }
+
+- id: D5-LST-004
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [UnsupportedOperationException, List.of, Arrays.asList, immutable]
+  prompt: Which statements throw an `UnsupportedOperationException` at runtime? Choose three.
+  options:
+    - key: a
+      text: "`List.of(1, 2).set(0, 5);`"
+      correct: true
+      why: List.of creates an unmodifiable list; every mutator, including set, throws UOE.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { List.of(1, 2).set(0, 5); } }
+        expect: { compiles: true, exception: java.lang.UnsupportedOperationException }
+    - key: b
+      text: "`Arrays.asList(1, 2).set(0, 5);`"
+      why: The Arrays.asList list is fixed-size but supports set (it writes to the backing array).
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Arrays.asList(1, 2).set(0, 5); System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+    - key: c
+      text: "`Arrays.asList(1, 2).add(3);`"
+      correct: true
+      why: add would change the size of a fixed-size list.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Arrays.asList(1, 2).add(3); } }
+        expect: { compiles: true, exception: java.lang.UnsupportedOperationException }
+    - key: d
+      text: "`new ArrayList<>(List.of(1, 2)).add(3);`"
+      why: The ArrayList is a mutable copy; only the List.of source was immutable.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { new ArrayList<>(List.of(1, 2)).add(3); System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+    - key: e
+      text: "`Collections.unmodifiableList(new ArrayList<>(List.of(1))).clear();`"
+      correct: true
+      why: The unmodifiable view rejects all mutators, including clear.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Collections.unmodifiableList(new ArrayList<>(List.of(1))).clear(); } }
+        expect: { compiles: true, exception: java.lang.UnsupportedOperationException }
+    - key: f
+      text: "`List.of(1, null);`"
+      why: List.of rejects null elements, but with a NullPointerException, not UnsupportedOperationException.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { List.of(1, null); } }
+        expect: { compiles: true, exception: java.lang.NullPointerException }
+  explanation: |
+    `List.of`/`List.copyOf` and `Collections.unmodifiableList` reject **every** mutator with
+    `UnsupportedOperationException`. `Arrays.asList` is only *fixed-size*: `set` works, size changes throw.
+    Null elements in `List.of` are rejected at creation with `NullPointerException`.
+  rule: "Unmodifiable lists (List.of, List.copyOf, Collections.unmodifiableList) throw UnsupportedOperationException from all mutators; Arrays.asList is fixed-size; List.of throws NullPointerException for null elements."
+  misconception: Arrays.asList is fully immutable, like List.of.
+  hint: Separate "unmodifiable" from "fixed-size" and from "rejects null".
+
+# ───────────── sets ─────────────
+
+- id: D5-SET-001
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [TreeSet, NavigableSet, ceiling, floor]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            TreeSet<Integer> t = new TreeSet<>(List.of(5, 15, 25, 35));
+            System.out.println(t.floor(15) + " " + t.lower(15) + " " + t.ceiling(26) + " "
+                + t.higher(35) + " " + t.tailSet(15) + " " + t.headSet(15));
+        }
+    }
+  options:
+    - key: a
+      text: "`15 5 35 null [15, 25, 35] [5]`"
+      correct: true
+      why: floor is <=, lower is strictly <, ceiling is >=, higher is strictly > (none → null); tailSet includes the bound, headSet excludes it.
+    - key: b
+      text: "`5 5 35 null [25, 35] [5]`"
+      why: floor(15) includes 15 itself; tailSet(15) is inclusive.
+    - key: c
+      text: "`15 5 25 null [15, 25, 35] [5, 15]`"
+      why: ceiling(26) is the smallest element >= 26, which is 35; headSet(15) excludes 15.
+    - key: d
+      text: A `NoSuchElementException` is thrown by `higher(35)`
+      why: The navigation methods return null when there is no such element; only first()/last() throw.
+  explanation: |
+    `floor`/`ceiling` are inclusive (≤ / ≥), `lower`/`higher` are strict (< / >), and all four return `null`
+    when nothing qualifies. `tailSet(e)` is inclusive and `headSet(e)` is exclusive by default.
+  rule: "NavigableSet: floor(e) ≤ e, lower(e) < e, ceiling(e) ≥ e, higher(e) > e, null if none; headSet(to) excludes to, tailSet(from) includes from."
+  hint: Which of the four methods are strict?
+  java:
+    expect: { compiles: true, stdout: "15 5 35 null [15, 25, 35] [5]" }
+
+- id: D5-SET-002
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [TreeSet, Comparator, thenComparing, duplicates]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Set<String> s = new TreeSet<>(Comparator.comparing(String::length)
+                                                    .thenComparing(Comparator.reverseOrder()));
+            s.addAll(List.of("ox", "cat", "ant", "be", "ox"));
+            System.out.println(s);
+        }
+    }
+  options:
+    - key: a
+      text: "`[ox, be, cat, ant]`"
+      correct: true
+      why: Shorter strings first; ties broken in reverse alphabetical order; the second "ox" compares as 0 and is rejected.
+    - key: b
+      text: "`[be, ox, ant, cat]`"
+      why: The tie-breaker is reverseOrder(), so within each length the strings are in descending order.
+    - key: c
+      text: "`[ox, be, cat]`"
+      why: The tie-breaker distinguishes "cat" and "ant"; only the duplicate "ox" compares as 0.
+    - key: d
+      text: "`[ox, be, ox, cat, ant]`"
+      why: A Set never keeps two elements that compare as equal.
+  explanation: |
+    The comparator orders by length, and only for equal lengths by reverse natural order. Length 2: `ox`, `be`;
+    length 3: `cat`, `ant`. The second `"ox"` compares as 0 with the first and is not added.
+  rule: "TreeSet uses its comparator for both ordering and duplicate detection; thenComparing is consulted only when the previous comparator returns 0."
+  hint: Sort by length first; apply the tie-breaker only within equal lengths.
+  java:
+    expect: { compiles: true, stdout: "[ox, be, cat, ant]" }
+
+- id: D5-SET-003
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [TreeSet, HashSet, Comparable, consistent-with-equals, records]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        record Task(String name, int priority) implements Comparable<Task> {
+            public int compareTo(Task o) { return Integer.compare(priority, o.priority); }
+        }
+        public static void main(String[] args) {
+            List<Task> all = List.of(new Task("a", 1), new Task("b", 1), new Task("c", 2));
+            Set<Task> tree = new TreeSet<>(all);
+            Set<Task> hash = new HashSet<>(all);
+            System.out.println(tree.size() + " " + hash.size() + " "
+                + tree.contains(new Task("z", 2)) + " " + hash.contains(new Task("z", 2)));
+        }
+    }
+  options:
+    - key: a
+      text: "`2 3 true false`"
+      correct: true
+      why: TreeSet treats tasks with equal priority as duplicates (compareTo returns 0) and also finds "z" by priority; HashSet uses the record's equals/hashCode over all components.
+    - key: b
+      text: "`3 3 false false`"
+      why: TreeSet never calls equals; for it, Task("a",1) and Task("b",1) are the same element.
+    - key: c
+      text: "`2 2 true true`"
+      why: HashSet relies on the record's generated equals/hashCode, which compare name as well as priority.
+    - key: d
+      text: "`2 3 false false`"
+      why: TreeSet.contains also uses compareTo, and Task("z", 2) compares as 0 with Task("c", 2).
+  explanation: |
+    This `compareTo` is **inconsistent with equals**. A `TreeSet` relies only on `compareTo`: `a` and `b` (both
+    priority 1) collide, leaving 2 elements, and `contains(new Task("z", 2))` succeeds because it compares as 0
+    with `c`. A `HashSet` uses the record's generated `equals`/`hashCode` (all components), keeps 3 tasks and
+    finds no task named `z`.
+  rule: "TreeSet/TreeMap perform all element comparisons using compareTo (or compare), not equals; records derive equals and hashCode from all components."
+  misconception: TreeSet falls back to equals to decide duplicates.
+  hint: Which method does each set use to decide equality?
+  java:
+    expect: { compiles: true, stdout: "2 3 true false" }
+
+# ───────────── deques ─────────────
+
+- id: D5-DEQ-001
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [ArrayDeque, stack, queue, push, offer]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Deque<Integer> d = new ArrayDeque<>();
+            d.push(1);
+            d.offer(2);
+            d.push(3);
+            d.offerFirst(4);
+            System.out.println(d + " " + d.pop() + " " + d.pollLast() + " " + d.peek());
+        }
+    }
+  options:
+    - key: a
+      text: "`[4, 3, 1, 2] 4 2 3`"
+      correct: true
+      why: push and offerFirst add at the head, offer adds at the tail; pop removes the head (4), pollLast the tail (2), peek shows the new head (3).
+    - key: b
+      text: "`[2, 1, 3, 4] 2 4 1`"
+      why: push inserts at the head, not the tail, and the deque prints head-first.
+    - key: c
+      text: "`[4, 3, 2, 1] 4 1 3`"
+      why: offer(2) appends at the tail, after 1, which was pushed earlier.
+    - key: d
+      text: "`[4, 3, 1, 2] 4 2 1`"
+      why: After pop() removed 4, the head is 3, so peek() returns 3.
+  explanation: |
+    Build it step by step: `push(1)` → `[1]`; `offer(2)` (tail) → `[1, 2]`; `push(3)` (head) → `[3, 1, 2]`;
+    `offerFirst(4)` → `[4, 3, 1, 2]`. The string concatenation evaluates left to right: the deque is printed
+    first, then `pop()` → 4, `pollLast()` → 2, and `peek()` → 3.
+  rule: "Deque: push = addFirst, pop = removeFirst, offer = offerLast, peek = peekFirst; toString lists elements from head to tail."
+  misconception: push adds at the end, like add.
+  hint: Draw the deque with the head on the left after each call.
+  java:
+    expect: { compiles: true, stdout: "[4, 3, 1, 2] 4 2 3" }
+
+# ───────────── sequenced collections ─────────────
+
+- id: D5-SEQ-001
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [sequenced-collections, reversed, view, java21]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> base = new ArrayList<>(List.of("a", "b", "c"));
+            List<String> rev = base.reversed();
+            rev.addFirst("d");
+            rev.removeLast();
+            base.add("e");
+            System.out.println(base + " " + rev + " " + rev.getFirst());
+        }
+    }
+  options:
+    - key: a
+      text: "`[b, c, d, e] [e, d, c, b] e`"
+      correct: true
+      why: reversed() is a live view; its first is base's last. addFirst on the view appends d to base; removeLast on the view removes base's first element a.
+    - key: b
+      text: "`[a, b, c, e] [d, c, b] d`"
+      why: reversed() does not copy; changes through the view modify base, and changes to base show in the view.
+    - key: c
+      text: "`[d, b, c, e] [e, c, b, d] e`"
+      why: The view's "first" end is base's last end — addFirst on rev adds to the END of base.
+    - key: d
+      text: An `UnsupportedOperationException` is thrown
+      why: The reversed view of a modifiable ArrayList supports the same modifications as the list itself.
+  explanation: |
+    `List.reversed()` (Java 21, JEP 431) returns a reverse-ordered **view**. `rev.addFirst("d")` = `base.addLast("d")`
+    → `[a, b, c, d]`; `rev.removeLast()` = `base.removeFirst()` → `[b, c, d]`; then `base.add("e")` → `[b, c, d, e]`.
+    The view shows `[e, d, c, b]` and its first element is `e`.
+  rule: "SequencedCollection.reversed() returns a reverse-ordered view; modifications through it write through to the original and vice versa."
+  misconception: reversed() returns a reversed copy.
+  hint: Translate each call on rev into the equivalent call on base.
+  java:
+    expect: { compiles: true, stdout: "[b, c, d, e] [e, d, c, b] e" }
+
+- id: D5-SEQ-002
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [sequenced-collections, SequencedSet, SequencedMap, java21]
+  prompt: Which statements compile? Choose three.
+  options:
+    - key: a
+      text: "`new LinkedHashSet<String>().getFirst();`"
+      why: It compiles (LinkedHashSet is a SequencedSet) — but on an empty set getFirst() throws NoSuchElementException at runtime. Careful — this option IS correct for "compiles".
+      correct: true
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { new LinkedHashSet<String>().getFirst(); } }
+        expect: { compiles: true, exception: java.util.NoSuchElementException }
+    - key: b
+      text: "`new HashSet<String>().getFirst();`"
+      why: HashSet has no defined encounter order and does not implement SequencedCollection, so there is no getFirst() method.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { new HashSet<String>().getFirst(); } }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: c
+      text: "`SequencedSet<Integer> s = new TreeSet<>();`"
+      correct: true
+      why: TreeSet implements NavigableSet → SortedSet, which extends SequencedSet.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { SequencedSet<Integer> s = new TreeSet<>(); System.out.println(s.isEmpty()); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: d
+      text: "`Map<String, Integer> m = new LinkedHashMap<>(); m.firstEntry();`"
+      why: Even though the object is a LinkedHashMap, the declared type Map has no firstEntry() method.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Map<String, Integer> m = new LinkedHashMap<>(); m.firstEntry(); } }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: e
+      text: "`SequencedCollection<Integer> q = new ArrayDeque<>();`"
+      correct: true
+      why: Every Deque is a SequencedCollection.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { SequencedCollection<Integer> q = new ArrayDeque<>(); System.out.println(q.size()); } }
+        expect: { compiles: true, stdout: "0" }
+    - key: f
+      text: "`SequencedMap<String, Integer> sm = new HashMap<>();`"
+      why: HashMap has no encounter order and does not implement SequencedMap.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { SequencedMap<String, Integer> sm = new HashMap<>(); } }
+        expect: { compiles: false, errorContains: "incompatible types" }
+  explanation: |
+    Java 21's sequenced interfaces are implemented by `List`, `Deque`, `LinkedHashSet`, `SortedSet`/`TreeSet`
+    (`SequencedCollection`/`SequencedSet`) and `LinkedHashMap`, `SortedMap`/`TreeMap` (`SequencedMap`). `HashSet`
+    and `HashMap` are not sequenced. Method availability is decided by the **declared** type, so a
+    `Map`-typed variable cannot call `firstEntry()`. Whether a call later throws (e.g. `getFirst()` on an empty
+    set) is a runtime matter.
+  rule: "JEP 431: SequencedCollection is implemented by List, Deque, SequencedSet (LinkedHashSet, SortedSet); SequencedMap by LinkedHashMap and SortedMap."
+  misconception: Every Set and Map gained getFirst()/firstEntry() in Java 21.
+  hint: Ask whether each declared type has a defined encounter order.
+
+- id: D5-SEQ-003
+  objective: D5.1
+  lesson: coll-lists-sets-deques
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [sequenced-collections, TreeSet, UnsupportedOperationException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            TreeSet<Integer> scores = new TreeSet<>(List.of(10, 20, 30));
+            System.out.print(scores.getLast() + " ");
+            scores.addLast(99);
+            System.out.println(scores);
+        }
+    }
+  options:
+    - key: a
+      text: It prints `30 ` and then throws an `UnsupportedOperationException`
+      correct: true
+      why: getLast() works on a SortedSet, but addFirst/addLast are unsupported because the comparator — not the caller — decides positions.
+    - key: b
+      text: "`30 [10, 20, 30, 99]`"
+      why: Even though 99 would sort last anyway, TreeSet.addLast always throws; use add(99) instead.
+    - key: c
+      text: Compilation fails because `TreeSet` has no `addLast` method
+      why: TreeSet inherits addLast from SequencedCollection (via SortedSet); it compiles but throws.
+    - key: d
+      text: It prints `30 ` and then throws an `IllegalArgumentException`
+      why: The exception type is UnsupportedOperationException, documented on SortedSet.addLast.
+  explanation: |
+    `SortedSet` implements the `SequencedCollection` methods that make sense for it (`getFirst`, `getLast`,
+    `removeFirst`, `removeLast`, `reversed`), but `addFirst` and `addLast` always throw
+    `UnsupportedOperationException`: in a sorted set the position of an element is determined by its value.
+  rule: "SortedSet.addFirst/addLast: throws UnsupportedOperationException always (Java 21, JEP 431)."
+  misconception: addLast is fine when the element would be last anyway.
+  hint: Who decides the position of an element in a TreeSet?
+  java:
+    expect: { compiles: true, exception: java.lang.UnsupportedOperationException, stdout: "30" }
+
+# ───────────── maps ─────────────
+
+- id: D5-MAP-001
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Map, putIfAbsent, getOrDefault, merge, return-values]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Map<String, Integer> stock = new HashMap<>();
+            stock.put("apple", 3);
+            stock.put("pear", null);
+            System.out.println(stock.putIfAbsent("apple", 10) + " "
+                + stock.putIfAbsent("pear", 5) + " "
+                + stock.getOrDefault("fig", 0) + " "
+                + stock.merge("apple", 2, Integer::sum) + " "
+                + stock.merge("kiwi", 7, Integer::sum));
+        }
+    }
+  options:
+    - key: a
+      text: "`3 null 0 5 7`"
+      correct: true
+      why: putIfAbsent returns the existing value 3 without writing; pear maps to null so it is treated as absent (writes 5, returns the old null); fig is absent → 0; merge returns the new values 5 and 7.
+    - key: b
+      text: "`3 5 0 5 7`"
+      why: putIfAbsent returns the PREVIOUS value, which for pear was null.
+    - key: c
+      text: "`null null 0 5 7`"
+      why: For apple a value already exists, so putIfAbsent returns it (3).
+    - key: d
+      text: "`3 null 0 2 7`"
+      why: "merge combines the old value with the new one using the function: 3 + 2 = 5."
+  explanation: |
+    `putIfAbsent` writes only if the key is absent **or mapped to null**, and returns the previous value.
+    `getOrDefault` returns the default for an absent key. `merge` puts the given value if absent (kiwi → 7),
+    otherwise the function result (apple → 3 + 2), and returns the **new** value.
+  rule: "Map.putIfAbsent returns the previous value (null if absent or null); Map.merge returns the new value associated with the key."
+  misconception: putIfAbsent returns the value that ends up in the map.
+  hint: Which of these methods return the old value, and which the new one?
+  java:
+    expect: { compiles: true, stdout: "3 null 0 5 7" }
+
+- id: D5-MAP-002
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [Map, merge, compute, computeIfPresent, null-removes]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Map<Character, Integer> freq = new TreeMap<>();
+            for (char c : "banana".toCharArray())
+                freq.merge(c, 1, Integer::sum);
+            freq.computeIfPresent('n', (k, v) -> v > 1 ? null : v);
+            freq.computeIfAbsent('z', k -> null);
+            freq.compute('b', (k, v) -> v + 10);
+            System.out.println(freq);
+        }
+    }
+  options:
+    - key: a
+      text: "`{a=3, b=11}`"
+      correct: true
+      why: Counts are a=3, b=1, n=2; computeIfPresent returns null for n → removed; computeIfAbsent with a null result adds nothing; compute updates b to 11.
+    - key: b
+      text: "`{a=3, b=11, n=null, z=null}`"
+      why: A remapping or mapping function that returns null never stores null — it removes the entry or adds nothing.
+    - key: c
+      text: "`{a=3, b=11, n=2}`"
+      why: n's count is 2, so the function returns null, which removes the mapping.
+    - key: d
+      text: "`{b=11, a=3}`"
+      why: A TreeMap prints its keys in sorted order, so a comes before b.
+  explanation: |
+    After the loop: `{a=3, b=1, n=2}`. `computeIfPresent('n', …)` returns `null` ⇒ the mapping is removed.
+    `computeIfAbsent('z', k -> null)` ⇒ nothing is recorded. `compute('b', …)` ⇒ `b=11`. TreeMap prints
+    in key order.
+  rule: "Map.compute/computeIfPresent/merge: if the remapping function returns null, the mapping is removed; computeIfAbsent records nothing if the mapping function returns null."
+  misconception: compute* methods can store null values.
+  hint: What does a null result from these functions mean?
+  java:
+    expect: { compiles: true, stdout: "{a=3, b=11}" }
+
+- id: D5-MAP-003
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [Map, getOrDefault, null-values]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Map<String, Integer> m = new HashMap<>();
+            m.put("a", null);
+            System.out.println(m.getOrDefault("a", 1) + " " + m.containsKey("a") + " " + m.get("b"));
+        }
+    }
+  options:
+    - key: a
+      text: "`null true null`"
+      correct: true
+      why: The key "a" exists (mapped to null), so getOrDefault returns that null; get on an absent key returns null.
+    - key: b
+      text: "`1 true null`"
+      why: getOrDefault returns the default only when the key is absent, not when it maps to null.
+    - key: c
+      text: "`1 false null`"
+      why: put("a", null) does create a mapping; containsKey returns true.
+    - key: d
+      text: A `NullPointerException` is thrown
+      why: HashMap permits null values (and one null key).
+  explanation: |
+    `HashMap` allows `null` values. `getOrDefault(key, d)` returns `d` only if the map contains **no mapping**
+    for the key; here the mapping exists and its value is `null`.
+  rule: "Map.getOrDefault returns the value to which the key is mapped, or defaultValue if this map contains no mapping for the key."
+  misconception: getOrDefault returns the default whenever the value is null.
+  hint: Is "a" present in the map?
+  java:
+    expect: { compiles: true, stdout: "null true null" }
+
+# ───────────── sorting ─────────────
+
+- id: D5-SRT-001
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 75
+  tags: [Comparable, Comparator]
+  prompt: Which statements about `Comparable` and `Comparator` are true? Choose three.
+  options:
+    - key: a
+      text: "`Comparable` is in `java.lang` and declares `int compareTo(T o)`."
+      correct: true
+      why: Comparable defines a class's natural ordering via compareTo.
+    - key: b
+      text: "`Comparator` is in `java.util` and declares `int compare(T a, T b)`."
+      correct: true
+      why: Comparator is a separate functional interface for external orderings.
+    - key: c
+      text: "`Collections.sort(list)` compiles for any `List<T>`, and throws at runtime if T is not Comparable."
+      why: Its signature requires T extends Comparable<? super T>, so a list of non-Comparable elements does not even compile.
+    - key: d
+      text: "A `TreeSet` created without a comparator whose elements are not `Comparable` throws `ClassCastException` when an element is added."
+      correct: true
+      why: TreeSet's type parameter is unbounded, so it compiles; the cast to Comparable fails on the first add.
+    - key: e
+      text: "`compareTo` must return -1, 0 or 1."
+      why: Only the sign matters; any negative or positive int is valid.
+  explanation: |
+    `Comparable` (`java.lang`) gives a type its natural order; `Comparator` (`java.util`) defines any other order.
+    `Collections.sort(List<T>)` is bounded by `T extends Comparable<? super T>` — a compile-time check — whereas
+    `TreeSet<E>` is unbounded and fails at runtime. Only the sign of a comparison result matters.
+  rule: "Comparable.compareTo / Comparator.compare return a negative, zero or positive int; Collections.sort(List<T>) requires T extends Comparable<? super T>."
+  misconception: Comparison methods must return exactly -1, 0 or 1.
+  hint: Check where each API's requirement is enforced — compile time or runtime.
+
+- id: D5-SRT-002
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [Comparator, thenComparing, reversed, records]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        record Emp(String name, String dept, int salary) {}
+        public static void main(String[] args) {
+            List<Emp> list = new ArrayList<>(List.of(
+                new Emp("Ana", "IT", 50), new Emp("Bob", "HR", 40),
+                new Emp("Cid", "IT", 60), new Emp("Dee", "HR", 40)));
+            list.sort(Comparator.comparing(Emp::dept)
+                                .thenComparing(Emp::salary, Comparator.reverseOrder())
+                                .thenComparing(Emp::name)
+                                .reversed());
+            list.forEach(e -> System.out.print(e.name() + " "));
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`Ana Cid Dee Bob`"
+      correct: true
+      why: The final reversed() flips the whole chain — dept descending (IT before HR), salary ascending, name descending.
+    - key: b
+      text: "`Cid Ana Bob Dee`"
+      why: That would be dept descending with the inner comparators unchanged; reversed() at the end also reverses the tie-breakers.
+    - key: c
+      text: "`Bob Dee Cid Ana`"
+      why: That is the order before reversed() is applied (HR first, salary descending, name ascending).
+    - key: d
+      text: "`Dee Bob Ana Cid`"
+      why: reversed() also reverses the primary key, so IT (larger string) comes first.
+  explanation: |
+    Without `reversed()` the order is: dept ascending (HR, IT); within a dept, salary descending; then name
+    ascending ⇒ `Bob Dee Cid Ana`. `reversed()` at the end of the chain returns a comparator that reverses
+    **all** of that ⇒ `Ana Cid Dee Bob`.
+  rule: "Comparator.reversed() returns a comparator imposing the reverse ordering of the entire comparator it is called on."
+  misconception: reversed() applies only to the last thenComparing.
+  hint: First compute the order without reversed(), then reverse the whole list.
+  java:
+    expect: { compiles: true, stdout: "Ana Cid Dee Bob" }
+
+- id: D5-SRT-003
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [Comparator, lambda, type-inference, reversed]
+  prompt: What is the result of compiling this code?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = new ArrayList<>(List.of("bb", "a", "ccc"));
+            words.sort(Comparator.comparing(w -> w.length()).reversed());
+            System.out.println(words);
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails at line 5 because `w` is inferred as `Object`
+      correct: true
+      why: Because reversed() is invoked on the result of comparing(...), that call is not in an assignment/argument context, so T is inferred as Object and w.length() does not exist.
+    - key: b
+      text: "`[ccc, bb, a]`"
+      why: That is the intended result, but the implicitly typed lambda gets no target type from words.sort here.
+    - key: c
+      text: "`[a, bb, ccc]`"
+      why: The code does not compile; even if it did, reversed() would put the longest first.
+    - key: d
+      text: A `ClassCastException` is thrown
+      why: The problem is detected at compile time (cannot find symbol length()).
+  explanation: |
+    Target typing flows into `Comparator.comparing(...)` only if that call is directly the argument. Here it is
+    the receiver of `.reversed()`, so the compiler infers `T` from the lambda alone, defaulting to `Object` —
+    `w.length()` ⇒ *cannot find symbol*. Fix: `Comparator.comparing(String::length).reversed()` or
+    `comparing((String w) -> w.length())`.
+  rule: "JLS 15.12.2.6 / 18: a method invocation used as the receiver of another invocation is not a poly expression in an assignment context, so its type arguments are inferred without a target type."
+  misconception: The compiler always infers lambda parameter types from the surrounding call.
+  hint: Which expression is actually passed to words.sort?
+  java:
+    expect: { compiles: false, errorContains: "cannot find symbol", errorLine: 5 }
+
+# ───────────── equals / hashCode ─────────────
+
+- id: D5-EQH-001
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [hashCode, equals, HashSet, mutable-keys]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    class Ticket {
+        int id;
+        Ticket(int id) { this.id = id; }
+        @Override public boolean equals(Object o) { return o instanceof Ticket t && t.id == id; }
+        @Override public int hashCode() { return id; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Set<Ticket> set = new HashSet<>();
+            Ticket t = new Ticket(1);
+            set.add(t);
+            t.id = 2;
+            set.add(new Ticket(2));
+            System.out.println(set.size() + " " + set.contains(t) + " " + set.contains(new Ticket(1)));
+        }
+    }
+  options:
+    - key: a
+      text: "`2 true false`"
+      correct: true
+      why: t stays in the bucket for hash 1; the new Ticket(2) goes to bucket 2 (size 2). contains(t) looks in bucket 2 and finds the equal new Ticket(2); contains(Ticket(1)) looks in bucket 1 but t's id is now 2.
+    - key: b
+      text: "`1 true false`"
+      why: When the second ticket is added, the set searches bucket 2 only; t is still filed under hash 1, so no duplicate is detected.
+    - key: c
+      text: "`2 false true`"
+      why: Lookups use the current hashCode and equals; Ticket(1) is no longer equal to anything in the set.
+    - key: d
+      text: "`2 false false`"
+      why: contains(t) computes hash 2, and the bucket for 2 contains new Ticket(2), which equals t.
+  explanation: |
+    A `HashSet` files each element under the hash it had **when it was added**. Mutating `t` changes its hash
+    to 2, but it stays filed under 1. Adding `new Ticket(2)` checks bucket 2 — empty — so the set now has two
+    "equal" elements. `contains(t)` finds the other ticket in bucket 2; `contains(new Ticket(1))` checks
+    bucket 1, where `t` (now id 2) is not equal. Never mutate fields used by `equals`/`hashCode` of an element.
+  rule: "Object.hashCode contract and Set Javadoc: behaviour is unspecified if an element's value is changed in a way that affects equals comparisons while it is in the set."
+  misconception: A HashSet re-hashes elements automatically when they change.
+  hint: Which bucket does each lookup search?
+  java:
+    expect: { compiles: true, stdout: "2 true false" }
+
+# ───────────── generics ─────────────
+
+- id: D5-GEN-001
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [generics, wildcards, PECS]
+  prompt: |
+    Given `List<? extends Number> ext = new ArrayList<Integer>();` and
+    `List<? super Integer> sup = new ArrayList<Number>();`, which statements compile? Choose four.
+  options:
+    - key: a
+      text: "`Number n = ext.get(0);`"
+      correct: true
+      why: Whatever the actual type argument is, it is some subtype of Number, so reading as Number is safe.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? extends Number> ext = new ArrayList<Integer>(List.of(1));
+              Number n = ext.get(0); System.out.println(n); } }
+        expect: { compiles: true, stdout: "1" }
+    - key: b
+      text: "`ext.add(1);`"
+      why: The list might be a List<Double>; the compiler cannot allow adding an Integer (only null).
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? extends Number> ext = new ArrayList<Integer>();
+              ext.add(1); } }
+        expect: { compiles: false, errorContains: "incompatible types" }
+    - key: c
+      text: "`sup.add(1);`"
+      correct: true
+      why: The list holds Integer or one of its supertypes, so an Integer can always be stored.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? super Integer> sup = new ArrayList<Number>();
+              sup.add(1); System.out.println(sup); } }
+        expect: { compiles: true, stdout: "[1]" }
+    - key: d
+      text: "`Integer i = sup.get(0);`"
+      why: The list could be a List<Object> holding anything; reads are typed as Object.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? super Integer> sup = new ArrayList<Number>();
+              sup.add(1); Integer i = sup.get(0); } }
+        expect: { compiles: false, errorContains: "cannot be converted to java.lang.Integer" }
+    - key: e
+      text: "`Object o = sup.get(0);`"
+      correct: true
+      why: Every element is at least an Object.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? super Integer> sup = new ArrayList<Number>();
+              sup.add(1); Object o = sup.get(0); System.out.println(o); } }
+        expect: { compiles: true, stdout: "1" }
+    - key: f
+      text: "`ext.add(null);`"
+      correct: true
+      why: null belongs to every reference type, so it is the one value you can add to a ? extends list.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) {
+              List<? extends Number> ext = new ArrayList<Integer>();
+              ext.add(null); System.out.println(ext); } }
+        expect: { compiles: true, stdout: "[null]" }
+  explanation: |
+    **PECS**: `? extends Number` is a *producer* — you can read elements as `Number`, but cannot add anything
+    except `null`. `? super Integer` is a *consumer* — you can add `Integer`s, but reads only give `Object`.
+  rule: "JLS 4.5.1: wildcard types; with ? extends T you may read as T; with ? super T you may write T (Producer Extends, Consumer Super)."
+  misconception: "`List<? extends Number>` accepts any Number to be added."
+  hint: Imagine the worst-case actual type argument for each wildcard.
+
+- id: D5-GEN-002
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 150
+  tags: [generics, raw-types, ClassCastException, heap-pollution]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List raw = new ArrayList();
+            raw.add("one");
+            raw.add(2);
+            List<String> strings = raw;
+            System.out.print(strings.size() + " ");
+            for (String s : strings) System.out.print(s + " ");
+        }
+    }
+  options:
+    - key: a
+      text: It compiles with warnings, prints `2 one ` and then throws a `ClassCastException`
+      correct: true
+      why: Raw types disable type checking (only unchecked warnings); the cast to String inserted by the compiler fails when the Integer is read in the loop.
+    - key: b
+      text: Compilation fails at line 7 because a raw `List` cannot be assigned to `List<String>`
+      why: Assigning a raw type to a parameterized type is allowed with an unchecked warning.
+    - key: c
+      text: Compilation fails at line 6 because `2` is not a `String`
+      why: A raw List accepts any Object; there is no type argument to check against.
+    - key: d
+      text: "`2 one 2`"
+      why: The enhanced for loop with String s inserts a cast to String for each element; the Integer fails that cast.
+  explanation: |
+    Raw types bypass generic type checking. Line 7 compiles with an *unchecked* warning, polluting
+    `List<String>` with an `Integer`. Because of erasure the list itself has no idea; the failure appears only
+    where the compiler inserted a cast — when the loop assigns the second element to `String s` —
+    as a `ClassCastException`.
+  rule: "JLS 4.8 / 5.1.9: use of raw types produces unchecked warnings; heap pollution is detected only by compiler-inserted casts at runtime."
+  misconception: The compiler rejects mixing types in a raw list, or the error happens at add().
+  hint: Where does the compiler insert a cast to String?
+  java:
+    expect: { compiles: true, exception: java.lang.ClassCastException, stdout: "2 one" }
+
+- id: D5-GEN-003
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [generics, type-erasure, compile-errors]
+  prompt: Which of these declarations compile? Choose two.
+  options:
+    - key: a
+      text: "`class Box<T> { T make() { return new T(); } }`"
+      why: The type argument is erased at runtime, so the JVM would not know which class to instantiate.
+      java:
+        source: |
+          class Box<T> { T make() { return new T(); } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "unexpected type" }
+    - key: b
+      text: "`class Box<T> { boolean same(Object o) { return o instanceof Box<?>; } }`"
+      correct: true
+      why: An unbounded wildcard type is reifiable, so instanceof with Box<?> is allowed.
+      java:
+        source: |
+          class Box<T> { boolean same(Object o) { return o instanceof Box<?>; } }
+          public class Main { public static void main(String[] args) { System.out.println(new Box<String>().same(new Box<Integer>())); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`class Box<T> { static T shared; }`"
+      why: A static member belongs to the class, shared by every parameterization, so it cannot use the instance type parameter T.
+      java:
+        source: |
+          class Box<T> { static T shared; }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "non-static type variable T cannot be referenced from a static context" }
+    - key: d
+      text: "`class Util { void log(Set<String> s) { } void log(Set<Integer> s) { } }`"
+      why: Both methods erase to log(Set), which is a name clash.
+      java:
+        source: |
+          import java.util.*;
+          class Util { void log(Set<String> s) { } void log(Set<Integer> s) { } }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "have the same erasure" }
+    - key: e
+      text: "`class Shelf<T extends Comparable<T>> { T best(T a, T b) { return a.compareTo(b) >= 0 ? a : b; } }`"
+      correct: true
+      why: A bounded type parameter lets the body call compareTo on T.
+      java:
+        source: |
+          class Shelf<T extends Comparable<T>> { T best(T a, T b) { return a.compareTo(b) >= 0 ? a : b; } }
+          public class Main { public static void main(String[] args) { System.out.println(new Shelf<String>().best("ab", "b")); } }
+        expect: { compiles: true, stdout: "b" }
+    - key: f
+      text: "`class Holder<T> { java.util.List<T>[] lists = new java.util.List<T>[2]; }`"
+      why: Arrays need a reifiable component type; generic array creation is a compile error.
+      java:
+        source: |
+          class Holder<T> { java.util.List<T>[] lists = new java.util.List<T>[2]; }
+          public class Main { public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "generic array creation" }
+  explanation: |
+    Type arguments are erased after compilation. That forbids `new T()`, generic array creation
+    (`new List<T>[2]`), static use of a class's type parameter, and overloads whose parameter types erase to the
+    same signature. `instanceof Box<?>` is fine because `Box<?>` is reifiable, and bounded type parameters let
+    you call the bound's methods.
+  rule: "JLS 4.6/4.7 type erasure and reifiable types; JLS 8.4.2 (override-equivalent signatures after erasure); JLS 15.10.1 generic array creation."
+  misconception: Generic type information is fully available at runtime.
+  hint: For each line, ask what the JVM would need to know at runtime.
+
+- id: D5-GEN-004
+  objective: D5.1
+  lesson: coll-maps-sorting-generics
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [generics, generic-methods, bounded-types, type-witness]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static <T> T first(T a, T b) { return a; }
+        static <T extends Number> double twice(T t) { return t.doubleValue() * 2; }
+        public static void main(String[] args) {
+            String s = first("x", "y");
+            System.out.println(s + " " + twice(4) + " " + Main.<Object>first(1, "z"));
+        }
+    }
+  options:
+    - key: a
+      text: "`x 8.0 1`"
+      correct: true
+      why: T is inferred as String for the first call; 4 is boxed to Integer (a Number) and doubleValue()*2 is 8.0; the explicit witness <Object> accepts both arguments and returns the first.
+    - key: b
+      text: "`x 8 1`"
+      why: twice returns a double, so the value prints as 8.0.
+    - key: c
+      text: Compilation fails because `first(1, "z")` mixes Integer and String
+      why: With T = Object (explicit witness), both arguments are Objects; even without a witness the compiler would infer a common supertype.
+    - key: d
+      text: Compilation fails because `twice(4)` passes a primitive to a generic method
+      why: The int argument is boxed to Integer, which satisfies the bound T extends Number.
+  explanation: |
+    A generic method declares its type parameters before the return type. The compiler infers `T` from the
+    arguments (and target type), boxing primitives when needed. A bound (`T extends Number`) lets the body call
+    `Number` methods. An explicit type witness (`Main.<Object>first(...)`) fixes `T` directly.
+  rule: "JLS 8.4.4 generic methods; JLS 18 type inference; type arguments must be reference types, so primitives are boxed."
+  hint: Infer T separately for each call.
+  java:
+    expect: { compiles: true, stdout: "x 8.0 1" }

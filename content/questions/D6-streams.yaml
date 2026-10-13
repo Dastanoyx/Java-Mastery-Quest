@@ -1,0 +1,1702 @@
+# D6 — Streams & Lambdas (D6.1 lambdas / pipelines, D6.2 reduction / collectors / parallel / gatherers)
+
+# ───────────────────────── D6.1 · lambdas & functional interfaces ─────────────────────────
+
+- id: D6-LAM-001
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [lambda, effectively-final, capture]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<Runnable> tasks = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                tasks.add(() -> System.out.print(i));
+            }
+            tasks.forEach(Runnable::run);
+        }
+    }
+  options:
+    - key: a
+      text: "`012`"
+      why: This is what a JavaScript closure with `let` would print; Java refuses to capture a variable that is modified, so the code never runs.
+    - key: b
+      text: "`333`"
+      why: This models "lambdas capture the variable, not the value". Java avoids that problem by only allowing capture of effectively final locals — the code does not compile.
+    - key: c
+      text: Compilation fails at line 6
+      correct: true
+      why: "`i` is modified by `i++`, so it is not effectively final, and a lambda may only capture final or effectively final locals."
+    - key: d
+      text: An `IllegalStateException` is thrown at runtime
+      why: Capture rules are enforced entirely by the compiler; there is no runtime check.
+  explanation: |
+    A lambda can read a local variable only if it is **final or effectively final** (JLS §15.27.2). The loop
+    variable `i` is reassigned by `i++`, so javac reports *local variables referenced from a lambda expression
+    must be final or effectively final* on line 6. Fix: copy it first (`int n = i; tasks.add(() -> print(n));`)
+    or use an enhanced for loop, which declares a fresh variable per iteration.
+  rule: Local variables referenced from a lambda body must be final or effectively final (JLS 15.27.2).
+  misconception: Lambdas capture a snapshot of the current value, so later changes do not matter.
+  hint: Is `i` ever assigned after it is declared?
+  java:
+    expect: { compiles: false, errorContains: "must be final or effectively final", errorLine: 6 }
+
+- id: D6-LAM-002
+  objective: D6.1
+  lesson: streams-lambdas
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [functional-interface, annotation, object-methods]
+  prompt: Which of the following interfaces compile when annotated with `@FunctionalInterface`? Choose three.
+  options:
+    - key: a
+      text: "`interface A { void go(); default void stop() { } }`"
+      correct: true
+      why: Exactly one abstract method; default methods do not count.
+      java:
+        source: |
+          @FunctionalInterface interface A { void go(); default void stop() { } }
+          public class Main { public static void main(String[] x) { A a = () -> {}; a.go(); } }
+        expect: { compiles: true }
+    - key: b
+      text: "`interface B { boolean equals(Object o); }`"
+      why: "`equals(Object)` is a public method of Object, so it does not count — B has zero abstract methods and is not functional."
+      java:
+        source: |
+          @FunctionalInterface interface B { boolean equals(Object o); }
+          public class Main { public static void main(String[] x) { } }
+        expect: { compiles: false, errorContains: "no abstract method found" }
+    - key: c
+      text: "`interface C { int size(); String toString(); static C empty() { return () -> 0; } }`"
+      correct: true
+      why: toString() is a public Object method and the static method is not abstract, so size() is the single abstract method.
+      java:
+        source: |
+          @FunctionalInterface interface C { int size(); String toString(); static C empty() { return () -> 0; } }
+          public class Main { public static void main(String[] x) { System.out.println(C.empty().size()); } }
+        expect: { compiles: true, stdout: "0" }
+    - key: d
+      text: "`interface D { void open(); void close(); }`"
+      why: Two abstract methods — a lambda could not know which one it implements.
+      java:
+        source: |
+          @FunctionalInterface interface D { void open(); void close(); }
+          public class Main { public static void main(String[] x) { } }
+        expect: { compiles: false, errorContains: "multiple non-overriding abstract methods" }
+    - key: e
+      text: "`interface E extends Runnable { void run(); }`"
+      correct: true
+      why: E redeclares (overrides) Runnable.run(); there is still only one abstract method.
+      java:
+        source: |
+          @FunctionalInterface interface E extends Runnable { void run(); }
+          public class Main { public static void main(String[] x) { E e = () -> System.out.println("e"); e.run(); } }
+        expect: { compiles: true, stdout: "e" }
+  explanation: |
+    A functional interface has exactly one abstract method that is not a redeclaration of a public `Object`
+    method (JLS §9.8). Default and static methods are irrelevant. Inherited abstract methods count, but an
+    override of the same signature is still the same single method.
+  rule: "JLS 9.8: exactly one abstract method, ignoring public methods of java.lang.Object; @FunctionalInterface only asks the compiler to check this."
+  misconception: Any abstract method declared in the interface counts, including equals/toString.
+  hint: Which abstract methods are already implemented by every object?
+
+- id: D6-LAM-003
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [method-reference, bound, unbound, constructor-reference]
+  prompt: What is the output?
+  code: |
+    import java.util.function.*;
+    public class Main {
+        public static void main(String[] args) {
+            String base = "java";
+            Function<String, Boolean> f1 = base::contains;
+            BiFunction<String, String, Boolean> f2 = String::contains;
+            Supplier<StringBuilder> f3 = StringBuilder::new;
+            Function<String, StringBuilder> f4 = StringBuilder::new;
+            System.out.println(f1.apply("av") + " " + f2.apply("av", "java") + " "
+                + f3.get().append("x") + f4.apply("yz").reverse());
+        }
+    }
+  options:
+    - key: a
+      text: "`true false xzy`"
+      correct: true
+      why: "f1 is bound to \"java\" → \"java\".contains(\"av\"); f2 is unbound → \"av\".contains(\"java\"); f3 calls new StringBuilder(); f4 calls new StringBuilder(\"yz\") which is then reversed."
+    - key: b
+      text: "`true true xzy`"
+      why: For an unbound reference the FIRST argument becomes the receiver, so f2 asks whether "av" contains "java" — false.
+    - key: c
+      text: "`true false xyz`"
+      why: f4 passes the argument to the StringBuilder(String) constructor, and reverse() then turns "yz" into "zy".
+    - key: d
+      text: Compilation fails because `StringBuilder::new` cannot match two different functional interfaces
+      why: A constructor reference is matched against each target separately — the no-arg constructor for Supplier, StringBuilder(String) for Function.
+  explanation: |
+    `base::contains` is a **bound** reference: the receiver is fixed (`"java"`) and the lambda argument becomes the
+    method argument. `String::contains` is **unbound**: the first lambda argument is the receiver, the second the
+    argument. `StringBuilder::new` selects the constructor whose parameters match the descriptor: `()` for
+    `Supplier`, `(String)` for `Function<String, StringBuilder>`.
+  rule: "Method references (JLS 15.13): bound obj::m, unbound Type::m (first parameter is the receiver), static Type::m, constructor Type::new."
+  misconception: "`String::contains` with two arguments calls the method on the second argument."
+  hint: For `String::contains` with a BiFunction, which argument becomes `this`?
+  java:
+    expect: { compiles: true, stdout: "true false xzy" }
+
+- id: D6-LAM-004
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: overload-resolution
+  difficulty: expert
+  estSeconds: 150
+  tags: [lambda, overloading, runnable, callable, checked-exceptions]
+  prompt: What does this program print?
+  code: |
+    import java.util.concurrent.*;
+    public class Main {
+        static void submit(Runnable r)         { System.out.print("R "); }
+        static void submit(Callable<String> c) { System.out.print("C "); }
+        public static void main(String[] args) {
+            submit(() -> { throw new Exception("x"); });
+            submit(() -> { });
+            submit(() -> "done");
+        }
+    }
+  options:
+    - key: a
+      text: "`C R C`"
+      correct: true
+      why: The throwing lambda only fits Callable (call() declares throws Exception); the empty block only fits Runnable (returns nothing); "done" is only value-compatible, so Callable.
+    - key: b
+      text: "`R R C`"
+      why: A lambda that throws a checked exception cannot implement Runnable.run(), which declares no checked exceptions.
+    - key: c
+      text: Compilation fails because the first call is ambiguous
+      why: "`{ throw ...; }` can complete only abruptly, so it is compatible with both shapes, but the checked Exception rules out Runnable — only one overload applies."
+    - key: d
+      text: Compilation fails because `throw new Exception` is not handled
+      why: Callable.call() is declared `throws Exception`, so a lambda implementing it may throw any Exception.
+  explanation: |
+    A block body that can only complete by throwing is compatible with both void and value descriptors. What
+    decides the first call is exception checking: `Runnable.run()` declares no checked exceptions, so only
+    `Callable<String>` is applicable. `() -> { }` returns no value, so only `Runnable` fits. `() -> "done"` is an
+    expression that is not a statement (a literal), so it cannot be void-compatible — `Callable` again.
+  rule: A lambda body must be compatible with the descriptor's return type and may only throw checked exceptions that the descriptor declares (JLS 15.27.3).
+  misconception: Overloads with Runnable and Callable are always ambiguous for lambdas.
+  hint: Which of `run()` and `call()` declares `throws Exception`?
+  java:
+    expect: { compiles: true, stdout: "C R C" }
+
+- id: D6-LAM-005
+  objective: D6.1
+  lesson: streams-lambdas
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [lambda-syntax, var, block-body]
+  prompt: |
+    Which lambda expressions can be assigned to `BiFunction<Integer, Integer, Integer> f`? Choose three.
+  options:
+    - key: a
+      text: "`(a, b) -> a + b`"
+      correct: true
+      why: Both parameters are implicitly typed; the expression body returns the sum.
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = (a, b) -> a + b; System.out.println(f.apply(2, 3)); } }
+        expect: { compiles: true, stdout: "5" }
+    - key: b
+      text: "`(var a, var b) -> { return a * b; }`"
+      correct: true
+      why: "`var` is used for every parameter, and the block body returns a value."
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = (var a, var b) -> { return a * b; }; System.out.println(f.apply(2, 3)); } }
+        expect: { compiles: true, stdout: "6" }
+    - key: c
+      text: "`(Integer a, b) -> a - b`"
+      why: Mixing an explicitly typed parameter with an implicitly typed one is not allowed.
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = (Integer a, b) -> a - b; } }
+        expect: { compiles: false, errorContains: "cannot mix implicitly-typed and explicitly-typed parameters" }
+    - key: d
+      text: "`(a, b) -> { a + b; }`"
+      why: Inside a block, `a + b;` is not a statement — and a value-returning block needs `return`.
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = (a, b) -> { a + b; }; } }
+        expect: { compiles: false, errorContains: "not a statement" }
+    - key: e
+      text: "`(final Integer a, final Integer b) -> a / b`"
+      correct: true
+      why: Explicitly typed parameters may carry the final modifier.
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = (final Integer a, final Integer b) -> a / b; System.out.println(f.apply(7, 2)); } }
+        expect: { compiles: true, stdout: "3" }
+    - key: f
+      text: "`Integer a, Integer b -> a % b`"
+      why: Explicitly typed parameters must be enclosed in parentheses.
+      java:
+        source: |
+          import java.util.function.*;
+          public class Main { public static void main(String[] x) { BiFunction<Integer, Integer, Integer> f = Integer a, Integer b -> a % b; } }
+        expect: { compiles: false }
+  explanation: |
+    Lambda parameters must be uniformly implicit, explicit or `var`; parentheses can only be omitted for a
+    single implicitly typed parameter. An expression body is returned automatically; a block body needs
+    statements terminated by `;` and a `return` for a value-returning descriptor.
+  rule: "JLS 15.27.1: lambda parameters are all inferred, all declared or all var; JLS 15.27.2: block bodies of value-compatible lambdas must return a value."
+  hint: Check each parameter list for uniformity and each block for a `return`.
+
+- id: D6-LAM-006
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [composition, andThen, compose, predicate]
+  prompt: What is the output?
+  code: |
+    import java.util.function.*;
+    public class Main {
+        public static void main(String[] args) {
+            Function<Integer, Integer> inc = x -> x + 3;
+            Function<Integer, Integer> sq = x -> x * x;
+            Predicate<String> longW = s -> s.length() > 3;
+            Predicate<String> startsA = s -> s.startsWith("a");
+            System.out.println(inc.compose(sq).andThen(inc).apply(2) + " "
+                + longW.negate().or(startsA).test("apple") + " "
+                + Predicate.not(longW).and(startsA).test("apple"));
+        }
+    }
+  options:
+    - key: a
+      text: "`10 true false`"
+      correct: true
+      why: compose runs sq first (2*2=4, +3=7), then andThen adds 3 → 10. "apple" is long, so negate() is false, but startsA is true → true. not(longW) is false → and(...) is false.
+    - key: b
+      text: "`28 true false`"
+      why: This applies inc before sq (5*5=25, +3). compose(g) runs g FIRST, then the receiver.
+    - key: c
+      text: "`10 false false`"
+      why: or() is true if either side is true; "apple" starts with "a".
+    - key: d
+      text: "`13 true true`"
+      why: Predicate.not(longW) negates the predicate; "apple" has 5 characters, so not(longW) is false and the and() short-circuits to false.
+  explanation: |
+    `f.compose(g)` = `f(g(x))`; `f.andThen(g)` = `g(f(x))`. So `inc.compose(sq)` maps 2 → 7 and `.andThen(inc)`
+    maps 7 → 10. `negate`, `or`, `and` are default methods of `Predicate`; `Predicate.not` is a static helper
+    (Java 11) that is equivalent to `p.negate()`.
+  rule: "java.util.function.Function: compose(before) applies before first; andThen(after) applies after. Predicate: and/or/negate defaults, static not()."
+  misconception: compose and andThen are synonyms.
+  hint: Write `inc.compose(sq)` as nested calls.
+  java:
+    expect: { compiles: true, stdout: "10 true false" }
+
+- id: D6-LAM-007
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [this, anonymous-class, capture, fields]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        String name = "outer";
+        void show() {
+            Runnable a = () -> System.out.print(name + " ");
+            Runnable b = new Runnable() {
+                String name = "anon";
+                public void run() { System.out.print(name + " "); }
+            };
+            Runnable c = new Runnable() {
+                public void run() { System.out.print(Main.this.name); }
+            };
+            name = "changed";
+            a.run(); b.run(); c.run();
+        }
+        public static void main(String[] args) { new Main().show(); }
+    }
+  options:
+    - key: a
+      text: "`changed anon changed`"
+      correct: true
+      why: The lambda reads this.name when it runs (after the assignment); the anonymous class's own field shadows the outer one; Main.this.name is the outer field.
+    - key: b
+      text: "`outer anon outer`"
+      why: Lambdas capture `this`, not a copy of the field value — they observe the field as it is when they run.
+    - key: c
+      text: "`changed changed changed`"
+      why: Inside an anonymous class, an unqualified `name` resolves to the anonymous class's own field first.
+    - key: d
+      text: Compilation fails because `name` is not effectively final
+      why: The effectively-final rule applies to local variables and parameters only. `name` is an instance field.
+  explanation: |
+    A lambda body is in the same scope as `show()`, so `name` means `this.name` and is read at call time — after
+    `name = "changed"`. The first anonymous class declares its own field `name`, which shadows `Main.name`. The
+    second explicitly reads `Main.this.name`. Fields are never subject to the effectively-final rule.
+  rule: "`this` and simple names in a lambda body mean the same as in the enclosing context (JLS 15.27.2); anonymous classes introduce a new scope and their own `this`."
+  misconception: The effectively-final rule applies to every variable a lambda uses, including fields.
+  hint: Is `name` a local variable or a field?
+  java:
+    expect: { compiles: true, stdout: "changed anon changed" }
+
+- id: D6-LAM-008
+  objective: D6.1
+  lesson: streams-lambdas
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 90
+  tags: [functional-interfaces, primitive-specializations, java.util.function]
+  prompt: Which statements about the functional interfaces in `java.util.function` are correct? Choose three.
+  options:
+    - key: a
+      text: "`Supplier<T>` declares `T get()`."
+      correct: true
+      why: Supplier takes no arguments and produces a value via get().
+    - key: b
+      text: "`ToIntFunction<T>` declares `int apply(T t)`."
+      why: The method is applyAsInt(T). Primitive-returning interfaces use applyAsInt/applyAsLong/applyAsDouble.
+    - key: c
+      text: "`ObjIntConsumer<T>` declares `void accept(T t, int value)`."
+      correct: true
+      why: ObjIntConsumer is the BiConsumer specialization whose second argument is an int.
+    - key: d
+      text: "`IntFunction<R>` declares `int apply(R value)`."
+      why: The prefix says what the function TAKES. IntFunction<R> declares R apply(int value).
+    - key: e
+      text: "`UnaryOperator<T>` extends `Function<T, T>`."
+      correct: true
+      why: Its abstract method is the inherited apply(T); likewise BinaryOperator<T> extends BiFunction<T,T,T>.
+    - key: f
+      text: "`IntUnaryOperator` declares `Integer applyAsInt(Integer operand)`."
+      why: The point of primitive specializations is to avoid boxing — it is int applyAsInt(int operand).
+  explanation: |
+    Naming scheme: `IntXxx` takes an `int`; `ToIntXxx` returns an `int` via `applyAsInt`; `ObjIntConsumer`
+    takes an object and an `int`. `UnaryOperator`/`BinaryOperator` are specialisations of
+    `Function`/`BiFunction` with identical argument and result types.
+  rule: "java.util.function package: primitive prefixes describe parameters (IntFunction), To-prefixes describe results (ToIntFunction → applyAsInt)."
+  misconception: "`IntFunction` returns an int."
+  hint: Does the primitive name at the front of the interface describe the input or the output?
+
+- id: D6-LAM-009
+  objective: D6.1
+  lesson: streams-lambdas
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [comparator, type-inference, method-reference]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> names = new ArrayList<>(List.of("Eve", "Bob", "Alexandra"));
+            names.sort(Comparator.comparing(s -> s.length()).reversed());
+            System.out.println(names);
+        }
+    }
+  options:
+    - key: a
+      text: "`[Alexandra, Eve, Bob]`"
+      why: This would be the output with `Comparator.comparing(String::length).reversed()` — the lambda version does not compile.
+    - key: b
+      text: "`[Bob, Eve, Alexandra]`"
+      why: Even ignoring the compile error, reversed() would put the longest name first.
+    - key: c
+      text: Compilation fails at line 5
+      correct: true
+      why: "`comparing(...)` is typed before `.reversed()` is applied, so the lambda has no String target and `s` is inferred as Object, which has no length() method."
+    - key: d
+      text: A `ClassCastException` is thrown at runtime
+      why: The problem is detected by the compiler; no cast happens at runtime.
+  explanation: |
+    Inference does not flow "backwards" through a method chain: `Comparator.comparing(s -> s.length())` is a
+    receiver expression, so it is inferred without the target type of `sort`, and `T` becomes `Object`. javac
+    reports *cannot find symbol: method length()*. Fix it with a method reference (`String::length`), an
+    explicitly typed lambda (`(String s) -> s.length()`) or a type witness (`Comparator.<String, Integer>comparing(...)`).
+  rule: Poly expressions get their target type from the context; a method-invocation receiver has no target type, so generic inference cannot use the type expected later in the chain (JLS 15.12, 18.5).
+  misconception: The compiler always infers lambda parameter types from where the result is finally used.
+  hint: What does the compiler know about `s` when it types `Comparator.comparing(s -> s.length())` on its own?
+  java:
+    expect: { compiles: false, errorContains: "cannot find symbol", errorLine: 5 }
+
+# ───────────────────────── D6.1 · pipelines, Optional, primitive streams ─────────────────────────
+
+- id: D6-PIP-001
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: trace
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [laziness, vertical-processing, limit, short-circuit]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Stream.of("kiwi", "fig", "plum", "pear", "lime")
+                .filter(s -> { System.out.print("F" + s.charAt(0) + " "); return s.length() == 4; })
+                .map(s -> { System.out.print("M" + s.charAt(0) + " "); return s.toUpperCase(); })
+                .limit(2)
+                .forEach(s -> System.out.print(s + " "));
+        }
+    }
+  options:
+    - key: a
+      text: "`Fk Mk KIWI Ff Fp Mp PLUM`"
+      correct: true
+      why: Each element goes through filter → map → limit → forEach before the next one starts; after the second element passes, limit stops the source.
+    - key: b
+      text: "`Fk Ff Fp Fp Fl Mk Mp Mp Ml KIWI PLUM`"
+      why: Streams do not run each stage over the whole collection (horizontal); elements flow one at a time.
+    - key: c
+      text: "`Fk Mk KIWI Ff Fp Mp PLUM Fp Mp Fl Ml`"
+      why: limit is short-circuiting — once two elements have passed, no more elements are pulled from the source.
+    - key: d
+      text: "`Fk Mk Ff Fp Mp KIWI PLUM`"
+      why: forEach receives each element as soon as it leaves map; it does not wait for the others.
+  explanation: |
+    Stream pipelines are lazy and process elements **vertically**: `kiwi` passes the filter, is mapped and
+    printed; `fig` fails the filter; `plum` passes and is printed. `limit(2)` has now seen two elements, so the
+    pipeline stops and `pear`/`lime` are never examined.
+  rule: Intermediate operations are lazy; limit is a short-circuiting stateful intermediate operation (java.util.stream package docs).
+  misconception: Each intermediate operation processes the entire stream before the next one starts.
+  hint: Follow one element at a time all the way to forEach.
+  java:
+    expect: { compiles: true, stdout: "Fk Mk KIWI Ff Fp Mp PLUM" }
+
+- id: D6-PIP-002
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 60
+  tags: [stream-reuse, IllegalStateException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Stream<Integer> nums = Stream.of(3, 1, 2);
+            Stream<Integer> sorted = nums.sorted();
+            System.out.println(nums.count());
+        }
+    }
+  options:
+    - key: a
+      text: "`3`"
+      why: "`nums.sorted()` already linked (consumed) the stream object `nums`; it cannot be used for another operation."
+    - key: b
+      text: "`0`"
+      why: A consumed stream does not become empty; using it again is an error.
+    - key: c
+      text: An `IllegalStateException` is thrown
+      correct: true
+      why: A stream may be operated on only once; the second operation reports "stream has already been operated upon or closed".
+    - key: d
+      text: Compilation fails because `sorted` is never used
+      why: Unused local variables are legal in Java.
+  explanation: |
+    Calling any intermediate or terminal operation on a stream consumes that stream object. `nums.sorted()`
+    returned a new stage; calling `nums.count()` afterwards throws `IllegalStateException: stream has already been
+    operated upon or closed`, even though the sorted stage was never used.
+  rule: A stream should be operated on (invoking an intermediate or terminal operation) only once (java.util.stream.Stream API docs).
+  misconception: Intermediate operations that are never "executed" leave the original stream reusable.
+  hint: How many times is the stream object `nums` used?
+  java:
+    expect: { compiles: true, exception: java.lang.IllegalStateException }
+
+- id: D6-PIP-003
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [primitive-streams, OptionalDouble, return-types]
+  prompt: Which line causes a compilation error?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            int sum = IntStream.rangeClosed(1, 3).sum();
+            long count = Stream.of("a", "b").count();
+            double avg = IntStream.of(2, 4).average();
+            int max = IntStream.of(5, 9).max().getAsInt();
+            System.out.println(sum + count + avg + max);
+        }
+    }
+  options:
+    - key: a
+      text: Line 4, because `sum()` returns an `OptionalInt`
+      why: IntStream.sum() returns a plain int (0 for an empty stream); only average/min/max are optional.
+    - key: b
+      text: Line 5, because `count()` returns an `int`
+      why: count() returns long, so assigning to long is fine.
+    - key: c
+      text: Line 6, because `average()` returns an `OptionalDouble`
+      correct: true
+      why: average() always returns OptionalDouble, which cannot be assigned to double without getAsDouble()/orElse(...).
+    - key: d
+      text: Line 7, because `IntStream.max()` requires a `Comparator`
+      why: Primitive-stream max() takes no arguments and returns OptionalInt; it is Stream<T>.max that needs a Comparator.
+  explanation: |
+    `IntStream` terminal return types: `sum()` → `int`, `count()` → `long`, `average()` → `OptionalDouble`,
+    `min()`/`max()` → `OptionalInt`. javac reports *incompatible types: OptionalDouble cannot be converted to
+    double* on line 6.
+  rule: "IntStream API: sum() int, average() OptionalDouble, max()/min() OptionalInt, count() long."
+  hint: Which of these operations could have no answer for an empty stream?
+  java:
+    expect: { compiles: false, errorContains: "OptionalDouble cannot be converted to double", errorLine: 6 }
+
+- id: D6-PIP-004
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 120
+  tags: [sorted, stateful, barrier, findFirst]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Stream.of("c", "a", "b")
+                .peek(s -> System.out.print("1" + s + " "))
+                .sorted()
+                .peek(s -> System.out.print("2" + s + " "))
+                .findFirst()
+                .ifPresent(s -> System.out.print("=" + s));
+        }
+    }
+  options:
+    - key: a
+      text: "`1c 2c =c`"
+      why: sorted() cannot pass anything downstream until it has seen every element — and the first sorted element is "a".
+    - key: b
+      text: "`1c 1a 1b 2a 2b 2c =a`"
+      why: After sorting, elements flow one at a time again, and findFirst short-circuits after the first.
+    - key: c
+      text: "`1c 1a 1b 2a =a`"
+      correct: true
+      why: sorted() is a barrier, so all three first peeks run; then only the first sorted element reaches findFirst.
+    - key: d
+      text: "`2a 1c 1a 1b =a`"
+      why: Upstream peeks must run before sorted() can produce any element.
+  explanation: |
+    `sorted()` is a stateful operation: it buffers every element before emitting the first one. Everything
+    upstream therefore runs for all elements (`1c 1a 1b`). Downstream processing is lazy again: `findFirst`
+    needs only one element, so only `2a` is printed before the result.
+  rule: Stateful intermediate operations such as sorted() may need to process the entire input before producing a result (java.util.stream package docs).
+  misconception: findFirst makes the whole pipeline process only one element.
+  hint: Can sorted() know which element is smallest before it has seen them all?
+  java:
+    expect: { compiles: true, stdout: "1c 1a 1b 2a =a" }
+
+- id: D6-PIP-005
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [allMatch, anyMatch, noneMatch, empty-stream]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> none = List.of();
+            System.out.println(none.stream().allMatch(String::isEmpty) + " "
+                + none.stream().anyMatch(String::isEmpty) + " "
+                + none.stream().noneMatch(String::isEmpty));
+        }
+    }
+  options:
+    - key: a
+      text: "`false false false`"
+      why: allMatch and noneMatch are vacuously true on an empty stream — there is no element that violates them.
+    - key: b
+      text: "`true false true`"
+      correct: true
+      why: "Empty stream: allMatch → true, anyMatch → false, noneMatch → true."
+    - key: c
+      text: "`true true true`"
+      why: anyMatch needs at least one matching element, so it is false for an empty stream.
+    - key: d
+      text: A `NoSuchElementException` is thrown
+      why: Match operations return a boolean; they never throw for empty streams.
+  explanation: |
+    The match operations follow logic: "all elements satisfy p" is true when there are no elements (no
+    counter-example), "some element satisfies p" is false, and "no element satisfies p" is true.
+  rule: "Stream API: allMatch/noneMatch return true and anyMatch returns false if the stream is empty."
+  misconception: Every match operation on an empty stream returns false.
+  hint: Can you find a counter-example in an empty list?
+  java:
+    expect: { compiles: true, stdout: "true false true" }
+
+- id: D6-PIP-006
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Optional, orElse, orElseGet, map]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        static int calls = 0;
+        static String load() { calls++; return "db"; }
+        public static void main(String[] args) {
+            Optional<String> cached = Optional.of("cache");
+            String a = cached.orElse(load());
+            String b = cached.orElseGet(Main::load);
+            String c = cached.map(s -> (String) null).orElseGet(Main::load);
+            System.out.println(a + " " + b + " " + c + " " + calls);
+        }
+    }
+  options:
+    - key: a
+      text: "`cache cache null 1`"
+      why: When the mapping function returns null, Optional.map returns an EMPTY Optional, not Optional[null].
+    - key: b
+      text: "`cache cache db 1`"
+      why: orElse(load()) evaluates its argument before the call, even though the Optional has a value — that is a second call.
+    - key: c
+      text: "`cache cache db 2`"
+      correct: true
+      why: load() runs once for orElse (eager argument) and once for the last line (map produced an empty Optional); orElseGet on a present value never calls the supplier.
+    - key: d
+      text: A `NullPointerException` is thrown
+      why: Optional.map tolerates a null result by returning Optional.empty().
+  explanation: |
+    `orElse(x)` is a normal method call, so `x` (here `load()`) is evaluated first: `calls = 1`, result `"cache"`.
+    `orElseGet(supplier)` calls the supplier only for an empty Optional, so line `b` does not call `load()`.
+    `map` returning `null` yields `Optional.empty()`, so `orElseGet` calls `load()`: `calls = 2`, `c = "db"`.
+  rule: "Optional API: orElse argument is always evaluated; orElseGet's supplier only when empty; map returns empty if the mapper returns null."
+  misconception: orElse and orElseGet are interchangeable.
+  hint: When are method arguments evaluated in Java?
+  java:
+    expect: { compiles: true, stdout: "cache cache db 2" }
+
+- id: D6-PIP-007
+  objective: D6.1
+  lesson: streams-pipelines
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Optional, toList, exceptions]
+  prompt: Which of the following statements throw an exception at runtime? Choose three.
+  options:
+    - key: a
+      text: "`Optional.of(null);`"
+      correct: true
+      why: Optional.of requires a non-null value and throws NullPointerException; use ofNullable for maybe-null values.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] x) { Optional.of(null); } }
+        expect: { compiles: true, exception: java.lang.NullPointerException }
+    - key: b
+      text: "`System.out.println(Optional.ofNullable(null).orElse(\"x\"));`"
+      why: ofNullable(null) is simply empty, so orElse returns "x".
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] x) { System.out.println(Optional.ofNullable(null).orElse("x")); } }
+        expect: { compiles: true, stdout: "x" }
+    - key: c
+      text: "`Stream.of(1, 2).toList().add(3);`"
+      correct: true
+      why: Stream.toList() returns an unmodifiable list, so add throws UnsupportedOperationException.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] x) { Stream.of(1, 2).toList().add(3); } }
+        expect: { compiles: true, exception: java.lang.UnsupportedOperationException }
+    - key: d
+      text: "`Optional.empty().get();`"
+      correct: true
+      why: get() (like orElseThrow()) on an empty Optional throws NoSuchElementException.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] x) { Optional.empty().get(); } }
+        expect: { compiles: true, exception: java.util.NoSuchElementException }
+    - key: e
+      text: "`System.out.println(IntStream.empty().sum());`"
+      why: sum() of an empty IntStream is 0 — it is not an Optional and does not throw.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] x) { System.out.println(IntStream.empty().sum()); } }
+        expect: { compiles: true, stdout: "0" }
+  explanation: |
+    `Optional.of(null)` → `NullPointerException`; `Optional.empty().get()` → `NoSuchElementException: No value
+    present`; `Stream.toList()` → unmodifiable list → `UnsupportedOperationException` on `add`. Empty-safe
+    operations: `ofNullable`, `orElse`, `IntStream.sum()`.
+  rule: "Optional.of rejects null; get()/orElseThrow() throw NoSuchElementException when empty; Stream.toList() is unmodifiable."
+  hint: Which of these methods promise a non-empty or modifiable result?
+
+- id: D6-PIP-008
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [iterate, takeWhile, dropWhile, joining]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Stream.iterate(1, n -> n <= 20, n -> n + 3)
+                .dropWhile(n -> n < 8)
+                .takeWhile(n -> n < 17)
+                .map(String::valueOf)
+                .collect(Collectors.joining(",")));
+        }
+    }
+  options:
+    - key: a
+      text: "`10,13,16`"
+      correct: true
+      why: iterate yields 1,4,7,10,13,16,19; dropWhile removes the prefix 1,4,7; takeWhile keeps 10,13,16 and stops at 19.
+    - key: b
+      text: "`10,13,16,19`"
+      why: takeWhile(n < 17) stops as soon as it meets 19.
+    - key: c
+      text: "`8,11,14`"
+      why: The stream starts at 1 and steps by 3 — 8 is never generated; dropWhile does not insert values.
+    - key: d
+      text: "`1,4,7,10,13,16`"
+      why: dropWhile discards the leading elements that match its predicate (1, 4 and 7).
+  explanation: |
+    The three-argument `iterate(seed, hasNext, next)` behaves like `for (n = 1; n <= 20; n += 3)`. `dropWhile`
+    drops the longest prefix matching the predicate, `takeWhile` keeps the longest prefix matching its predicate.
+  rule: "Stream.iterate(seed, hasNext, next) (Java 9); takeWhile/dropWhile operate on the longest matching prefix of an ordered stream."
+  misconception: takeWhile and dropWhile act like filter.
+  hint: Write out the elements generated by iterate first.
+  java:
+    expect: { compiles: true, stdout: "10,13,16" }
+
+- id: D6-PIP-009
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [laziness, late-binding, source-modification]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<Integer> list = new ArrayList<>(List.of(1, 2, 3));
+            Stream<Integer> s = list.stream().filter(x -> x > 1);
+            list.add(4);
+            System.out.println(s.count());
+        }
+    }
+  options:
+    - key: a
+      text: "`2`"
+      why: The stream is not a snapshot taken at creation time; nothing is read from the list until count() runs.
+    - key: b
+      text: "`3`"
+      correct: true
+      why: ArrayList's spliterator is late-binding — it binds to the list when the terminal operation starts, so it sees 1,2,3,4; three elements are > 1.
+    - key: c
+      text: A `ConcurrentModificationException` is thrown
+      why: The list was modified BEFORE the terminal operation started, which is allowed; modifying it during traversal would throw.
+    - key: d
+      text: An `IllegalStateException` is thrown
+      why: The stream is used only once (count()), so it is not reused.
+  explanation: |
+    Building a pipeline does not read the source. ArrayList's spliterator binds to the list's contents when
+    traversal begins (late-binding), so modifications made before the terminal operation are visible. Changing
+    the list *inside* the pipeline (for example in `forEach`) would throw `ConcurrentModificationException`.
+  rule: Non-interference — the source may be modified before the terminal operation begins; late-binding spliterators reflect those changes (java.util.stream package docs, "Non-interference").
+  misconception: A stream copies its source when it is created.
+  hint: When does the stream actually start reading the list?
+  java:
+    expect: { compiles: true, stdout: "3" }
+
+- id: D6-PIP-010
+  objective: D6.1
+  lesson: streams-pipelines
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [chars, IntStream, distinct]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String s = "abca";
+            System.out.println(s.chars().distinct().count() + " "
+                + s.chars().filter(c -> c == 'a').sum());
+            s.chars().limit(2).forEach(System.out::print);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        3 194
+        9798
+      correct: true
+      why: chars() is an IntStream of char codes; 3 distinct codes, 'a' (97) occurs twice → 194, and the first two codes print as numbers.
+    - key: b
+      text: |
+        3 194
+        ab
+      why: The elements are ints, so the IntConsumer System.out::print resolves to print(int) and prints numbers.
+    - key: c
+      text: |
+        4 194
+        9798
+      why: distinct() removes the second 'a', leaving 3 elements.
+    - key: d
+      text: |
+        3 aa
+        9798
+      why: sum() on an IntStream returns an int sum of the codes, not a concatenation.
+  explanation: |
+    `String.chars()` returns an `IntStream` of UTF-16 code units. Arithmetic and printing therefore work on
+    numbers: `'a'` is 97, so the sum of the two `a`s is 194, and `forEach(System.out::print)` prints `97` and
+    `98`. Use `mapToObj(c -> (char) c)` to get characters back.
+  rule: CharSequence.chars() returns an IntStream of char values zero-extended to int.
+  misconception: "`chars()` streams `Character` objects."
+  hint: What type are the elements of `s.chars()`?
+  java:
+    expect: { compiles: true, stdout: "3 194\n9798" }
+
+# ───────────────────────── D6.2 · reduction, collectors, parallel ─────────────────────────
+
+- id: D6-COL-001
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [toMap, duplicate-key]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        record City(String name, String country) {}
+        public static void main(String[] args) {
+            Map<String, String> byCountry = Stream.of(
+                    new City("Tunis", "TN"), new City("Sfax", "TN"), new City("Lyon", "FR"))
+                .collect(Collectors.toMap(City::country, City::name));
+            System.out.println(byCountry.get("TN"));
+        }
+    }
+  options:
+    - key: a
+      text: "`Tunis`"
+      why: toMap does not keep the first value silently; without a merge function a duplicate key is an error.
+    - key: b
+      text: "`Sfax`"
+      why: toMap is not Map.put — it does not overwrite; it throws on the duplicate key.
+    - key: c
+      text: An `IllegalStateException` is thrown
+      correct: true
+      why: Two elements map to the key "TN" and no merge function was supplied → IllegalStateException "Duplicate key TN".
+    - key: d
+      text: Compilation fails because `City::country` is not a `Function`
+      why: An accessor method of a record is an ordinary instance method, so City::country is a valid Function<City, String>.
+  explanation: |
+    The two-argument `Collectors.toMap(keyMapper, valueMapper)` throws `IllegalStateException: Duplicate key TN
+    (attempted merging values Tunis and Sfax)`. Add a merge function — e.g. `(a, b) -> a + "," + b` — to resolve
+    collisions.
+  rule: "Collectors.toMap(k, v): if the mapped keys contain duplicates, an IllegalStateException is thrown when the collection operation is performed."
+  misconception: toMap overwrites the old value like Map.put.
+  hint: Do any two cities share a country?
+  java:
+    expect: { compiles: true, exception: java.lang.IllegalStateException }
+
+- id: D6-COL-002
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [groupingBy, mapping, joining, partitioningBy]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = List.of("sun", "sea", "sky", "moon", "mist");
+            Map<Integer, String> byLength = words.stream().collect(Collectors.groupingBy(String::length, TreeMap::new,
+                Collectors.mapping(w -> w.substring(0, 2), Collectors.joining("+"))));
+            System.out.println(byLength);
+            System.out.println(words.stream().collect(
+                Collectors.partitioningBy(w -> w.startsWith("x"), Collectors.counting())));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        {3=su+se+sk, 4=mo+mi}
+        {false=5, true=0}
+      correct: true
+      why: Words are grouped by length in a TreeMap, each mapped to its first two letters and joined; partitioningBy always contains both keys.
+    - key: b
+      text: |
+        {3=su+se+sk, 4=mo+mi}
+        {false=5}
+      why: partitioningBy always produces both the false and the true partition, even if one is empty.
+    - key: c
+      text: |
+        {3=[su, se, sk], 4=[mo, mi]}
+        {false=5, true=0}
+      why: The downstream collector is joining("+"), so each value is a single String, not a List.
+    - key: d
+      text: |
+        {3=sun+sea+sky, 4=moon+mist}
+        {false=5, true=0}
+      why: mapping(...) applies substring(0, 2) to each element before joining.
+  explanation: |
+    3-argument `groupingBy(classifier, mapFactory, downstream)`: `TreeMap::new` sorts the keys, and the
+    downstream `mapping(f, joining("+"))` transforms and concatenates the elements of each group.
+    `partitioningBy` always contains both keys `false` and `true`.
+  rule: "Collectors.groupingBy(classifier, mapFactory, downstream); Collectors.partitioningBy always returns a map with entries for both false and true."
+  hint: What is the type of each map value after `mapping(..., joining("+"))`?
+  java:
+    expect: { compiles: true, stdout: "{3=su+se+sk, 4=mo+mi}\n{false=5, true=0}" }
+
+- id: D6-COL-003
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 90
+  tags: [flatMap, split, decomposition]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> lines = List.of("a,b", "", "c");
+            System.out.println(lines.stream()
+                .flatMap(l -> Arrays.stream(l.split(",")))
+                .count());
+        }
+    }
+  options:
+    - key: a
+      text: "`3`"
+      why: "\"\".split(\",\") returns an array containing one empty string, not an empty array — so the empty line contributes one element."
+    - key: b
+      text: "`4`"
+      correct: true
+      why: "\"a,b\" → [a, b], \"\" → [\"\"], \"c\" → [c]: 2 + 1 + 1 = 4 elements after flattening."
+    - key: c
+      text: "`2`"
+      why: flatMap flattens every resulting array element into the stream; it does not count the lines that contain a comma.
+    - key: d
+      text: Compilation fails because `Arrays.stream` returns an array, not a stream
+      why: Arrays.stream(T[]) returns a Stream<T>, exactly what flatMap expects.
+  explanation: |
+    `flatMap` replaces each line by the stream of its parts. The subtle point is `String.split`: splitting an
+    empty string yields `[""]` (one element), because no match was found and the result is the whole input.
+    The total is therefore 4.
+  rule: Stream.flatMap replaces each element with the contents of a mapped stream; String.split returns the whole string as the only element when the regex does not match.
+  misconception: Splitting an empty string produces an empty array.
+  hint: What is `"".split(",").length`?
+  java:
+    expect: { compiles: true, stdout: "4" }
+
+- id: D6-COL-004
+  objective: D6.2
+  lesson: streams-collectors
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [parallel-streams, determinism, forEachOrdered, findAny]
+  prompt: |
+    Given `List<Integer> data = List.of(1, 2, 3, 4, 5, 6);`, which statements always produce the same output on
+    every run? Choose three.
+  options:
+    - key: a
+      text: "`System.out.println(data.parallelStream().map(x -> x * 2).toList());`"
+      correct: true
+      why: toList() preserves encounter order even for parallel streams — always [2, 4, 6, 8, 10, 12].
+    - key: b
+      text: "`data.parallelStream().forEach(System.out::print);`"
+      why: forEach on a parallel stream does not respect encounter order; elements print in thread arrival order.
+    - key: c
+      text: "`data.parallelStream().forEachOrdered(System.out::print);`"
+      correct: true
+      why: forEachOrdered processes elements in encounter order, always printing 123456.
+    - key: d
+      text: "`System.out.println(data.parallelStream().filter(x -> x > 2).findAny().get());`"
+      why: findAny is free to return any matching element; in parallel it often does not return the first.
+    - key: e
+      text: "`System.out.println(data.parallelStream().reduce(0, (a, b) -> a - b));`"
+      why: Subtraction is not associative, so the result depends on how the work is split.
+    - key: f
+      text: "`System.out.println(data.parallelStream().reduce(0, Integer::sum));`"
+      correct: true
+      why: Addition is associative and 0 is a true identity, so every split gives 21.
+  explanation: |
+    Parallel streams keep **results** deterministic when the operations are order-preserving (`toList`,
+    `collect`, `forEachOrdered`, `findFirst`) and reductions are associative with a true identity. `forEach`,
+    `findAny` and non-associative reductions may differ between runs.
+  rule: "Stream API: forEach is explicitly nondeterministic for parallel pipelines; reduce requires an associative accumulator and an identity value."
+  misconception: A parallel stream returns the same result as the sequential version as long as it compiles.
+  hint: Which of these depend on the order in which threads finish?
+
+- id: D6-COL-005
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [reduce, Optional, identity, combiner]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = List.of("ab", "cde", "f");
+            Optional<String> a = words.stream().reduce((x, y) -> y + x);
+            String b = words.stream().reduce("", (x, y) -> x + y.length());
+            int c = words.stream().reduce(0, (acc, w) -> acc + w.length(), Integer::sum);
+            System.out.println(a + " " + b + " " + c);
+        }
+    }
+  options:
+    - key: a
+      text: "`Optional[fcdeab] 231 6`"
+      correct: true
+      why: "a: (ab, cde) → \"cdeab\", then (cdeab, f) → \"fcdeab\", wrapped in Optional. b: \"\" + 2 + 3 + 1 as string concatenation. c: 2 + 3 + 1."
+    - key: b
+      text: "`fcdeab 231 6`"
+      why: The one-argument reduce returns Optional<String>, and printing an Optional shows Optional[...].
+    - key: c
+      text: "`Optional[abcdef] 231 6`"
+      why: The accumulator is (x, y) -> y + x, which prepends the next element each time.
+    - key: d
+      text: "`Optional[fcdeab] 6 6`"
+      why: x is a String, so x + y.length() is string concatenation, not addition.
+  explanation: |
+    `reduce(BinaryOperator)` returns `Optional<T>`. `reduce(identity, BinaryOperator)` returns `T` — here the
+    accumulator concatenates lengths onto a String. The three-argument form changes the result type
+    (`String` elements → `Integer` result) and needs a combiner for parallel execution.
+  rule: "Stream.reduce: (op) → Optional<T>; (identity, op) → T; (identity, accumulator, combiner) → U."
+  hint: Which form of reduce returns an Optional, and what does `y + x` do to the order?
+  java:
+    expect: { compiles: true, stdout: "Optional[fcdeab] 231 6" }
+
+- id: D6-COL-006
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [counting, averagingInt, summingInt, result-types]
+  prompt: Which line causes a compilation error?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Long n = Stream.of("a", "b").collect(Collectors.counting());
+            Double avg = Stream.of(1, 2).collect(Collectors.averagingInt(x -> x));
+            Integer total = Stream.of(1, 2).collect(Collectors.summingInt(x -> x));
+            Integer size = Stream.of("a").collect(Collectors.counting());
+            System.out.println(n + avg + total + size);
+        }
+    }
+  options:
+    - key: a
+      text: Line 4
+      why: counting() produces a Long, which matches the declared type.
+    - key: b
+      text: Line 5
+      why: averagingInt always produces a Double, regardless of the element type.
+    - key: c
+      text: Line 6
+      why: summingInt produces an Integer (summingLong a Long, summingDouble a Double).
+    - key: d
+      text: Line 7
+      correct: true
+      why: counting() produces a Long; a Long cannot be assigned to Integer (no conversion between wrapper types).
+  explanation: |
+    Result types of common collectors: `counting()` → `Long`, `summingInt` → `Integer`, `averagingInt/Long/Double`
+    → `Double`. On line 7 inference fails with *inference variable R has incompatible bounds* (Long vs Integer).
+  rule: "Collectors API: counting() is Collector<T, ?, Long>; averagingX() is Collector<T, ?, Double>; summingInt() is Collector<T, ?, Integer>."
+  misconception: counting() returns an int-compatible count.
+  hint: What wrapper type does `Collectors.counting()` produce?
+  java:
+    expect: { compiles: false, errorContains: "incompatible bounds", errorLine: 7 }
+
+- id: D6-COL-007
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: concept
+  difficulty: expert
+  estSeconds: 150
+  tags: [parallel, reduce, identity]
+  prompt: Which statement about this program is true?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            int r = List.of(1, 2, 3, 4).parallelStream().reduce(5, Integer::sum);
+            System.out.println(r);
+        }
+    }
+  options:
+    - key: a
+      text: It always prints `15`.
+      why: That is the sequential result; in parallel the identity 5 is added once per chunk, not once overall.
+    - key: b
+      text: It always prints `10`.
+      why: The identity is used at least once, so the result is never just the sum of the elements.
+    - key: c
+      text: The result depends on how the stream is split; it is not guaranteed to be `15` because `5` is not an identity for addition.
+      correct: true
+      why: Each chunk starts from the "identity", so with k chunks the result is 10 + 5k (typically 30 here). The identity contract op(identity, x) == x is violated.
+    - key: d
+      text: Compilation fails because `reduce` on a parallel stream needs a combiner.
+      why: The two-argument form uses the accumulator as combiner; it compiles fine.
+  explanation: |
+    `reduce(identity, op)` requires `op(identity, x) == x` for every `x`. The framework is allowed to use the
+    identity as the starting value of **every** sub-task. Sequentially 5 + 1 + 2 + 3 + 4 = 15, but in parallel
+    each of the (typically four) leaf tasks adds 5, giving 30 on a typical run. The fix is `reduce(0, Integer::sum) + 5`.
+  rule: "Stream.reduce: the identity value must be an identity for the accumulator function (for all t, accumulator.apply(identity, t) equals t)."
+  misconception: The identity is just the starting value and is used exactly once.
+  hint: How many times may the identity be used when the work is split into chunks?
+  java:
+    expect: { compiles: true }
+
+- id: D6-COL-008
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [groupingBy, filtering, counting, TreeMap]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = List.of("alpha", "beta", "avocado", "blue", "cherry");
+            Map<Character, Long> a = words.stream()
+                .filter(w -> w.length() > 4)
+                .collect(Collectors.groupingBy(w -> w.charAt(0), TreeMap::new, Collectors.counting()));
+            Map<Character, Long> b = words.stream()
+                .collect(Collectors.groupingBy(w -> w.charAt(0), TreeMap::new,
+                         Collectors.filtering(w -> w.length() > 4, Collectors.counting())));
+            System.out.println(a);
+            System.out.println(b);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        {a=2, c=1}
+        {a=2, b=0, c=1}
+      correct: true
+      why: Filtering before grouping removes "b" words entirely, so key b never appears; filtering as a downstream collector keeps key b with a count of 0.
+    - key: b
+      text: |
+        {a=2, c=1}
+        {a=2, c=1}
+      why: The filtering collector runs inside each group — every key produced by the classifier is still present.
+    - key: c
+      text: |
+        {a=2, b=0, c=1}
+        {a=2, b=0, c=1}
+      why: In the first pipeline the b-words are removed before groupingBy ever sees them, so no b key is created.
+    - key: d
+      text: |
+        {a=2, b=2, c=1}
+        {a=2, b=0, c=1}
+      why: "\"beta\" and \"blue\" have only 4 characters and fail the length > 4 filter."
+  explanation: |
+    `filter` before `groupingBy` decides which elements exist at all, so empty groups disappear.
+    `Collectors.filtering` (Java 9) is applied per group *after* classification, so every key is created and
+    the downstream collector can produce an "empty" result (`0` for `counting`, `[]` for `toList`).
+  rule: Collectors.filtering(predicate, downstream) applies the predicate inside each group; keys produced by the classifier are retained.
+  hint: When is the key `b` created in each pipeline?
+  java:
+    expect: { compiles: true, stdout: "{a=2, c=1}\n{a=2, b=0, c=1}" }
+
+- id: D6-COL-009
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [teeing, collectingAndThen, joining, minBy]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            String r = Stream.of(4, 9, 2, 7).collect(Collectors.teeing(
+                Collectors.minBy(Comparator.naturalOrder()),
+                Collectors.collectingAndThen(Collectors.toList(), List::size),
+                (min, size) -> min.get() + "/" + size));
+            System.out.println(r);
+            System.out.println(Stream.of("x", "y").collect(Collectors.joining(",", "<", ">"))
+                + Stream.<String>empty().collect(Collectors.joining(",", "<", ">")));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        2/4
+        <x,y>
+      why: joining with a prefix and suffix adds them even for an empty stream, producing "<>".
+    - key: b
+      text: |
+        Optional[2]/4
+        <x,y><>
+      why: The merger calls min.get(), which unwraps the Optional returned by minBy.
+    - key: c
+      text: |
+        2/4
+        <x,y><>
+      correct: true
+      why: teeing feeds every element to both collectors; minBy → Optional[2], collectingAndThen → 4; joining adds "<" and ">" even when there are no elements.
+    - key: d
+      text: |
+        2/4
+        <x>,<y><>
+      why: The prefix and suffix wrap the whole joined result once, not each element.
+  explanation: |
+    `teeing(c1, c2, merger)` (Java 12) sends each element to both downstream collectors and merges their final
+    results. `collectingAndThen(downstream, finisher)` post-processes a result. `joining(delim, prefix, suffix)`
+    always emits prefix + suffix, so an empty stream gives `<>`.
+  rule: "Collectors.teeing(downstream1, downstream2, merger); Collectors.joining(delimiter, prefix, suffix)."
+  hint: What does `minBy` return, and what happens to the prefix/suffix for an empty stream?
+  java:
+    expect: { compiles: true, stdout: "2/4\n<x,y><>" }
+
+- id: D6-COL-010
+  objective: D6.2
+  lesson: streams-collectors
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [toMap, merge-function, concat, TreeMap]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Map<Character, Integer> m = Stream.concat(Stream.of("apple", "avocado"), Stream.of("banana", "apricot"))
+                .collect(Collectors.toMap(s -> s.charAt(0), String::length, Integer::sum, TreeMap::new));
+            System.out.println(m);
+        }
+    }
+  options:
+    - key: a
+      text: "`{a=19, b=6}`"
+      correct: true
+      why: "Stream.concat joins both streams; the merge function adds the lengths of colliding keys: 5 + 7 + 7 = 19 for 'a', 6 for 'b'."
+    - key: b
+      text: An `IllegalStateException` is thrown because of the duplicate key `a`
+      why: The third argument is a merge function, which resolves duplicate keys instead of throwing.
+    - key: c
+      text: "`{a=5, b=6}`"
+      why: The merge function does not keep the first value; Integer::sum adds the old and new values.
+    - key: d
+      text: "`{a=7, b=6}`"
+      why: That would be the result with Integer::max as the merge function.
+  explanation: |
+    `Stream.concat(a, b)` lazily joins two streams. `toMap(keyMapper, valueMapper, mergeFunction, mapFactory)`
+    calls the merge function whenever a key already exists, and `TreeMap::new` sorts the keys.
+  rule: "Collectors.toMap(k, v, merge, mapFactory): merge resolves collisions between values for the same key."
+  hint: How many words start with 'a', and what does Integer::sum do with their lengths?
+  java:
+    expect: { compiles: true, stdout: "{a=19, b=6}" }
+
+# ───────────────────────── D6.2 · Stream Gatherers (JEP 485) ─────────────────────────
+
+- id: D6-GAT-001
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [gatherers, windowFixed, windowSliding, java24]
+  prompt: What is the output when run with Java 25?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Stream.of("a", "b", "c", "d", "e").gather(Gatherers.windowFixed(3)).toList());
+            System.out.println(Stream.of(1, 2, 3).gather(Gatherers.windowSliding(4)).toList());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        [[a, b, c], [d, e]]
+        [[1, 2, 3]]
+      correct: true
+      why: windowFixed emits a shorter final window; windowSliding on a stream shorter than the window emits one window with all elements.
+    - key: b
+      text: |
+        [[a, b, c]]
+        []
+      why: Neither gatherer drops incomplete data — the final partial window of windowFixed is emitted, and windowSliding emits the short window.
+    - key: c
+      text: |
+        [[a, b, c], [b, c, d], [c, d, e]]
+        [[1, 2, 3]]
+      why: That is windowSliding(3); windowFixed windows do not overlap.
+    - key: d
+      text: Compilation fails because `gather` is a preview API
+      why: Stream Gatherers became final in Java 24 (JEP 485); no --enable-preview is needed in Java 25.
+  explanation: |
+    `Gatherers.windowFixed(n)` groups consecutive elements into non-overlapping lists of size `n`; the last one
+    may be shorter. `Gatherers.windowSliding(n)` emits overlapping windows; if the stream has fewer than `n`
+    elements it emits a single window containing all of them.
+  rule: "JEP 485 / java.util.stream.Gatherers: windowFixed(n) and windowSliding(n)."
+  hint: Do these gatherers ever drop the leftover elements?
+  java:
+    expect: { compiles: true, stdout: "[[a, b, c], [d, e]]\n[[1, 2, 3]]" }
+
+- id: D6-GAT-002
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [gatherers, fold, scan, empty-stream]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Stream.of(2, 3, 4).gather(Gatherers.scan(() -> 1, (a, x) -> a * x)).toList());
+            System.out.println(Stream.<Integer>empty().gather(Gatherers.fold(() -> 1, (a, x) -> a * x)).toList());
+            System.out.println(Stream.<Integer>empty().gather(Gatherers.scan(() -> 1, (a, x) -> a * x)).toList());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        [1, 2, 6, 24]
+        [1]
+        []
+      why: scan does not emit the initial value — only the result after each element.
+    - key: b
+      text: |
+        [2, 6, 24]
+        []
+        []
+      why: fold always emits exactly one element when the stream ends, which is the initial value for an empty stream.
+    - key: c
+      text: |
+        [2, 6, 24]
+        [1]
+        []
+      correct: true
+      why: scan emits 1*2, 2*3, 6*4; fold on an empty stream emits the initial value 1; scan on an empty stream emits nothing.
+    - key: d
+      text: |
+        [2, 6, 24]
+        [1]
+        [1]
+      why: scan only emits after integrating an element, so an empty stream produces an empty result.
+  explanation: |
+    `scan(initial, f)` emits the running accumulation after every element (the seed itself is not emitted).
+    `fold(initial, f)` emits exactly one value — the final accumulation — at the end, which is the seed if there
+    were no elements. Contrast with `reduce(BinaryOperator)`, which returns `Optional.empty()` for an empty stream.
+  rule: "java.util.stream.Gatherers.fold emits a single result when the stream ends; Gatherers.scan emits each incremental accumulation."
+  misconception: fold behaves like reduce without identity and produces nothing for an empty stream.
+  hint: When does fold push its value downstream?
+  java:
+    expect: { compiles: true, stdout: "[2, 6, 24]\n[1]\n[]" }
+
+- id: D6-GAT-003
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: trace
+  difficulty: expert
+  estSeconds: 180
+  tags: [gatherers, custom-gatherer, integrator, short-circuit]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Gatherer<String, int[], String> numbered = Gatherer.ofSequential(
+                () -> new int[1],
+                (n, s, down) -> {
+                    if (s.isEmpty()) return false;
+                    return down.push(++n[0] + ":" + s);
+                });
+            Stream.of("x", "y", "", "z")
+                .peek(s -> System.out.print("<" + s + ">"))
+                .gather(numbered)
+                .forEach(System.out::print);
+        }
+    }
+  options:
+    - key: a
+      text: "`<x>1:x<y>2:y<>`"
+      correct: true
+      why: Elements flow one at a time; the empty string is peeked, then the integrator returns false, which stops the stream before "z" is pulled.
+    - key: b
+      text: "`<x>1:x<y>2:y<><z>3:z`"
+      why: Returning false from the integrator is a short-circuit signal, not "skip this element" — "z" is never requested.
+    - key: c
+      text: "`<x><y><><z>1:x2:y`"
+      why: A gatherer is part of the lazy, element-by-element pipeline; it pushes each result downstream immediately.
+    - key: d
+      text: "`<x>1:x<y>2:y<><z>`"
+      why: After the integrator returns false, the upstream stops sending elements, so peek never sees "z".
+  explanation: |
+    The integrator's boolean means "do I want more input?". For `""` it returns `false`, so the stream stops after
+    that element (which was already pulled and peeked). The state `int[1]` created by the initializer numbers the
+    emitted elements. To *skip* an element instead, the integrator would `return true` without pushing.
+  rule: "Gatherer.Integrator.integrate returns false to signal that no more elements should be sent (short-circuit) (JEP 485)."
+  misconception: Returning false from the integrator filters out the current element.
+  hint: What does the integrator's return value mean?
+  java:
+    expect: { compiles: true, stdout: "<x>1:x<y>2:y<>" }
+
+- id: D6-GAT-004
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [gatherers, custom-gatherer, finisher, state]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            Gatherer<Integer, List<Integer>, Integer> sumPairs = Gatherer.ofSequential(
+                ArrayList::new,
+                (buf, x, down) -> {
+                    buf.add(x);
+                    if (buf.size() < 2) return true;
+                    int sum = buf.get(0) + buf.get(1);
+                    buf.clear();
+                    return down.push(sum);
+                },
+                (buf, down) -> { if (!buf.isEmpty()) down.push(-buf.get(0)); });
+            System.out.println(Stream.of(1, 2, 3, 4, 5).gather(sumPairs).toList());
+        }
+    }
+  options:
+    - key: a
+      text: "`[3, 7]`"
+      why: The finisher runs after the last element and pushes the leftover 5 (negated).
+    - key: b
+      text: "`[3, 7, 5]`"
+      why: The finisher pushes -buf.get(0), i.e. -5.
+    - key: c
+      text: "`[3, 7, -5]`"
+      correct: true
+      why: Pairs (1,2) and (3,4) are summed by the integrator; 5 remains in the buffer and the finisher pushes -5.
+    - key: d
+      text: "`[1, 3, 5, 7, 9]`"
+      why: The buffer is cleared after each pair, so the windows do not overlap.
+  explanation: |
+    `Gatherer.ofSequential(initializer, integrator, finisher)`: the initializer creates the buffer, the integrator
+    pushes a sum for every complete pair, and the finisher is called once at the end of input with the final
+    state — here it flushes the incomplete pair.
+  rule: "Gatherer finisher: performs a final action at the end of input with the state and the downstream (JEP 485)."
+  hint: What is left in the buffer when the stream ends?
+  java:
+    expect: { compiles: true, stdout: "[3, 7, -5]" }
+
+- id: D6-GAT-005
+  objective: D6.2
+  lesson: streams-gatherers
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [gatherers, concept, mapConcurrent, java24]
+  prompt: Which statements about Stream Gatherers in Java 25 are true? Choose three.
+  options:
+    - key: a
+      text: "`Stream.gather(...)` is an intermediate operation that returns a `Stream`."
+      correct: true
+      why: gather plugs a custom intermediate operation into the pipeline; a terminal operation is still needed.
+    - key: b
+      text: "`Gatherers.fold(...)` emits exactly one element, even for an empty stream."
+      correct: true
+      why: fold emits its accumulated value when the input ends — the initial value if there was no input.
+    - key: c
+      text: "`Gatherers.mapConcurrent(...)` emits results in the order the mapping operations complete."
+      why: mapConcurrent preserves encounter order, even though it runs mappers concurrently on virtual threads.
+    - key: d
+      text: The windows produced by `Gatherers.windowFixed(...)` are modifiable `ArrayList`s.
+      why: The emitted windows are unmodifiable lists; add() throws UnsupportedOperationException.
+    - key: e
+      text: Stream Gatherers are a final feature since Java 24 and need no `--enable-preview` flag.
+      correct: true
+      why: JEP 485 finalised Stream Gatherers in Java 24, after previews in 22 and 23.
+    - key: f
+      text: An integrator returns `false` to request more elements.
+      why: It is the opposite — true asks for more; false signals that the gatherer is done (short-circuit).
+  explanation: |
+    Gatherers (JEP 485) are custom intermediate operations. Built-ins: `windowFixed`, `windowSliding` (unmodifiable
+    windows), `fold` (one result), `scan` (running results), `mapConcurrent` (concurrent but order-preserving).
+  rule: JEP 485 — Stream Gatherers, final in Java 24.
+  hint: Is gather intermediate or terminal, and what does true mean for an integrator?
+
+- id: D6-GAT-006
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [gatherers, windowFixed, unmodifiable]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            List<List<Integer>> pairs = Stream.of(1, 2, 3).gather(Gatherers.windowFixed(2)).toList();
+            pairs.get(1).add(4);
+            System.out.println(pairs);
+        }
+    }
+  options:
+    - key: a
+      text: "`[[1, 2], [3, 4]]`"
+      why: The window lists produced by windowFixed are unmodifiable, so add() fails.
+    - key: b
+      text: An `UnsupportedOperationException` is thrown
+      correct: true
+      why: Each window emitted by windowFixed is an unmodifiable list.
+    - key: c
+      text: An `IndexOutOfBoundsException` is thrown
+      why: There are two windows ([1, 2] and [3]), so pairs.get(1) exists.
+    - key: d
+      text: "`[[1, 2], [3]]`"
+      why: The program never reaches println; add() throws first.
+  explanation: |
+    `windowFixed(2)` on three elements produces `[[1, 2], [3]]`. Both the outer list (from `toList()`) and the
+    windows themselves are unmodifiable, so `pairs.get(1).add(4)` throws `UnsupportedOperationException`.
+  rule: Gatherers.windowFixed emits unmodifiable List windows (java.util.stream.Gatherers API).
+  hint: Who creates the inner lists, and are they mutable?
+  java:
+    expect: { compiles: true, exception: java.lang.UnsupportedOperationException }
+
+- id: D6-GAT-007
+  objective: D6.2
+  lesson: streams-gatherers
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [gatherers, windowSliding, mapConcurrent, order]
+  prompt: What is the output?
+  code: |
+    import java.util.stream.*;
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Stream.of(1, 2, 3, 4)
+                .gather(Gatherers.windowSliding(2))
+                .map(w -> w.get(0) * w.get(1))
+                .toList());
+            System.out.println(Stream.of("c", "a", "b")
+                .gather(Gatherers.mapConcurrent(2, String::toUpperCase))
+                .toList());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        [2, 6, 12]
+        [C, A, B]
+      correct: true
+      why: windowSliding(2) yields [1,2], [2,3], [3,4]; mapConcurrent keeps encounter order.
+    - key: b
+      text: |
+        [2, 12]
+        [C, A, B]
+      why: That is windowFixed(2); sliding windows overlap and advance one element at a time.
+    - key: c
+      text: |
+        [2, 6, 12]
+        [A, B, C]
+      why: mapConcurrent does not sort; it emits results in the original encounter order.
+    - key: d
+      text: |
+        [2, 6, 12, 4]
+        [C, A, B]
+      why: windowSliding never emits a partial trailing window once a full window has been emitted.
+  explanation: |
+    Sliding windows of size 2 over `1, 2, 3, 4` are `[1, 2]`, `[2, 3]`, `[3, 4]` → products `2, 6, 12`.
+    `mapConcurrent(maxConcurrency, mapper)` runs the mapper concurrently but preserves the stream order.
+  rule: "Gatherers.windowSliding(n) emits overlapping windows; Gatherers.mapConcurrent preserves encounter order."
+  hint: How many sliding windows of size 2 fit into 4 elements?
+  java:
+    expect: { compiles: true, stdout: "[2, 6, 12]\n[C, A, B]" }

@@ -1,0 +1,226 @@
+# Frequently confused concepts (Knowledge Vault → "Confusable pairs").
+# Each pair contrasts two ideas that exam questions deliberately mix up. Keep every point a precise,
+# checkable rule; link the lessons that teach it. Validated by scripts/validate-content.ts.
+- id: overload-override
+  title: Overloading vs overriding
+  domains: [D3]
+  lessons: [oop-overloading, oop-inheritance-polymorphism]
+  a:
+    name: Overloading
+    points:
+      - Same name, different parameter lists, in the same class or a subtype.
+      - The compiler picks the method from the compile-time types of the arguments.
+      - "Resolution phases: exact/widening first, then boxing/unboxing, then varargs."
+      - Return type alone never distinguishes two overloads.
+  b:
+    name: Overriding
+    points:
+      - Same signature in a subclass; return type identical or covariant.
+      - The JVM picks the body from the runtime class of the object.
+      - Access may not be more restrictive; checked exceptions may not be broader.
+      - Static methods are hidden, never overridden.
+  rule: Overloads are chosen at compile time by argument types; overrides are chosen at run time by the object's class.
+
+- id: eq-equals
+  title: "== vs equals()"
+  domains: [D1, D5]
+  lessons: [values-strings-text, coll-maps-sorting-generics]
+  a:
+    name: "=="
+    points:
+      - For primitives, compares values (after numeric promotion).
+      - For references, compares identity — the same object or not.
+      - String literals are interned, so two equal literals are `==`; strings built at run time usually are not.
+      - Autoboxed Integer values from -128 to 127 are cached, so `==` may appear to work there and fail outside it.
+  b:
+    name: equals()
+    points:
+      - Logical equality, defined by the class; Object's default is identity.
+      - String, wrappers, records and most collections override it.
+      - Must be consistent with hashCode() for hash-based collections.
+  rule: Use == for primitives and identity, equals() for value comparison of objects.
+
+- id: duration-period
+  title: Duration vs Period
+  domains: [D1]
+  lessons: [values-date-time]
+  a:
+    name: Duration
+    points:
+      - Time-based amount stored as seconds and nanoseconds.
+      - Duration.ofDays(1) is always exactly 24 hours, even across a DST change.
+      - Adding a Duration to a LocalDate throws UnsupportedTemporalTypeException at run time.
+      - toString looks like PT36H.
+  b:
+    name: Period
+    points:
+      - Date-based amount in years, months and days.
+      - Period.ofDays(1) added to a ZonedDateTime keeps the local time, so it can be 23 or 25 hours across DST.
+      - Not normalised automatically — Period.ofMonths(14) stays P14M.
+      - toString looks like P1Y2M3D.
+  rule: Duration measures machine time; Period measures calendar time.
+
+- id: compile-runtime
+  title: Compilation failure vs runtime exception
+  domains: [D2, D3, D4]
+  lessons: [flow-loops-branching, exc-fundamentals, oop-inheritance-polymorphism]
+  a:
+    name: Does not compile
+    points:
+      - Unreachable statements, missing return, use of an unassigned local variable.
+      - An unhandled checked exception, or catching a checked exception the try block cannot throw.
+      - A cast between types that can never be related (e.g. String to Integer).
+      - A catch block for a subclass after a catch for its superclass.
+  b:
+    name: Compiles, then throws
+    points:
+      - A downcast to a related type the object isn't — ClassCastException.
+      - Integer division by zero, even `1 / 0` — ArithmeticException (floating-point gives Infinity instead).
+      - Dereferencing null — NullPointerException.
+      - Modifying an immutable collection from List.of — UnsupportedOperationException.
+  rule: The compiler only knows declared types and definite flow; values and runtime classes are checked when the code runs.
+
+- id: checked-unchecked
+  title: Checked vs unchecked exceptions
+  domains: [D4]
+  lessons: [exc-fundamentals]
+  a:
+    name: Checked
+    points:
+      - Exception and its subclasses, except RuntimeException and its subclasses.
+      - Must be caught or declared with throws (the "catch or declare" rule).
+      - An overriding method may not declare broader or new checked exceptions.
+  b:
+    name: Unchecked
+    points:
+      - RuntimeException and Error, and their subclasses.
+      - May be thrown, caught or declared freely — the compiler doesn't track them.
+      - Catching Exception or Throwable is always allowed, even if nothing checked can be thrown.
+  rule: Only checked exceptions take part in compile-time exception analysis.
+
+- id: platform-virtual
+  title: Platform threads vs virtual threads
+  domains: [D8]
+  lessons: [conc-threads-executors, conc-virtual-scoped]
+  a:
+    name: Platform thread
+    points:
+      - A thin wrapper over an OS thread; expensive, so usually pooled.
+      - Created with new Thread(..) or Thread.ofPlatform(); daemon status and priority are configurable.
+      - Suited to CPU-bound work.
+  b:
+    name: Virtual thread
+    points:
+      - Scheduled by the JVM onto carrier platform threads; cheap enough to create one per task.
+      - Created with Thread.ofVirtual(), Thread.startVirtualThread(..) or Executors.newVirtualThreadPerTaskExecutor().
+      - Always a daemon thread; its priority is always NORM_PRIORITY.
+      - Shines with blocking I/O; offers no speed-up for CPU-bound work. Don't pool them.
+  rule: Virtual threads change how many tasks can wait, not how fast a task computes.
+
+- id: classpath-modulepath
+  title: Classpath vs module path
+  domains: [D7]
+  lessons: [pkg-modules-services, pkg-compile-package-run]
+  a:
+    name: Classpath
+    points:
+      - Everything on it belongs to the single unnamed module.
+      - The unnamed module reads every module and exports all its packages.
+      - Named modules cannot `requires` the unnamed module.
+  b:
+    name: Module path
+    points:
+      - A JAR with module-info.class is a named (explicit) module.
+      - A JAR without one becomes an automatic module, named from Automatic-Module-Name or the file name.
+      - Automatic modules export and open all packages and read all other modules, including the unnamed one.
+  rule: Where a JAR is placed — not what it contains — decides whether it is the unnamed or an automatic module.
+
+- id: exports-opens
+  title: exports vs opens
+  domains: [D7]
+  lessons: [pkg-modules-services]
+  a:
+    name: exports
+    points:
+      - Public types of the package become accessible at compile time and run time.
+      - Reflection may access public members only.
+      - "`exports p to m;` restricts access to the named modules."
+  b:
+    name: opens
+    points:
+      - No compile-time access is granted.
+      - At run time, reflection may access all members, including private ones (setAccessible).
+      - "`open module` opens every package of the module."
+  rule: exports is for code that compiles against you; opens is for frameworks that reflect into you.
+
+- id: collection-stream
+  title: Collection methods vs stream operations
+  domains: [D5, D6]
+  lessons: [coll-lists-sets-deques, streams-pipelines]
+  a:
+    name: Collection methods
+    points:
+      - Operate on the collection itself and usually mutate it (add, remove, removeIf, sort).
+      - Unmodifiable collections (List.of, Collections.unmodifiableList) throw UnsupportedOperationException.
+      - "`List<Integer>.remove(1)` removes index 1; `remove(Integer.valueOf(1))` removes the value."
+  b:
+    name: Stream operations
+    points:
+      - Never modify the source; they produce a new result.
+      - Lazy — nothing runs until a terminal operation is invoked.
+      - A stream can be consumed once; reusing it throws IllegalStateException.
+  rule: Collections hold data; streams describe a computation over data.
+
+- id: comparable-comparator
+  title: Comparable vs Comparator
+  domains: [D5]
+  lessons: [coll-maps-sorting-generics]
+  a:
+    name: Comparable<T>
+    points:
+      - Implemented by the element class itself — its "natural ordering".
+      - One method, compareTo(T other).
+      - Used by TreeSet, TreeMap and Collections.sort(list) when no comparator is given.
+  b:
+    name: Comparator<T>
+    points:
+      - A separate strategy object with compare(T a, T b); can be a lambda.
+      - Composable with comparing, thenComparing, reversed, nullsFirst.
+      - A TreeSet/TreeMap built with it uses it for equality too — elements that compare as 0 are duplicates.
+  rule: Sorted collections decide duplicates by compareTo/compare, not by equals().
+
+- id: map-flatmap
+  title: map vs flatMap
+  domains: [D6]
+  lessons: [streams-pipelines]
+  a:
+    name: map
+    points:
+      - One input element produces exactly one output element.
+      - "`Stream<List<String>>.map(List::size)` gives a Stream<Integer>."
+      - "Optional.map wraps the function's result: a function returning Optional gives Optional<Optional<T>>."
+  b:
+    name: flatMap
+    points:
+      - Each element is mapped to a stream, and the streams are concatenated.
+      - "`Stream<List<String>>.flatMap(List::stream)` gives a Stream<String>."
+      - Optional.flatMap expects a function that already returns an Optional and doesn't nest it.
+  rule: Use flatMap when your mapping function already returns a container.
+
+- id: hiding-overriding
+  title: Hiding vs overriding (static methods and fields)
+  domains: [D3]
+  lessons: [oop-inheritance-polymorphism]
+  a:
+    name: Hiding
+    points:
+      - Applies to static methods and to all fields.
+      - The member used is chosen by the compile-time type of the reference.
+      - "`Parent p = new Child(); p.staticMethod()` calls Parent's version."
+  b:
+    name: Overriding
+    points:
+      - Applies to instance methods only.
+      - The body used is chosen by the runtime class of the object.
+      - "`Parent p = new Child(); p.instanceMethod()` calls Child's version."
+  rule: Only instance methods are polymorphic; fields and static methods follow the reference type.

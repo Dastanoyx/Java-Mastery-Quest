@@ -1,0 +1,236 @@
+# D8 — executor and virtual-thread coding exercises
+
+- id: D8-EX-010
+  objective: D8.1
+  lesson: conc-threads-executors
+  title: Fetching quotes on virtual threads with invokeAll
+  difficulty: advanced
+  kind: complete
+  prompt: |
+    `PriceFetcher` asks several slow quote services for a price at the same time. Complete both
+    `public static` methods. Each call must create its own executor with
+    **`Executors.newVirtualThreadPerTaskExecutor()`** in a **try-with-resources** statement, so that no task
+    is still running when the method returns.
+
+    1. `List<Integer> fetchAll(List<Callable<Integer>> tasks) throws InterruptedException` runs all tasks
+       concurrently (one virtual thread each) and returns their results **in the order of `tasks`**, no matter
+       which task finishes first. If a task throws, throw an `IllegalStateException` with the message
+       `"task <i> failed"` (`i` = 0-based index of the first failed task in list order) whose **cause is the
+       exception the task threw** — not the `ExecutionException` that wraps it. An empty list gives an empty
+       list; a `null` list throws `NullPointerException`.
+    2. `List<Optional<Integer>> fetchWithin(List<Callable<Integer>> tasks, Duration timeout) throws InterruptedException`
+       works like `fetchAll` but waits at most `timeout` in total. It returns one `Optional` per task, in task
+       order: the result if the task completed with a non-`null` value, otherwise `Optional.empty()` (the task
+       threw, returned `null`, or was still running at the deadline). Tasks still running at the deadline must
+       be **cancelled**, so the method returns promptly instead of waiting for them. A zero or negative
+       `timeout` throws `IllegalArgumentException`.
+  fileName: PriceFetcher.java
+  starter: |
+    import java.time.Duration;
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class PriceFetcher {
+
+        public static List<Integer> fetchAll(List<Callable<Integer>> tasks) throws InterruptedException {
+            Objects.requireNonNull(tasks);
+            try (ExecutorService pool = Executors.newFixedThreadPool(2)) {    // TODO: one virtual thread per task
+                List<Future<Integer>> futures = pool.invokeAll(tasks);
+                List<Integer> results = new ArrayList<>();
+                for (int i = 0; i < futures.size(); i++) {
+                    // TODO: add the result of task i; if the task threw, throw
+                    //       new IllegalStateException("task " + i + " failed", <the task's own exception>)
+                }
+                return results;
+            }
+        }
+
+        public static List<Optional<Integer>> fetchWithin(List<Callable<Integer>> tasks, Duration timeout)
+                throws InterruptedException {
+            // TODO: validate timeout, use the timed invokeAll, map each Future to an Optional
+            return List.of();
+        }
+    }
+  solution: |
+    import java.time.Duration;
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class PriceFetcher {
+
+        public static List<Integer> fetchAll(List<Callable<Integer>> tasks) throws InterruptedException {
+            Objects.requireNonNull(tasks);
+            try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+                List<Future<Integer>> futures = pool.invokeAll(tasks);       // same order as tasks, all done
+                List<Integer> results = new ArrayList<>(futures.size());
+                for (int i = 0; i < futures.size(); i++) {
+                    try {
+                        results.add(futures.get(i).get());
+                    } catch (ExecutionException e) {
+                        throw new IllegalStateException("task " + i + " failed", e.getCause());
+                    }
+                }
+                return results;
+            }                                                                  // close(): shutdown + wait
+        }
+
+        public static List<Optional<Integer>> fetchWithin(List<Callable<Integer>> tasks, Duration timeout)
+                throws InterruptedException {
+            Objects.requireNonNull(tasks);
+            if (timeout.isNegative() || timeout.isZero())
+                throw new IllegalArgumentException("timeout must be positive: " + timeout);
+            try (ExecutorService pool = Executors.newVirtualThreadPerTaskExecutor()) {
+                // Tasks still running when the timeout expires are cancelled (and interrupted).
+                List<Future<Integer>> futures = pool.invokeAll(tasks, timeout.toMillis(), TimeUnit.MILLISECONDS);
+                List<Optional<Integer>> results = new ArrayList<>(futures.size());
+                for (Future<Integer> f : futures) {
+                    try {
+                        results.add(Optional.ofNullable(f.get()));
+                    } catch (ExecutionException | CancellationException e) {
+                        results.add(Optional.empty());
+                    }
+                }
+                return results;
+            }
+        }
+    }
+  harness: |
+    import java.io.IOException;
+    import java.time.Duration;
+    import java.util.*;
+    import java.util.concurrent.*;
+    import java.util.concurrent.atomic.*;
+
+    public class Main {
+        static void check(String name, boolean ok, Object detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+        static Callable<Integer> after(long millis, int value) {
+            return () -> { Thread.sleep(millis); return value; };
+        }
+
+        public static void main(String[] args) {
+            test("results in submission order", () -> {
+                // the first task finishes LAST
+                List<Callable<Integer>> tasks = List.of(after(150, 10), after(100, 20), after(50, 30), after(0, 40));
+                var r = PriceFetcher.fetchAll(tasks);
+                check("results in submission order", List.of(10, 20, 30, 40).equals(r), r + ", expected [10, 20, 30, 40]");
+            });
+            test("tasks run on virtual threads", () -> {
+                List<Boolean> virtual = new CopyOnWriteArrayList<>();
+                List<Callable<Integer>> tasks = new ArrayList<>();
+                for (int i = 0; i < 3; i++) {
+                    int v = i;
+                    tasks.add(() -> { virtual.add(Thread.currentThread().isVirtual()); return v; });
+                }
+                var r = PriceFetcher.fetchAll(tasks);
+                check("tasks run on virtual threads",
+                        r.equals(List.of(0, 1, 2)) && virtual.size() == 3 && !virtual.contains(false),
+                        "results " + r + ", isVirtual per task " + virtual);
+            });
+            test("tasks run concurrently", () -> {
+                int n = 6;
+                CountDownLatch allStarted = new CountDownLatch(n);
+                List<Callable<Integer>> tasks = new ArrayList<>();
+                for (int i = 0; i < n; i++) {
+                    tasks.add(() -> {
+                        allStarted.countDown();
+                        // only succeeds if all n tasks are running at the same time
+                        return allStarted.await(750, TimeUnit.MILLISECONDS) ? 1 : 0;
+                    });
+                }
+                var r = PriceFetcher.fetchAll(tasks);
+                check("tasks run concurrently", r.equals(List.of(1, 1, 1, 1, 1, 1)),
+                        r + " (0 = task waited in vain for the others to start)");
+            });
+            test("failure is unwrapped and reported", () -> {
+                IOException boom = new IOException("quote service down");
+                List<Callable<Integer>> tasks = List.of(after(0, 1), () -> { throw boom; }, after(0, 3));
+                try {
+                    var r = PriceFetcher.fetchAll(tasks);
+                    check("failure is unwrapped and reported", false, "no exception, results " + r);
+                } catch (IllegalStateException e) {
+                    check("failure is unwrapped and reported",
+                            "task 1 failed".equals(e.getMessage()) && e.getCause() == boom,
+                            "message \"" + e.getMessage() + "\", cause " + e.getCause());
+                }
+            });
+            test("empty and null task lists", () -> {
+                var r = PriceFetcher.fetchAll(List.of());
+                String nul;
+                try { PriceFetcher.fetchAll(null); nul = "no exception"; }
+                catch (NullPointerException e) { nul = "NullPointerException"; }
+                check("empty and null task lists", r.isEmpty() && nul.equals("NullPointerException"),
+                        "empty -> " + r + ", null -> " + nul);
+            });
+
+            AtomicBoolean slowStarted = new AtomicBoolean(), slowInterrupted = new AtomicBoolean();
+            List<Optional<Integer>> within = null;
+            long elapsed = -1;
+            try {
+                List<Callable<Integer>> tasks = List.of(
+                        after(0, 1),
+                        () -> { throw new IllegalStateException("bad quote"); },
+                        () -> {
+                            slowStarted.set(true);
+                            try { Thread.sleep(4_000); return 3; }
+                            catch (InterruptedException e) { slowInterrupted.set(true); throw e; }
+                        },
+                        () -> null,
+                        after(20, 5));
+                long t0 = System.nanoTime();
+                within = PriceFetcher.fetchWithin(tasks, Duration.ofMillis(500));
+                elapsed = (System.nanoTime() - t0) / 1_000_000;
+            } catch (Throwable t) {
+                System.out.println("FAIL fetchWithin maps every outcome: unexpected " + t);
+                System.out.println("FAIL fetchWithin cancels late tasks: unexpected " + t);
+            }
+            if (within != null) {
+                var expected = List.of(Optional.of(1), Optional.empty(), Optional.empty(), Optional.empty(), Optional.of(5));
+                check("fetchWithin maps every outcome", expected.equals(within), within + ", expected " + expected);
+                check("fetchWithin cancels late tasks", elapsed < 2_500 && (slowInterrupted.get() || !slowStarted.get()),
+                        "returned after " + elapsed + " ms, slow task interrupted: " + slowInterrupted.get());
+            }
+            test("fetchWithin all on time", () -> {
+                var r = PriceFetcher.fetchWithin(List.of(after(30, 7), after(0, 8)), Duration.ofSeconds(2));
+                check("fetchWithin all on time", List.of(Optional.of(7), Optional.of(8)).equals(r), r);
+            });
+            test("fetchWithin rejects a non-positive timeout", () -> {
+                List<Callable<Integer>> tasks = List.of(after(0, 1));
+                String zero, negative;
+                try { PriceFetcher.fetchWithin(tasks, Duration.ZERO); zero = "no exception"; }
+                catch (IllegalArgumentException e) { zero = "IllegalArgumentException"; }
+                try { PriceFetcher.fetchWithin(tasks, Duration.ofMillis(-1)); negative = "no exception"; }
+                catch (IllegalArgumentException e) { negative = "IllegalArgumentException"; }
+                check("fetchWithin rejects a non-positive timeout",
+                        zero.equals("IllegalArgumentException") && negative.equals("IllegalArgumentException"),
+                        "ZERO -> " + zero + ", -1 ms -> " + negative);
+            });
+        }
+    }
+  explanation: |
+    `Executors.newVirtualThreadPerTaskExecutor()` (final since Java 21) starts a new virtual thread for every
+    task, so blocking tasks all run at the same time instead of queuing behind the threads of a fixed pool.
+    Since Java 19 `ExecutorService` is `AutoCloseable`: `close()` calls `shutdown()` and then waits until all
+    submitted tasks have finished, so try-with-resources guarantees that no task outlives the method.
+
+    `invokeAll` returns the `Future`s **in the order of the task collection**, and only after every task has
+    completed, so reading them by index is deterministic regardless of completion order and `get()` never
+    blocks. An exception thrown by a `Callable` is captured in its `Future`; `get()` rethrows it wrapped in a
+    checked `ExecutionException`, and `getCause()` returns the original, which is what the domain exception
+    should carry.
+
+    The timed `invokeAll(tasks, timeout, unit)` returns when all tasks are done or the timeout expires, and
+    cancels every task that has not completed (the JDK implementation uses `cancel(true)`, which interrupts the
+    sleeping virtual thread). `get()` on a cancelled `Future` throws the unchecked `CancellationException`.
+    Without that cancellation, `close()` would wait for the slow task. Finally, `Optional.ofNullable` maps a
+    `null` result to `Optional.empty()`, whereas `Optional.of(null)` throws `NullPointerException`.
+  hints:
+    - "`invokeAll(tasks)` returns the `Future`s in the same order as the tasks and only returns when every task is done."
+    - "`Future.get()` wraps a task's exception in an `ExecutionException`; `e.getCause()` is the exception the task threw."
+    - "`invokeAll(tasks, timeout.toMillis(), TimeUnit.MILLISECONDS)` cancels unfinished tasks, and `get()` on a cancelled future throws `CancellationException`. Use `Optional.ofNullable`."
+  timeLimitMs: 8000

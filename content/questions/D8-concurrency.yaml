@@ -1,0 +1,1362 @@
+# D8.1 — threads, executors, futures, CompletableFuture, virtual threads and scoped values
+# Every program below is deterministic by construction: it reads shared results only after join(),
+# Future.get(), CountDownLatch.await() or ExecutorService.close(). The one nondeterministic program
+# (D8-VT-004) is asked as "which outputs are possible" and only checks the guaranteed lines.
+
+# ───────────────────────── threads & executors (lesson conc-threads-executors) ─────────────────────────
+
+- id: D8-THR-001
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [thread, start, run, thread-state]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        static class Worker extends Thread {
+            Worker() { super("w1"); }
+            @Override public void run() {
+                System.out.print("[" + Thread.currentThread().getName() + "]");
+            }
+        }
+        public static void main(String[] args) throws InterruptedException {
+            Worker w = new Worker();
+            w.run();
+            w.run();
+            System.out.print(w.getState());
+            w.start();
+            w.join();
+            System.out.println(w.isAlive());
+        }
+    }
+  options:
+    - key: a
+      text: "`[w1][w1]NEW[w1]false`"
+      why: This assumes run() executes on the thread that the Thread object represents. run() is an ordinary method, so it executes on the caller — main.
+    - key: b
+      text: "`[main][main]NEW[w1]false`"
+      correct: true
+      why: The two direct run() calls execute synchronously on main and do not change the state; only start() creates the w1 thread, and join() waits until it has terminated.
+    - key: c
+      text: "`[main][main]RUNNABLE[w1]false`"
+      why: Calling run() directly does not move the thread out of NEW; only start() does that.
+    - key: d
+      text: "`[main][main]NEW` followed by an `IllegalThreadStateException`"
+      why: run() does not count as starting the thread, so the first start() call is perfectly legal. Only a second start() throws.
+  explanation: |
+    `start()` asks the JVM to create a new thread of execution that then calls `run()`. Calling `run()` yourself
+    is a plain method call: the body runs on the **current** thread (`main`), synchronously, and the `Thread`
+    object stays in state `NEW`. After `start()`, `join()` makes `main` wait until `w1` is `TERMINATED`, so
+    `isAlive()` is `false` and the output order is fully determined.
+  rule: "Thread.start() causes the JVM to call run() on a new thread; invoking run() directly executes it on the calling thread and leaves the Thread in state NEW."
+  misconception: Calling run() on a Thread object runs the code in that thread.
+  hint: Which thread executes a method that you call directly?
+  java:
+    expect: { compiles: true, stdout: "[main][main]NEW[w1]false" }
+
+- id: D8-THR-002
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [interrupt, InterruptedException, interrupt-flag, sleep]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            Thread worker = new Thread(() -> {
+                Thread me = Thread.currentThread();
+                while (!me.isInterrupted()) {
+                    Thread.onSpinWait();
+                }
+                System.out.print("A:" + me.isInterrupted() + " ");
+                try {
+                    Thread.sleep(1_000);
+                    System.out.print("B ");
+                } catch (InterruptedException e) {
+                    System.out.print("C:" + me.isInterrupted() + " ");
+                    me.interrupt();
+                }
+                System.out.print("D:" + Thread.interrupted() + " ");
+                System.out.print("E:" + me.isInterrupted());
+            });
+            worker.start();
+            worker.interrupt();
+            worker.join();
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`A:true C:false D:true E:false`"
+      correct: true
+      why: sleep() sees the pending flag, throws at once and clears it (C:false); the catch block re-sets it; Thread.interrupted() returns true and clears it again (D:true, E:false).
+    - key: b
+      text: "`A:true C:true D:true E:true`"
+      why: This assumes the flag survives the exception and that Thread.interrupted() only reads it. Both the throw and Thread.interrupted() clear the flag.
+    - key: c
+      text: "`A:true B D:true E:false`"
+      why: This assumes sleep() only reacts to interrupts that arrive while it is already sleeping. A thread whose flag is already set gets an InterruptedException immediately.
+    - key: d
+      text: "`A:true C:false D:false E:false`"
+      why: This assumes a thread cannot interrupt itself. me.interrupt() from inside the worker sets its own flag again, which is exactly the "restore the interrupt" idiom.
+  explanation: |
+    `interrupt()` only sets a flag. The busy loop polls it with `isInterrupted()`, which reads without clearing,
+    so `A:true`. Blocking methods such as `sleep`, `wait` and `join` throw `InterruptedException` when the flag
+    is set — also when it was set **before** the call — and clear the flag as they throw, so `C:false`. The
+    catch block restores the flag with `interrupt()`. The static `Thread.interrupted()` returns the flag
+    **and clears it**, so `D:true` and then `E:false`. `join()` makes the output deterministic.
+  rule: "Thread.sleep/join/Object.wait throw InterruptedException if the interrupt status is set and clear it; Thread.interrupted() tests and clears; isInterrupted() only tests."
+  misconception: sleep() is only interrupted by an interrupt that arrives during the sleep, and catching the exception leaves the flag set.
+  hint: Track the flag through three operations that clear it or set it.
+  java:
+    expect: { compiles: true, stdout: "A:true C:false D:true E:false" }
+
+- id: D8-THR-003
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ExecutorService, submit, Future, ExecutionException]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+
+    public class Main {
+        static int reserve(int qty) {
+            if (qty > 3) throw new IllegalStateException("only 3 left");
+            return qty;
+        }
+        public static void main(String[] args) throws InterruptedException {
+            try (ExecutorService pool = Executors.newSingleThreadExecutor()) {
+                Future<String> withResult = pool.submit(() -> System.out.print("run "), "done");
+                Future<Integer> failing = pool.submit(() -> reserve(5));
+                try {
+                    System.out.print(withResult.get() + " ");
+                    System.out.print(failing.get());
+                } catch (ExecutionException e) {
+                    Throwable cause = e.getCause();
+                    System.out.print(cause.getClass().getSimpleName() + ": " + cause.getMessage());
+                }
+            }
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`run done IllegalStateException: only 3 left`"
+      correct: true
+      why: submit(Runnable, result) completes with the given result; the Callable's exception is stored in its Future and get() wraps it in an ExecutionException whose cause is the original.
+    - key: b
+      text: "`run null IllegalStateException: only 3 left`"
+      why: Only submit(Runnable) yields null. The two-argument submit(Runnable, T result) completes the Future with result, here "done".
+    - key: c
+      text: "`run done ` followed by an uncaught `IllegalStateException`"
+      why: Future.get() never rethrows the task's exception directly — it always wraps it in a checked ExecutionException, which the catch block handles.
+    - key: d
+      text: "`done run IllegalStateException: only 3 left`"
+      why: get() blocks until the task has finished, and the task's print happens-before get() returns, so "run " is printed first.
+  explanation: |
+    A task submitted to an `ExecutorService` never throws into the caller's code directly. Its outcome — a value
+    or an exception — is stored in the `Future`. `get()` blocks until the task is done; if it failed, `get()`
+    throws `ExecutionException` and the original exception is `getCause()`. `submit(Runnable task, T result)`
+    is the Runnable variant that lets you choose the Future's value. The single-thread executor and the
+    blocking `get()` calls make the output deterministic.
+  rule: "Future.get() throws ExecutionException (checked) if the computation threw; getCause() returns the original exception. submit(Runnable, T) returns a Future whose get() returns the given result."
+  misconception: Future.get() rethrows the task's own exception type.
+  hint: What does get() throw, and where is the original exception kept?
+  java:
+    expect: { compiles: true, stdout: "run done IllegalStateException: only 3 left" }
+
+- id: D8-THR-004
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ExecutorService, shutdown, shutdownNow, awaitTermination, close]
+  prompt: Which statements about stopping an `ExecutorService` are true in Java 25? Choose three.
+  options:
+    - key: a
+      text: After `shutdown()`, tasks that were already queued still run, but new submissions are rejected with `RejectedExecutionException`.
+      correct: true
+      why: shutdown() is an orderly shutdown — it closes the door to new work but drains the queue.
+    - key: b
+      text: "`shutdown()` blocks the calling thread until all submitted tasks have finished."
+      why: shutdown() returns immediately. You need awaitTermination(...) or close() to wait.
+    - key: c
+      text: "`shutdownNow()` interrupts the tasks that are running and returns the tasks that never started as a `List<Runnable>`."
+      correct: true
+      why: That is its contract; it does not wait for the interrupted tasks to actually stop either.
+    - key: d
+      text: "`close()` initiates an orderly shutdown and then waits until all tasks have completed."
+      correct: true
+      why: Since Java 19 ExecutorService extends AutoCloseable; close() = shutdown() + wait for termination, which is why try-with-resources works.
+    - key: e
+      text: "`awaitTermination(1, TimeUnit.SECONDS)` first shuts the executor down and then waits."
+      why: awaitTermination only waits. On an executor that was never shut down it simply returns false after the time-out.
+    - key: f
+      text: Immediately after `shutdown()` returns, `isTerminated()` is always `true`.
+      why: isShutdown() is true right away, but isTerminated() becomes true only once every task has finished.
+  explanation: |
+    `shutdown()` and `shutdownNow()` both only *initiate* a shutdown and return at once: the first lets queued
+    tasks run, the second interrupts running tasks and hands back the queued ones. Waiting is a separate step —
+    `awaitTermination(timeout, unit)` returns `true` if the executor terminated in time. Since Java 19,
+    `close()` combines `shutdown()` with waiting, so `try (ExecutorService ex = …) { … }` waits for all tasks
+    at the end of the block.
+  rule: "ExecutorService: shutdown() = no new tasks, queued tasks run, no waiting; shutdownNow() = interrupt + return unstarted tasks, no waiting; awaitTermination waits only; close() (Java 19+) = shutdown + wait."
+  misconception: shutdown() waits for the tasks, or awaitTermination() triggers the shutdown.
+  hint: Which of these methods actually block the caller?
+
+- id: D8-THR-005
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [invokeAll, invokeAny, Future, ExecutorService]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class Main {
+        static Callable<String> task(String name, long millis) {
+            return () -> { Thread.sleep(millis); return name; };
+        }
+        public static void main(String[] args) throws Exception {
+            try (ExecutorService pool = Executors.newFixedThreadPool(2)) {
+                List<Future<String>> all = pool.invokeAll(
+                        List.of(task("slow", 150), task("fast", 10), task("mid", 60)));
+                StringBuilder sb = new StringBuilder();
+                for (Future<String> f : all) sb.append(f.get()).append(' ');
+                System.out.println(sb.toString().trim() + " | " + all.stream().allMatch(Future::isDone));
+                String any = pool.invokeAny(List.of(
+                        () -> { throw new IllegalStateException("down"); },
+                        task("backup", 20)));
+                System.out.println(any);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        slow fast mid | true
+        backup
+      correct: true
+      why: invokeAll waits for every task and returns the futures in input order; invokeAny returns the value of a task that succeeded — only "backup" can.
+    - key: b
+      text: |
+        fast mid slow | true
+        backup
+      why: This assumes invokeAll returns the futures in completion order. The list always matches the order of the input collection.
+    - key: c
+      text: |
+        slow fast mid | false
+        backup
+      why: invokeAll does not return until every task has completed (normally or exceptionally), so every future is already done.
+    - key: d
+      text: "`slow fast mid | true` followed by an `ExecutionException` from `invokeAny`"
+      why: invokeAny throws ExecutionException only when no task completes successfully. One failing task is simply ignored.
+  explanation: |
+    `invokeAll(tasks)` blocks until **all** tasks have finished and returns a `List<Future<T>>` in the **same
+    order as the input**, regardless of which task finished first — so every `isDone()` is `true` and `get()`
+    never blocks afterwards. `invokeAny(tasks)` returns the plain **result** (not a `Future`) of one task that
+    completed successfully and cancels the others; it throws `ExecutionException` only if every task failed.
+  rule: "ExecutorService.invokeAll returns futures in the iteration order of the given collection, all done; invokeAny returns the result of one successfully completed task, or throws ExecutionException if none succeeded."
+  misconception: invokeAll returns futures in completion order, and invokeAny fails if any task fails.
+  hint: Is the result list ordered by input or by completion?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        slow fast mid | true
+        backup
+
+- id: D8-THR-006
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [CompletableFuture, exceptionally, handle, CompletionException, failedFuture]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            String a = CompletableFuture.supplyAsync(() -> Integer.parseInt("x1"))
+                    .thenApply(n -> "value " + n)
+                    .handle((v, t) -> v != null ? v : "handled " + t.getClass().getSimpleName())
+                    .join();
+            String b = CompletableFuture.<Integer>failedFuture(new NumberFormatException("bad"))
+                    .exceptionally(t -> -1)
+                    .thenApply(n -> "got " + n)
+                    .join();
+            String c = CompletableFuture.<Integer>failedFuture(new NumberFormatException("bad"))
+                    .handle((v, t) -> t.getClass().getSimpleName())
+                    .join();
+            System.out.println(a + " / " + b + " / " + c);
+        }
+    }
+  options:
+    - key: a
+      text: "`handled CompletionException / got -1 / NumberFormatException`"
+      correct: true
+      why: An exception thrown inside an async stage reaches later stages wrapped in CompletionException; a failedFuture handled directly passes the raw exception; exceptionally recovers so thenApply runs.
+    - key: b
+      text: "`handled NumberFormatException / got -1 / NumberFormatException`"
+      why: This assumes handlers always see the original exception. When the exception was thrown inside supplyAsync and passed through thenApply, the dependent stage receives a CompletionException wrapper.
+    - key: c
+      text: "`handled CompletionException / got -1 / CompletionException`"
+      why: This assumes every failure is wrapped. A future completed with failedFuture(ex) and handled by the very next stage receives ex itself.
+    - key: d
+      text: "`join()` throws a `CompletionException` while computing `b`"
+      why: exceptionally replaces the failure with the value -1, so the chain continues normally and thenApply runs.
+  explanation: |
+    When a function inside a stage throws, the `CompletableFuture` stores the exception wrapped in a
+    `CompletionException`, and every dependent stage sees that wrapper — so `handle` in `a` gets a
+    `CompletionException` whose cause is the `NumberFormatException`. `failedFuture(ex)` (and
+    `completeExceptionally(ex)`) store `ex` as is, so a handler attached directly to it, as in `c`, receives
+    the raw exception. `exceptionally` runs only on failure and turns it into a normal value, after which
+    `thenApply` runs as usual. Robust handlers therefore check `t.getCause()` as well as `t`.
+  rule: "CompletableFuture: a failure thrown inside a stage propagates to dependents as CompletionException(cause); exceptionally(fn) runs only on failure and completes normally with fn's value; handle(fn) always runs with (value, throwable)."
+  misconception: exceptionally/handle always receive the original exception type.
+  hint: Where was each exception thrown — inside a stage, or passed to failedFuture?
+  java:
+    expect: { compiles: true, stdout: "handled CompletionException / got -1 / NumberFormatException" }
+
+- id: D8-THR-007
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ScheduledExecutorService, scheduleAtFixedRate, scheduleWithFixedDelay]
+  prompt: |
+    A `Runnable job` takes about 30 ms per run. It is scheduled on one single-threaded
+    `ScheduledExecutorService` with `scheduleAtFixedRate(job, 0, 100, TimeUnit.MILLISECONDS)` and on another
+    with `scheduleWithFixedDelay(job, 0, 100, TimeUnit.MILLISECONDS)`. Which statement is correct?
+  options:
+    - key: a
+      text: The fixed-rate runs start at about 0, 100, 200 ms; the fixed-delay runs start at about 0, 130, 260 ms.
+      correct: true
+      why: Fixed rate spaces the start times by the period; fixed delay measures the delay from the end of one run to the start of the next.
+    - key: b
+      text: Both schedules start runs at about 0, 100, 200 ms.
+      why: That ignores the difference between the two methods — with fixed delay, each run's 30 ms is added to the gap.
+    - key: c
+      text: The fixed-rate runs start at about 0, 130, 260 ms; the fixed-delay runs start at about 0, 100, 200 ms.
+      why: The definitions are swapped — "rate" is about start-to-start, "delay" is end-to-start.
+    - key: d
+      text: If a run threw a `RuntimeException`, both executors would log it and keep running `job` at the next scheduled time.
+      why: For both periodic methods, an exception in one run suppresses all subsequent runs; the returned ScheduledFuture completes exceptionally.
+  explanation: |
+    `scheduleAtFixedRate(r, initialDelay, period, unit)` starts runs at `initialDelay`, `initialDelay + period`,
+    `initialDelay + 2 * period` …; if a run takes longer than the period, the next one starts late, but runs of
+    the same task never overlap. `scheduleWithFixedDelay(r, initialDelay, delay, unit)` waits `delay` after
+    each run **ends**. Both accept only a `Runnable`, return a `ScheduledFuture<?>`, and stop repeating if a run
+    throws. One-shot `schedule(...)` accepts a `Runnable` or a `Callable`.
+  rule: "ScheduledExecutorService: scheduleAtFixedRate uses start-to-start periods; scheduleWithFixedDelay uses end-to-start delays; if any execution throws, subsequent executions are suppressed."
+  misconception: Fixed rate and fixed delay are two names for the same behaviour.
+  hint: From which moment is the 100 ms measured in each method?
+
+- id: D8-THR-008
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [Runnable, Callable, submit, execute, lambda, overload-resolution]
+  prompt: |
+    `ex` is an `ExecutorService`. Which statements compile when placed in a method that declares no checked
+    exceptions? Choose three.
+  options:
+    - key: a
+      text: "`Future<?> f = ex.submit(() -> System.out.println(\"x\"));`"
+      correct: true
+      why: A lambda whose body is a void method call is only Runnable-compatible, so submit(Runnable) is chosen and returns Future<?>.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  try (ExecutorService ex = Executors.newSingleThreadExecutor()) {
+                      Future<?> f = ex.submit(() -> System.out.println("x"));
+                      System.out.println(f.get());
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "x\nnull" }
+    - key: b
+      text: "`Future<String> f = ex.submit(() -> System.out.println(\"x\"));`"
+      why: A void lambda cannot be a Callable<String>, so submit(Runnable) is selected and its Future<?> result is not assignable to Future<String>.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) {
+                  ExecutorService ex = Executors.newSingleThreadExecutor();
+                  Future<String> f = ex.submit(() -> System.out.println("x"));
+              }
+          }
+        expect: { compiles: false, errorContains: "incompatible types" }
+    - key: c
+      text: "`Future<Integer> f = ex.submit(() -> { Thread.sleep(10); return 1; });`"
+      correct: true
+      why: The lambda returns a value, so it is a Callable<Integer>, and Callable.call() is declared to throw Exception — the InterruptedException needs no handler.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  try (ExecutorService ex = Executors.newSingleThreadExecutor()) {
+                      Future<Integer> f = ex.submit(() -> { Thread.sleep(10); return 1; });
+                      System.out.println(f.get());
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "1" }
+    - key: d
+      text: "`ex.execute(() -> { Thread.sleep(10); });`"
+      why: execute takes only a Runnable, and Runnable.run() declares no checked exceptions, so the unhandled InterruptedException is a compile error.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) {
+                  ExecutorService ex = Executors.newSingleThreadExecutor();
+                  ex.execute(() -> { Thread.sleep(10); });
+              }
+          }
+        expect: { compiles: false, errorContains: "unreported exception java.lang.InterruptedException" }
+    - key: e
+      text: "`Future<Object> f = ex.submit(() -> { throw new Exception(\"x\"); });`"
+      correct: true
+      why: A body that cannot complete normally is both void- and value-compatible; overload resolution prefers submit(Callable) (non-void result is more specific), and Callable may throw Exception.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  try (ExecutorService ex = Executors.newSingleThreadExecutor()) {
+                      Future<Object> f = ex.submit(() -> { throw new Exception("x"); });
+                      try {
+                          f.get();
+                      } catch (ExecutionException e) {
+                          System.out.println(e.getCause().getMessage());
+                      }
+                  }
+              }
+          }
+        expect: { compiles: true, stdout: "x" }
+    - key: f
+      text: "`Callable<String> c = () -> \"hi\"; ex.execute(c);`"
+      why: execute(Runnable) has no Callable overload, and a Callable is not a Runnable.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) {
+                  ExecutorService ex = Executors.newSingleThreadExecutor();
+                  Callable<String> c = () -> "hi";
+                  ex.execute(c);
+              }
+          }
+        expect: { compiles: false, errorContains: "cannot be converted to java.lang.Runnable" }
+  explanation: |
+    `submit` is overloaded for `Runnable` and `Callable<T>`; the compiler picks one from the **shape of the
+    lambda**. A lambda that returns a value is only `Callable`-compatible; a void statement lambda is only
+    `Runnable`-compatible; a block that can only `throw` is compatible with both, and then the `Callable`
+    overload is more specific. The checked-exception rules then follow the chosen interface: `call()` may throw
+    `Exception`, `run()` may throw nothing checked. `execute` exists only for `Runnable`.
+  rule: "Runnable.run() returns void and throws no checked exceptions; Callable<V>.call() returns V and throws Exception. ExecutorService.submit is overloaded for both; Executor.execute accepts only Runnable."
+  misconception: Any lambda can be submitted as a Callable, so the declared Future type and checked exceptions don't matter.
+  hint: For each lambda, decide whether it returns a value — that decides Runnable or Callable.
+
+- id: D8-THR-009
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 60
+  tags: [thread, start, IllegalThreadStateException, thread-state]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            Thread t = new Thread(() -> System.out.println("working"));
+            t.start();
+            t.join();
+            System.out.println(t.getState());
+            t.start();
+            System.out.println("restarted");
+        }
+    }
+  options:
+    - key: a
+      text: It prints `working`, `TERMINATED`, `working`, `restarted`
+      why: A terminated thread cannot be restarted — a Thread object represents one single execution.
+    - key: b
+      text: It prints `working` and `TERMINATED`, then an `IllegalThreadStateException` is thrown
+      correct: true
+      why: The second start() finds the thread already started (here terminated) and throws the unchecked IllegalThreadStateException.
+    - key: c
+      text: It prints `working`, `TERMINATED`, `restarted` — the second `start()` is ignored
+      why: start() never silently ignores a second call; it throws.
+    - key: d
+      text: It prints `working`, `NEW`, `working`, `restarted`
+      why: join() does not reset the thread; after run() returns the thread is TERMINATED for good.
+  explanation: |
+    A `Thread` may be started at most once. `start()` checks that the thread is still `NEW`; otherwise it throws
+    `IllegalThreadStateException` (an unchecked `IllegalArgumentException` subclass) — whether the thread is
+    still running or has already terminated. To run the work again, create a new `Thread` or submit the
+    `Runnable` to an executor.
+  rule: "Thread.start() throws IllegalThreadStateException if the thread was already started; it is never legal to start a thread more than once."
+  misconception: A thread that has finished can be started again.
+  hint: Which Thread.State values allow start()?
+  java:
+    expect: { compiles: true, stdout: "working\nTERMINATED", exception: java.lang.IllegalThreadStateException }
+
+- id: D8-THR-010
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags: [ExecutorService, close, AutoCloseable, java19]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+    import java.util.concurrent.atomic.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            AtomicInteger done = new AtomicInteger();
+            ExecutorService pool = Executors.newFixedThreadPool(2);
+            for (int i = 0; i < 5; i++) {
+                pool.submit(() -> { Thread.sleep(40); return done.incrementAndGet(); });
+            }
+            pool.close();
+            System.out.println(done.get() + " " + pool.isShutdown() + " " + pool.isTerminated());
+        }
+    }
+  options:
+    - key: a
+      text: "`5 true true`"
+      correct: true
+      why: close() shuts the pool down and waits until every submitted task has finished, so all five increments are visible.
+    - key: b
+      text: "`0 true false`"
+      why: This treats close() like shutdown(), which returns immediately. close() blocks until the executor has terminated.
+    - key: c
+      text: "`2 true true`"
+      why: This treats close() like shutdownNow() — interrupting and dropping queued tasks. close() lets the queued tasks run.
+    - key: d
+      text: Compilation fails because `ExecutorService` has no `close()` method
+      why: Since Java 19 ExecutorService extends AutoCloseable and has a close() method.
+  explanation: |
+    Since Java 19, `ExecutorService` implements `AutoCloseable`. Its `close()` method performs an orderly
+    `shutdown()` and then waits until all tasks — running and queued — have completed, so afterwards
+    `isTerminated()` is `true`. Termination also creates a happens-before edge, so the counter value is
+    visible to `main`. This is what a try-with-resources block on an executor calls at the end.
+  rule: "ExecutorService.close() (Java 19+): initiates an orderly shutdown and waits for all already-submitted tasks to complete."
+  misconception: close() is just an alias for shutdown(), which does not wait.
+  hint: Does close() return before the tasks are done?
+  java:
+    expect: { compiles: true, stdout: "5 true true" }
+
+- id: D8-THR-011
+  objective: D8.1
+  lesson: conc-threads-executors
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [CompletableFuture, thenApply, thenCompose, thenCombine, generics]
+  prompt: |
+    Given these declarations, which statements compile? Choose three.
+    ```java
+    static CompletableFuture<Integer> price(String sku) {
+        return CompletableFuture.supplyAsync(() -> sku.length() * 10);
+    }
+    CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+    ```
+  options:
+    - key: a
+      text: "`CompletableFuture<Integer> p = sku.thenCompose(Main::price);`"
+      correct: true
+      why: thenCompose takes a function returning a CompletionStage<U> and flattens it to CompletableFuture<U> — the flatMap of futures.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              static CompletableFuture<Integer> price(String sku) { return CompletableFuture.supplyAsync(() -> sku.length() * 10); }
+              public static void main(String[] args) {
+                  CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+                  CompletableFuture<Integer> p = sku.thenCompose(Main::price);
+                  System.out.println(p.join());
+              }
+          }
+        expect: { compiles: true, stdout: "30" }
+    - key: b
+      text: "`CompletableFuture<Integer> p = sku.thenApply(Main::price);`"
+      why: thenApply wraps whatever the function returns, giving CompletableFuture<CompletableFuture<Integer>>, which is not a CompletableFuture<Integer>.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              static CompletableFuture<Integer> price(String sku) { return CompletableFuture.supplyAsync(() -> sku.length() * 10); }
+              public static void main(String[] args) {
+                  CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+                  CompletableFuture<Integer> p = sku.thenApply(Main::price);
+              }
+          }
+        expect: { compiles: false, errorContains: "incompatible types" }
+    - key: c
+      text: "`CompletableFuture<CompletableFuture<Integer>> p = sku.thenApply(Main::price);`"
+      correct: true
+      why: This is the honest (nested) type of thenApply with a future-returning function — legal, just awkward to use.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              static CompletableFuture<Integer> price(String sku) { return CompletableFuture.supplyAsync(() -> sku.length() * 10); }
+              public static void main(String[] args) {
+                  CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+                  CompletableFuture<CompletableFuture<Integer>> p = sku.thenApply(Main::price);
+                  System.out.println(p.join().join());
+              }
+          }
+        expect: { compiles: true, stdout: "30" }
+    - key: d
+      text: "`CompletableFuture<Integer> p = sku.thenCompose(s -> s.length());`"
+      why: thenCompose requires the function to return a CompletionStage; an int is not one. Use thenApply for plain values.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) {
+                  CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+                  CompletableFuture<Integer> p = sku.thenCompose(s -> s.length());
+              }
+          }
+        expect: { compiles: false, errorContains: "incompatible types" }
+    - key: e
+      text: "`CompletableFuture<Integer> p = sku.thenCombine(price(\"XY\"), (s, n) -> s.length() + n);`"
+      correct: true
+      why: thenCombine waits for both independent futures and combines a String and an Integer with a BiFunction into an Integer.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              static CompletableFuture<Integer> price(String sku) { return CompletableFuture.supplyAsync(() -> sku.length() * 10); }
+              public static void main(String[] args) {
+                  CompletableFuture<String> sku = CompletableFuture.completedFuture("ABC");
+                  CompletableFuture<Integer> p = sku.thenCombine(price("XY"), (s, n) -> s.length() + n);
+                  System.out.println(p.join());
+              }
+          }
+        expect: { compiles: true, stdout: "23" }
+  explanation: |
+    `thenApply(Function<T, U>)` is the *map* of futures: whatever the function returns becomes the value, so a
+    function returning `CompletableFuture<Integer>` yields a nested `CompletableFuture<CompletableFuture<Integer>>`.
+    `thenCompose(Function<T, CompletionStage<U>>)` is the *flatMap*: it requires a stage-returning function and
+    flattens the result to `CompletableFuture<U>` — use it to chain a dependent asynchronous call.
+    `thenCombine(other, BiFunction<T, U, V>)` joins two independent futures.
+  rule: "CompletionStage.thenApply(Function<? super T, ? extends U>) returns CompletionStage<U>; thenCompose(Function<? super T, ? extends CompletionStage<U>>) returns CompletionStage<U>; thenCombine(other, BiFunction) combines two stages."
+  misconception: thenApply automatically unwraps a future returned by the function.
+  hint: Write down U for each call — is the function's result itself a future?
+
+# ───────────────────────── virtual threads (lesson conc-virtual-scoped) ─────────────────────────
+
+- id: D8-VT-001
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [virtual-threads, Thread.Builder, daemon, priority, thread-name]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            Thread.Builder builder = Thread.ofVirtual().name("job-", 7);
+            Thread first = builder.unstarted(() -> { });
+            Thread second = builder.start(() -> { });
+            second.join();
+            System.out.println(first.getName() + " " + first.getState() + " " + first.isDaemon());
+            System.out.println(second.getName() + " " + second.getState() + " " + second.getPriority());
+            Thread plain = new Thread(() -> { });
+            System.out.println(plain.isVirtual() + " " + plain.isDaemon());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        job-7 NEW true
+        job-8 TERMINATED 5
+        false false
+      correct: true
+      why: name(prefix, start) numbers each thread the builder creates (7, then 8); virtual threads are always daemon with priority 5; new Thread(...) always builds a platform thread that inherits main's non-daemon status.
+    - key: b
+      text: |
+        job-7 NEW false
+        job-7 TERMINATED 5
+        false false
+      why: This assumes each builder call restarts at the start number and that virtual threads inherit main's daemon status. The counter advances per created thread, and virtual threads are always daemon.
+    - key: c
+      text: |
+        job-7 RUNNABLE true
+        job-8 TERMINATED 5
+        false false
+      why: unstarted(...) creates the thread without starting it, so it stays NEW.
+    - key: d
+      text: |
+        job-7 NEW true
+        job-8 TERMINATED 5
+        true true
+      why: The Thread constructors never create virtual threads, even on Java 21+; only the ofVirtual() builder, startVirtualThread and the virtual-thread executor do.
+  explanation: |
+    `Thread.ofVirtual()` returns a `Thread.Builder.OfVirtual`. With `name(prefix, start)` every thread the
+    builder creates gets `prefix + counter`, and the counter is incremented after each one. `unstarted` returns
+    a `NEW` thread, `start` starts it. Virtual threads are **always** daemon threads and always have
+    `NORM_PRIORITY` (5). `new Thread(...)` creates a platform thread, which inherits the daemon status of its
+    creator — `main` is non-daemon.
+  rule: "Virtual threads are always daemon and have priority Thread.NORM_PRIORITY; Thread.Builder.name(prefix, start) names successive threads prefix+start, prefix+(start+1), …; Thread constructors create platform threads."
+  misconception: Every thread created by the same builder gets the same name, and virtual threads inherit daemon status like platform threads.
+  hint: What does the builder's counter do after each thread it creates?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        job-7 NEW true
+        job-8 TERMINATED 5
+        false false
+
+- id: D8-VT-002
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [virtual-threads, Semaphore, throughput, thread-pool]
+  prompt: |
+    A Java 25 service must handle up to 10 000 concurrent requests. Each request spends about 95 % of its time
+    waiting for a remote HTTP API, and that API tolerates at most 20 concurrent calls. Which design fits best?
+  options:
+    - key: a
+      text: Run each request on `Executors.newVirtualThreadPerTaskExecutor()` and guard only the remote call with a `Semaphore(20)`.
+      correct: true
+      why: Blocking, I/O-bound work is exactly what virtual threads are for, and the semaphore limits only the fragile resource instead of the whole request.
+    - key: b
+      text: Run each request on `Executors.newFixedThreadPool(20, Thread.ofVirtual().factory())`.
+      why: Pooling virtual threads defeats their purpose — this caps the whole request handling at 20, queueing work that could have run, instead of limiting just the remote call.
+    - key: c
+      text: Run each request on `Executors.newFixedThreadPool(10_000)` of platform threads.
+      why: Ten thousand platform threads each reserve an OS thread and a large stack — expensive — and nothing limits the remote calls to 20.
+    - key: d
+      text: Process the requests with `requests.parallelStream().forEach(this::handle)`.
+      why: Parallel streams use the common ForkJoinPool sized to the CPU count; blocking I/O inside them starves the pool and gives very little concurrency.
+  explanation: |
+    Virtual threads make **blocking** cheap: when a virtual thread waits on I/O it unmounts from its carrier,
+    so thousands of mostly-waiting requests need only a handful of OS threads. They do not make CPU-bound work
+    faster. Because they are cheap, you never pool them — create one per task with
+    `newVirtualThreadPerTaskExecutor()` — and when a downstream resource needs a concurrency limit, protect
+    that resource with a `Semaphore`.
+  rule: "Virtual threads increase throughput of blocking (I/O-bound) tasks; they should not be pooled; limit concurrent access to a resource with a Semaphore."
+  misconception: A pool is still the right way to limit concurrency when using virtual threads.
+  hint: Which part of the work actually needs a limit?
+
+- id: D8-VT-003
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [virtual-threads, Thread.Builder, factory, executor]
+  prompt: |
+    Given `Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());`, which
+    statements compile **and** run `task` on a virtual thread? Choose three.
+  options:
+    - key: a
+      text: "`Thread.startVirtualThread(task);`"
+      correct: true
+      why: The static shortcut creates and starts a virtual thread — equivalent to Thread.ofVirtual().start(task).
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) throws InterruptedException {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  Thread t = Thread.startVirtualThread(task);
+                  t.join();
+              }
+          }
+        expect: { compiles: true, stdout: "virtual=true" }
+    - key: b
+      text: "`Thread.ofVirtual().unstarted(task);`"
+      why: unstarted creates a virtual thread in state NEW but never runs it; you would still need start().
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  Thread t = Thread.ofVirtual().unstarted(task);
+                  System.out.println(t.getState());
+              }
+          }
+        expect: { compiles: true, stdout: "NEW" }
+    - key: c
+      text: "`Thread.ofVirtual().daemon(true).start(task);`"
+      why: OfVirtual has no daemon(...) method — virtual threads are always daemon — so this does not compile.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  Thread.ofVirtual().daemon(true).start(task);
+              }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: d
+      text: "`try (var ex = Executors.newVirtualThreadPerTaskExecutor()) { ex.submit(task); }`"
+      correct: true
+      why: This executor starts a new virtual thread for each task, and close() at the end of the block waits for it.
+      java:
+        source: |
+          import java.util.concurrent.*;
+          public class Main {
+              public static void main(String[] args) {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  try (var ex = Executors.newVirtualThreadPerTaskExecutor()) { ex.submit(task); }
+              }
+          }
+        expect: { compiles: true, stdout: "virtual=true" }
+    - key: e
+      text: "`new Thread(task).start();`"
+      why: Thread constructors always create platform threads; this prints virtual=false.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) throws InterruptedException {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  Thread t = new Thread(task);
+                  t.start();
+                  t.join();
+              }
+          }
+        expect: { compiles: true, stdout: "virtual=false" }
+    - key: f
+      text: "`Thread.ofVirtual().factory().newThread(task).start();`"
+      correct: true
+      why: The builder's ThreadFactory creates unstarted virtual threads; start() then runs the task.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) throws InterruptedException {
+                  Runnable task = () -> System.out.println("virtual=" + Thread.currentThread().isVirtual());
+                  Thread t = Thread.ofVirtual().factory().newThread(task);
+                  t.start();
+                  t.join();
+              }
+          }
+        expect: { compiles: true, stdout: "virtual=true" }
+  explanation: |
+    There are four standard ways to get a running virtual thread: `Thread.ofVirtual().start(r)`,
+    `Thread.startVirtualThread(r)`, a `ThreadFactory` from `Thread.ofVirtual().factory()` followed by
+    `start()`, and `Executors.newVirtualThreadPerTaskExecutor()`. `unstarted(r)` only creates the thread.
+    The virtual builder has no `daemon(...)` method because virtual threads are always daemon, and the
+    `Thread` constructors only ever create platform threads.
+  rule: "Thread.ofVirtual() returns Thread.Builder.OfVirtual (start, unstarted, factory, name, inheritInheritableThreadLocals, uncaughtExceptionHandler — no daemon or priority); Thread constructors create platform threads."
+  misconception: Creating a virtual thread with unstarted() runs it, or new Thread(...) creates virtual threads on Java 21+.
+  hint: For each option ask two questions — does it compile, and is the thread both virtual and started?
+
+- id: D8-VT-004
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: multi
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [virtual-threads, daemon, jvm-exit, nondeterminism]
+  prompt: Which of the following outputs are **possible** when this program runs? Choose three.
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            Thread.ofVirtual().start(() -> System.out.println("virtual"));
+            Thread.ofPlatform().start(() -> System.out.println("platform"));
+            System.out.println("main");
+        }
+    }
+  options:
+    - key: a
+      text: |
+        main
+        platform
+      correct: true
+      why: The virtual thread is a daemon thread; the JVM may exit as soon as main and the non-daemon platform thread have finished, before "virtual" is printed.
+    - key: b
+      text: |
+        virtual
+        main
+        platform
+      correct: true
+      why: Nothing orders the three threads, so the virtual thread may well print first.
+    - key: c
+      text: |
+        main
+        virtual
+      why: The platform thread is non-daemon (it inherits main's status), so the JVM cannot exit before it has printed "platform".
+    - key: d
+      text: |
+        platform
+        main
+      correct: true
+      why: The platform thread can print before main, and the daemon virtual thread may never get to print.
+    - key: e
+      text: "`main` only"
+      why: The JVM waits for every non-daemon thread, so "platform" is always printed.
+  explanation: |
+    No `join()` or other synchronization orders these threads, so any interleaving of the lines is possible —
+    with one asymmetry: the JVM exits when the last **non-daemon** thread ends. `main` and the platform thread
+    (which inherits `main`'s non-daemon status) are always waited for, so `main` and `platform` always appear.
+    A virtual thread is **always** a daemon thread, so its line may be lost. To make it reliable, `join()` the
+    thread or use a virtual-thread executor in try-with-resources.
+  rule: "The JVM terminates when all non-daemon threads have terminated; virtual threads are always daemon threads; without synchronization the order of output from different threads is unspecified."
+  misconception: The JVM waits for every started thread, including virtual ones, before exiting.
+  hint: Which of the three threads is the JVM obliged to wait for?
+  java:
+    expect: { compiles: true, stdoutContains: ["main", "platform"] }
+
+- id: D8-VT-005
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [virtual-threads, pinning, synchronized, jep491, beyond-the-exam]
+  prompt: A virtual thread on Java 25 calls a `synchronized` method and, inside it, blocks while reading from a socket. What happens?
+  options:
+    - key: a
+      text: The virtual thread unmounts from its carrier while it waits, just as it would outside `synchronized`; the carrier can run other virtual threads.
+      correct: true
+      why: Since JDK 24 (JEP 491) monitors are implemented so that a virtual thread blocking inside synchronized — or in Object.wait() — no longer pins its carrier.
+    - key: b
+      text: The virtual thread is pinned and blocks its carrier thread for the whole wait, so code must use `ReentrantLock` instead.
+      why: That was true up to Java 23 and is still common advice in Java 21-era material, but JEP 491 removed this pinning in JDK 24.
+    - key: c
+      text: The code does not compile, because `synchronized` cannot be used in code that runs on virtual threads.
+      why: Virtual threads run ordinary Java code; nothing about synchronized is checked at compile time with respect to thread kind.
+    - key: d
+      text: The JVM throws `IllegalStateException`, because a virtual thread may not block while holding a monitor.
+      why: Blocking while holding a monitor is legal for every kind of thread; at worst it reduces throughput.
+  explanation: |
+    A virtual thread is *pinned* when it cannot unmount from its carrier while blocked. Up to Java 23, blocking
+    inside `synchronized` pinned, which is why older guides recommend `ReentrantLock` for virtual threads. JDK 24
+    (JEP 491, *Synchronize Virtual Threads without Pinning*) reworked monitors, so on Java 25 blocking inside
+    `synchronized` or in `Object.wait()` unmounts normally. Native (JNI) frames on the stack still pin.
+    This is background knowledge rather than a core exam objective.
+  rule: "JEP 491 (JDK 24): virtual threads can acquire, hold and release monitors independently of their carrier; blocking in synchronized code or Object.wait() no longer pins. Native frames still pin."
+  misconception: synchronized always pins virtual threads, so it must be replaced by ReentrantLock.
+  hint: What changed in JDK 24 for monitors and virtual threads?
+  examEligible: false
+
+# ───────────────────────── scoped values (lesson conc-virtual-scoped) ─────────────────────────
+
+- id: D8-SV-001
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ScopedValue, rebinding, orElse, call, java25]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        static final ScopedValue<String> USER = ScopedValue.newInstance();
+
+        static String greet() { return "hi " + USER.orElse("guest"); }
+
+        public static void main(String[] args) {
+            System.out.println(greet());
+            String r = ScopedValue.where(USER, "ann").call(() ->
+                    greet() + ", " + ScopedValue.where(USER, "bob").call(Main::greet) + ", " + greet());
+            System.out.println(r);
+            System.out.println(USER.isBound());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        hi guest
+        hi ann, hi bob, hi ann
+        false
+      correct: true
+      why: The nested binding shadows "ann" only while the inner call runs; afterwards the outer binding is visible again, and after the outer call nothing is bound.
+    - key: b
+      text: |
+        hi guest
+        hi ann, hi bob, hi bob
+        false
+      why: This treats the nested where(...) like ThreadLocal.set — a permanent overwrite. A nested binding ends when its call returns.
+    - key: c
+      text: |
+        hi guest
+        hi ann, hi ann, hi ann
+        false
+      why: A key that is already bound can be rebound in a nested scope; the innermost binding wins while it is active.
+    - key: d
+      text: Compilation fails because `call(...)` throws `Exception`, which `main` neither catches nor declares
+      why: ScopedValue.Carrier.call takes a CallableOp<T, X> whose exception type is inferred from the lambda — here no checked exception, so nothing must be handled.
+  explanation: |
+    `ScopedValue.where(KEY, value).call(op)` binds `KEY` for exactly the dynamic extent of `op` and returns its
+    result. Methods called from inside — like `greet()` — read the binding without a parameter. A nested
+    `where` on the same key **shadows** the outer value only during the nested call. `orElse` returns the
+    fallback when nothing is bound. `call` takes a `ScopedValue.CallableOp<T, X extends Throwable>`, so a lambda
+    that throws no checked exception needs no handler. Scoped values are final in Java 25 (JEP 506).
+  rule: "ScopedValue (Java 25, JEP 506): where(key, value).run/call binds for the duration of the call only; a nested binding of the same key shadows the outer one inside the nested call; orElse returns the argument when unbound."
+  misconception: A nested binding permanently replaces the outer value, like ThreadLocal.set().
+  hint: Draw the three scopes as nested boxes and ask which value is visible in each.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        hi guest
+        hi ann, hi bob, hi ann
+        false
+
+- id: D8-SV-002
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [ScopedValue, get, NoSuchElementException, java25]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        static final ScopedValue<String> TENANT = ScopedValue.newInstance();
+
+        static String table() { return TENANT.get() + "_orders"; }
+
+        public static void main(String[] args) {
+            ScopedValue.where(TENANT, "acme").run(() -> System.out.println(table()));
+            System.out.println(TENANT.isBound());
+            System.out.println(table());
+        }
+    }
+  options:
+    - key: a
+      text: It prints `acme_orders`, `false`, `null_orders`
+      why: Unlike ThreadLocal.get(), ScopedValue.get() never returns null to mean "not set" — it throws.
+    - key: b
+      text: It prints `acme_orders`, `true`, `acme_orders`
+      why: A binding is not stored in the thread permanently; it ends when run(...) returns.
+    - key: c
+      text: It prints `acme_orders` and `false`, then a `NoSuchElementException` is thrown
+      correct: true
+      why: After run returns, TENANT is unbound again, and get() on an unbound scoped value throws NoSuchElementException.
+    - key: d
+      text: Compilation fails because `TENANT.get()` is used outside a `where(...)` block
+      why: The compiler does not track bindings; table() is an ordinary method and the problem only shows up at runtime.
+  explanation: |
+    A `ScopedValue` binding lives exactly as long as the `run`/`call` that created it. Outside, `isBound()` is
+    `false` and `get()` throws `NoSuchElementException` ("ScopedValue not bound"). Use `isBound()`,
+    `orElse(other)` or `orElseThrow(supplier)` when a method may legitimately run without a binding.
+  rule: "ScopedValue.get() throws NoSuchElementException if the scoped value is not bound in the current thread."
+  misconception: An unbound ScopedValue reads as null, like an unset ThreadLocal.
+  hint: What does get() do when no binding is active?
+  java:
+    expect: { compiles: true, stdout: "acme_orders\nfalse", exception: java.util.NoSuchElementException }
+
+- id: D8-SV-003
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ScopedValue, ThreadLocal, InheritableThreadLocal, java25]
+  prompt: Which statements correctly contrast `ThreadLocal` and `ScopedValue` in Java 25? Choose three.
+  options:
+    - key: a
+      text: A `ScopedValue` has no `set` method; a different value can only be bound for a nested scope.
+      correct: true
+      why: Bindings are immutable and one-way — information flows down the call stack only through where(...).run/call.
+    - key: b
+      text: Reading an unset `ThreadLocal` returns `null` (or its `withInitial` value), while `get()` on an unbound `ScopedValue` throws `NoSuchElementException`.
+      correct: true
+      why: That difference makes a missing ScopedValue binding fail fast instead of spreading nulls.
+    - key: c
+      text: A thread started inside `where(...).run(...)` automatically sees the binding, like an `InheritableThreadLocal`.
+      why: New threads and executor tasks do not inherit scoped-value bindings; only StructuredTaskScope forks (a preview API in Java 25) do.
+    - key: d
+      text: A `ThreadLocal` value stays until `remove()` is called or the thread dies, which can leak in pooled threads; a `ScopedValue` binding ends automatically when `run`/`call` returns.
+      correct: true
+      why: Bounded lifetime is one of the main design goals of scoped values.
+    - key: e
+      text: "`ScopedValue` is still a preview API in Java 25 and needs `--enable-preview`."
+      why: Scoped values were previewed in Java 21–24 and became final in Java 25 (JEP 506).
+  explanation: |
+    `ThreadLocal` is a mutable per-thread variable: `set` anywhere, any number of times, lifetime until
+    `remove()` or thread death, `InheritableThreadLocal` copies to child threads. `ScopedValue` (final in Java
+    25, JEP 506) is an immutable binding with a **bounded** lifetime — the dynamic extent of `run`/`call` — no
+    `set`, a fail-fast `get()`, and no inheritance by ordinary threads. With millions of virtual threads, the
+    cheap shared binding is far lighter than per-thread copies.
+  rule: "ScopedValue: immutable binding via where(...).run/call, bounded lifetime, get() throws NoSuchElementException when unbound, not inherited by new threads (only by StructuredTaskScope forks); final in Java 25 (JEP 506)."
+  misconception: ScopedValue is just a renamed ThreadLocal with the same mutability and inheritance.
+  hint: Compare how each one is written, how long the value lives and what a child thread sees.
+
+- id: D8-SV-004
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [ScopedValue, inheritance, virtual-threads, CallableOp, java25]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        static final ScopedValue<String> TRACE = ScopedValue.newInstance();
+
+        public static void main(String[] args) throws InterruptedException {
+            ScopedValue.where(TRACE, "t-42").call(() -> {
+                Thread child = Thread.ofVirtual().start(() ->
+                        System.out.println("child: " + TRACE.orElse("none")));
+                child.join();
+                String id = TRACE.get();
+                Thread rebound = Thread.ofPlatform().start(() ->
+                        ScopedValue.where(TRACE, id + "/sub").run(() ->
+                                System.out.println("rebound: " + TRACE.get())));
+                rebound.join();
+                System.out.println("parent: " + TRACE.get());
+                return null;
+            });
+        }
+    }
+  options:
+    - key: a
+      text: |
+        child: none
+        rebound: t-42/sub
+        parent: t-42
+      correct: true
+      why: The child thread does not inherit the binding; the second thread binds the value itself; the parent's binding is unaffected by what another thread binds.
+    - key: b
+      text: |
+        child: t-42
+        rebound: t-42/sub
+        parent: t-42
+      why: This assumes threads started inside a binding inherit it, like InheritableThreadLocal. Only StructuredTaskScope forks inherit scoped values.
+    - key: c
+      text: |
+        child: none
+        rebound: t-42/sub
+        parent: t-42/sub
+      why: Bindings belong to the thread that made them; a binding in another thread can never change what the parent sees.
+    - key: d
+      text: Compilation fails because the lambda passed to `call` throws `InterruptedException`
+      why: call takes a CallableOp<T, X extends Throwable>; X is inferred as InterruptedException, so call(...) simply throws it and main declares it.
+  explanation: |
+    A scoped-value binding is visible to the thread that called `run`/`call` and to the methods it calls — not
+    to threads it starts, whether virtual or platform, nor to executor tasks. To pass the value on, read it
+    (`TRACE.get()`) and **re-bind** it in the new thread. Each thread's bindings are independent. Note also
+    that `call` accepts a `CallableOp<T, X>`: because this lambda can throw `InterruptedException` (from
+    `join()`), `call(...)` throws exactly that checked exception. The `join()` calls make the order
+    deterministic.
+  rule: "ScopedValue bindings are per thread: threads created inside the dynamic scope (other than StructuredTaskScope forks) do not inherit them; Carrier.call(CallableOp<T, X>) throws X."
+  misconception: A thread started inside a ScopedValue binding inherits the binding.
+  hint: Which thread created each binding, and which thread reads it?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        child: none
+        rebound: t-42/sub
+        parent: t-42
+
+- id: D8-SV-005
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [ScopedValue, CallableOp, checked-exceptions, api, java25]
+  prompt: |
+    Given these members of `Main`, which statements compile when placed in
+    `public static void main(String[] args) throws IOException`? Choose two.
+    ```java
+    static final ScopedValue<String> USER = ScopedValue.newInstance();
+    static final ScopedValue<Integer> LEVEL = ScopedValue.newInstance();
+    static String load() throws IOException { return "data"; }
+    ```
+  options:
+    - key: a
+      text: "`ScopedValue<String> k = new ScopedValue<>();`"
+      why: ScopedValue has no accessible constructor; instances come from the factory method ScopedValue.newInstance().
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              public static void main(String[] args) throws IOException {
+                  ScopedValue<String> k = new ScopedValue<>();
+              }
+          }
+        expect: { compiles: false, errorContains: "constructor ScopedValue" }
+    - key: b
+      text: "`USER.set(\"ann\");`"
+      why: There is no set method — a scoped value can only be bound with where(...).run/call.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static final ScopedValue<String> USER = ScopedValue.newInstance();
+              public static void main(String[] args) throws IOException {
+                  USER.set("ann");
+              }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: c
+      text: "`String s = ScopedValue.where(USER, \"ann\").call(() -> load());`"
+      correct: true
+      why: CallableOp<T, X> infers X = IOException from the lambda, so call(...) throws IOException — which main declares.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static final ScopedValue<String> USER = ScopedValue.newInstance();
+              static String load() throws IOException { return "data"; }
+              public static void main(String[] args) throws IOException {
+                  String s = ScopedValue.where(USER, "ann").call(() -> load());
+                  System.out.println(s);
+              }
+          }
+        expect: { compiles: true, stdout: "data" }
+    - key: d
+      text: "`ScopedValue.where(USER, \"ann\").where(LEVEL, 3).run(() -> System.out.println(USER.get() + LEVEL.get()));`"
+      correct: true
+      why: Carrier.where adds another binding, so several scoped values can be bound for the same run.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static final ScopedValue<String> USER = ScopedValue.newInstance();
+              static final ScopedValue<Integer> LEVEL = ScopedValue.newInstance();
+              public static void main(String[] args) throws IOException {
+                  ScopedValue.where(USER, "ann").where(LEVEL, 3).run(() -> System.out.println(USER.get() + LEVEL.get()));
+              }
+          }
+        expect: { compiles: true, stdout: "ann3" }
+    - key: e
+      text: "`String s = ScopedValue.where(USER, \"ann\").run(() -> USER.get());`"
+      why: run takes a Runnable and returns void; use call(...) to get a result.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static final ScopedValue<String> USER = ScopedValue.newInstance();
+              public static void main(String[] args) throws IOException {
+                  String s = ScopedValue.where(USER, "ann").run(() -> USER.get());
+              }
+          }
+        expect: { compiles: false, errorContains: "incompatible types" }
+    - key: f
+      text: "`ScopedValue.where(USER, \"ann\").run(() -> load());`"
+      why: run takes a plain Runnable, whose run() cannot throw checked exceptions — load()'s IOException is unreported inside the lambda, even though main declares it.
+      java:
+        source: |
+          import java.io.*;
+          public class Main {
+              static final ScopedValue<String> USER = ScopedValue.newInstance();
+              static String load() throws IOException { return "data"; }
+              public static void main(String[] args) throws IOException {
+                  ScopedValue.where(USER, "ann").run(() -> load());
+              }
+          }
+        expect: { compiles: false, errorContains: "unreported exception java.io.IOException" }
+  explanation: |
+    The `ScopedValue` API is deliberately small: `newInstance()` creates a key, `where(key, value)` returns a
+    `Carrier` that can bind more keys with `.where(...)`, and the carrier runs code with `run(Runnable)` (no
+    result, no checked exceptions) or `call(CallableOp<T, X>)` (returns `T`, throws exactly the `X` that the
+    lambda throws). There is no constructor and no `set`. Scoped values are final in Java 25 (JEP 506).
+  rule: "ScopedValue.newInstance(); ScopedValue.where(key, value) returns a Carrier; Carrier.where adds bindings; Carrier.run(Runnable); Carrier.call(CallableOp<? extends R, X>) throws X."
+  misconception: run and call are interchangeable, and checked exceptions inside either lambda are covered by the enclosing method's throws clause.
+  hint: Check each lambda against its target — Runnable or CallableOp.
+
+- id: D8-SV-006
+  objective: D8.1
+  lesson: conc-virtual-scoped
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [ScopedValue, null-binding, orElse, nested-binding, java25]
+  prompt: What is the output of the following program?
+  code: |
+    public class Main {
+        static final ScopedValue<String> NAME = ScopedValue.newInstance();
+
+        public static void main(String[] args) {
+            ScopedValue.where(NAME, "outer").run(() -> {
+                ScopedValue.where(NAME, null).run(() ->
+                        System.out.print(NAME.isBound() + ":" + NAME.get() + " "));
+                System.out.print(NAME.get() + " ");
+            });
+            try {
+                System.out.print(NAME.orElse(null));
+            } catch (NullPointerException e) {
+                System.out.print("NPE");
+            }
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`true:null outer NPE`"
+      correct: true
+      why: Binding null is allowed and counts as bound; the outer value returns after the nested run; orElse rejects a null fallback.
+    - key: b
+      text: "`true:outer outer NPE`"
+      why: This assumes a null binding is ignored and falls back to the outer value. A null binding shadows the outer one like any other value.
+    - key: c
+      text: "`false:null outer null`"
+      why: This treats binding null as "unbinding" and assumes orElse(null) is legal. The key is bound (to null), and orElse throws NullPointerException for a null argument.
+    - key: d
+      text: "`true:null outer null`"
+      why: In Java 25 the fallback passed to orElse must not be null — orElse(null) throws NullPointerException.
+    - key: e
+      text: A `NullPointerException` is thrown by `where(NAME, null)` before anything is printed
+      why: In Java 25, where(key, value) accepts a null value; only the key must be non-null.
+  explanation: |
+    In Java 25 a scoped value may be **bound to `null`**: it then counts as bound and `get()` returns `null`.
+    The nested binding shadows `"outer"` only for the inner `run`; afterwards `get()` returns `"outer"` again.
+    Outside every binding, `orElse(other)` returns `other` — but `other` itself must not be `null`, so
+    `orElse(null)` throws `NullPointerException`.
+  rule: "ScopedValue (Java 25): where(key, value) permits a null value; orElse(other) throws NullPointerException if other is null; nested bindings shadow outer ones for their dynamic extent."
+  misconception: Binding null is the same as not binding, and orElse(null) is a harmless way to get null.
+  hint: Is a key bound to null "bound"? And what does orElse require of its argument?
+  java:
+    expect: { compiles: true, stdout: "true:null outer NPE" }

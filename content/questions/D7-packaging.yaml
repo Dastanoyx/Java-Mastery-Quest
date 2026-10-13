@@ -1,0 +1,2945 @@
+# D7 — Packaging and Deploying Java Code (D7.1 modules, services & module imports; D7.2 compile, package, run)
+# Module-mode checks (`modules: true`) are compiled with javac --module-source-path on JDK 25 and run with
+# java -p out -m <mainModule>. For those questions, `code` shows exactly the files listed in `java.files`
+# (one `// file:` header per file) — keep both in sync when editing.
+
+- id: D7-MOD-001
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 75
+  tags:
+  - module-info
+  - exports
+  - accessibility
+  prompt: The two modules below are compiled together with `javac -d out --module-source-path src ...` and launched with `java -p out -m shop/shop.Main`. What is the result?
+  code: |
+    // file: inventory/module-info.java
+    module inventory {
+        exports inventory.api;
+    }
+
+    // file: inventory/inventory/api/Stock.java
+    package inventory.api;
+
+    public class Stock {
+        public static int count(String sku) { return inventory.impl.Db.lookup(sku); }
+    }
+
+    // file: inventory/inventory/impl/Db.java
+    package inventory.impl;
+
+    public class Db {
+        public static int lookup(String sku) { return sku.length(); }
+    }
+
+    // file: shop/module-info.java
+    module shop {
+        requires inventory;
+    }
+
+    // file: shop/shop/Main.java
+    package shop;
+
+    import inventory.api.Stock;
+    import inventory.impl.Db;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Stock.count("ab") + Db.lookup("abc"));
+        }
+    }
+  options:
+  - key: a
+    text: '`5`'
+    why: This is what happens on the class path, where `public` means visible everywhere. In a module, a public type is only accessible to other modules if its package is exported.
+  - key: b
+    text: Compilation fails because package `inventory.impl` is not exported by `inventory`
+    correct: true
+    why: '`Db` is public, but `inventory` exports only `inventory.api`, so the package `inventory.impl` is not visible to `shop` — javac rejects the import.'
+  - key: c
+    text: It compiles, but an `IllegalAccessError` is thrown when `Db.lookup` is called
+    why: Module boundaries are enforced by the compiler as well as the JVM; the compiler sees the module-info files and stops before any code runs.
+  - key: d
+    text: Compilation fails because `shop` must also declare `requires inventory.impl;`
+    why: '`requires` names a module, never a package. No `requires` directive can reach a package that its module does not export.'
+  explanation: |
+    In a named module, a type is accessible to code in another module only if three things hold: the type
+    is `public`, its package is **exported** (to everyone or to that module), and the using module
+    **reads** the declaring module. `shop` reads `inventory` and `Stock` is in an exported package, but
+    `inventory.impl` is not exported, so javac reports *package inventory.impl is not visible* at the
+    import. Code inside `inventory` (like `Stock.count`) can still use `Db` freely.
+  rule: Accessibility across modules = public type + package exported to the reading module + readability (requires). A non-exported package is invisible to other modules at compile time and at run time.
+  misconception: '`public` still means accessible from everywhere once a class is in a module.'
+  hint: Look at which packages `inventory` exports.
+  examEligible: true
+  java:
+    modules: true
+    files:
+    - name: inventory/module-info.java
+      content: |
+        module inventory {
+            exports inventory.api;
+        }
+    - name: inventory/inventory/api/Stock.java
+      content: |
+        package inventory.api;
+
+        public class Stock {
+            public static int count(String sku) { return inventory.impl.Db.lookup(sku); }
+        }
+    - name: inventory/inventory/impl/Db.java
+      content: |
+        package inventory.impl;
+
+        public class Db {
+            public static int lookup(String sku) { return sku.length(); }
+        }
+    - name: shop/module-info.java
+      content: |
+        module shop {
+            requires inventory;
+        }
+    - name: shop/shop/Main.java
+      content: |
+        package shop;
+
+        import inventory.api.Stock;
+        import inventory.impl.Db;
+
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println(Stock.count("ab") + Db.lookup("abc"));
+            }
+        }
+    expect:
+      compiles: false
+      errorContains: is not visible
+
+- id: D7-MOD-002
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags:
+  - requires-transitive
+  - implied-readability
+  - qualified-exports
+  prompt: The three modules are compiled with `--module-source-path` and launched with `java -p out -m app/app.Main`. What is the output?
+  code: |
+    // file: core/module-info.java
+    module core {
+        exports core.model;
+        exports core.internal to service;
+    }
+
+    // file: core/core/model/Money.java
+    package core.model;
+
+    public record Money(long cents) { }
+
+    // file: core/core/internal/Rates.java
+    package core.internal;
+
+    public class Rates {
+        public static long fee() { return 25; }
+    }
+
+    // file: service/module-info.java
+    module service {
+        requires transitive core;
+        exports service;
+    }
+
+    // file: service/service/Billing.java
+    package service;
+
+    import core.internal.Rates;
+    import core.model.Money;
+
+    public class Billing {
+        public static Money charge(long cents) { return new Money(cents + Rates.fee()); }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires service;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import core.model.Money;
+    import service.Billing;
+
+    public class Main {
+        public static void main(String[] args) {
+            Money m = Billing.charge(100);
+            System.out.println(m.cents());
+        }
+    }
+  options:
+  - key: a
+    text: '`125`'
+    correct: true
+    why: '`requires transitive core` in `service` gives every module that reads `service` implied readability of `core`, so `app` may name `Money`; `Billing` (in `service`) may use the qualified export `core.internal`.'
+  - key: b
+    text: Compilation fails because `app` does not declare `requires core;`
+    why: That would be true with a plain `requires core` in `service`. `requires transitive` makes `app` read `core` implicitly.
+  - key: c
+    text: Compilation fails because `core.internal` is exported only to `service`, yet `app` calls code that uses it
+    why: Access is checked where a type is *named*. Only `Billing` (in module `service`) names `Rates`, and the qualified export allows exactly that.
+  - key: d
+    text: It compiles, but an `IllegalAccessError` is thrown because `app` reaches `core.internal` indirectly
+    why: Calling a public method of an exported class is fine even if that method internally uses packages you cannot access; there is no transitive access check at run time.
+  explanation: |
+    `requires transitive core` declares an **implied readability** edge: any module that reads `service`
+    also reads `core`. So `app` can import and use `core.model.Money` without its own `requires core`.
+    The qualified export `exports core.internal to service` lets code in `service` use `Rates`; `app` never
+    names `Rates`, so the restriction does not affect it. Use `requires transitive` whenever a type of the
+    required module appears in your own exported API (here `Money` is the return type of `Billing.charge`).
+  rule: If module B declares `requires transitive A`, every module that reads B also reads A (implied readability). `exports p to M` makes p accessible only to the named modules.
+  misconception: Every module must explicitly `requires` each module whose types it names, even when they come through another module's API.
+  hint: What does `transitive` add to the readability graph of modules that read `service`?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: core/module-info.java
+      content: |
+        module core {
+            exports core.model;
+            exports core.internal to service;
+        }
+    - name: core/core/model/Money.java
+      content: |
+        package core.model;
+
+        public record Money(long cents) { }
+    - name: core/core/internal/Rates.java
+      content: |
+        package core.internal;
+
+        public class Rates {
+            public static long fee() { return 25; }
+        }
+    - name: service/module-info.java
+      content: |
+        module service {
+            requires transitive core;
+            exports service;
+        }
+    - name: service/service/Billing.java
+      content: |
+        package service;
+
+        import core.internal.Rates;
+        import core.model.Money;
+
+        public class Billing {
+            public static Money charge(long cents) { return new Money(cents + Rates.fee()); }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires service;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import core.model.Money;
+        import service.Billing;
+
+        public class Main {
+            public static void main(String[] args) {
+                Money m = Billing.charge(100);
+                System.out.println(m.cents());
+            }
+        }
+    expect:
+      compiles: true
+      stdout: '125'
+
+- id: D7-MOD-003
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags:
+  - requires
+  - readability
+  - var
+  - accessibility
+  prompt: This time `service` uses a plain `requires core;`. The modules are compiled together and launched with `java -p out -m app/app.Main`. What is the output?
+  code: |
+    // file: core/module-info.java
+    module core {
+        exports core.model;
+        exports core.internal to service;
+    }
+
+    // file: core/core/model/Money.java
+    package core.model;
+
+    public record Money(long cents) { }
+
+    // file: core/core/internal/Rates.java
+    package core.internal;
+
+    public class Rates {
+        public static long fee() { return 25; }
+    }
+
+    // file: service/module-info.java
+    module service {
+        requires core;
+        exports service;
+    }
+
+    // file: service/service/Billing.java
+    package service;
+
+    import core.internal.Rates;
+    import core.model.Money;
+
+    public class Billing {
+        public static Money charge(long cents) { return new Money(cents + Rates.fee()); }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires service;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import service.Billing;
+
+    public class Main {
+        public static void main(String[] args) {
+            var m = Billing.charge(100);
+            System.out.println(m);
+        }
+    }
+  options:
+  - key: a
+    text: '`Money[cents=125]`'
+    correct: true
+    why: '`app` never *names* a type from `core`: `var` infers `Money` without a type name in the source, and `println(Object)` only uses `Object.toString()`. Readability is only needed to name types or access their members.'
+  - key: b
+    text: Compilation fails at `var m = ...` because `app` does not read `core`
+    why: '`var` does not name the type in source code, and readability restricts what you can *refer to*, not which objects you may hold. A declaration `Money m = ...` would fail.'
+  - key: c
+    text: Compilation fails at `System.out.println(m)` because `Money.toString()` is not accessible from `app`
+    why: '`m` is passed to `println(Object)`, and the call resolves `toString()` on `Object` dynamically. Only invoking a `Money` member directly, such as `m.cents()`, needs access to `core.model`.'
+  - key: d
+    text: It compiles, but `IllegalAccessError` is thrown at run time
+    why: The JVM checks access when code links to a class or member it names; `app`'s bytecode only references `Billing` and `Object`/`PrintStream` members.
+  explanation: |
+    Readability and accessibility govern which types and members code can **refer to**. Here `app` refers to
+    `service.Billing` (readable, exported) and to `PrintStream.println(Object)`; the inferred type of `var m`
+    is `Money`, but no source in `app` names it. Had `app` written `Money m = ...` or `m.cents()`, javac would
+    report that `core.model` is not accessible because `app` does not read `core`. This is exactly why an API
+    that exposes `Money` should say `requires transitive core` — javac's `-Xlint:exports` warns about it.
+  rule: Readability (requires) is needed to name a type or access its members; holding a reference whose static type comes from an unread module, without naming it, is allowed.
+  misconception: Any use of an object whose class lives in an unread module is a compile error.
+  hint: Which types does the source of `app` actually name?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: core/module-info.java
+      content: |
+        module core {
+            exports core.model;
+            exports core.internal to service;
+        }
+    - name: core/core/model/Money.java
+      content: |
+        package core.model;
+
+        public record Money(long cents) { }
+    - name: core/core/internal/Rates.java
+      content: |
+        package core.internal;
+
+        public class Rates {
+            public static long fee() { return 25; }
+        }
+    - name: service/module-info.java
+      content: |
+        module service {
+            requires core;
+            exports service;
+        }
+    - name: service/service/Billing.java
+      content: |
+        package service;
+
+        import core.internal.Rates;
+        import core.model.Money;
+
+        public class Billing {
+            public static Money charge(long cents) { return new Money(cents + Rates.fee()); }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires service;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import service.Billing;
+
+        public class Main {
+            public static void main(String[] args) {
+                var m = Billing.charge(100);
+                System.out.println(m);
+            }
+        }
+    expect:
+      compiles: true
+      stdout: Money[cents=125]
+
+- id: D7-MOD-004
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - exports
+  - qualified-exports
+  - import-module
+  - imports
+  prompt: Module `core` is declared as shown, and module `app` declares only `requires core;`. Each option is the import section of `app/app/Main.java`, whose `main` then uses the imported type by its simple name (`new Money(5)` or `Rates.fee()`). Which options compile? Choose three.
+  code: |
+    // file: core/module-info.java
+    module core {
+        exports core.model;
+        exports core.internal to service;
+    }
+
+    // file: core/core/model/Money.java
+    package core.model;
+
+    public record Money(long cents) { }
+
+    // file: core/core/internal/Rates.java
+    package core.internal;
+
+    public class Rates {
+        public static long fee() { return 25; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires core;
+    }
+  options:
+  - key: a
+    text: '`import core.model.Money;` — then uses `Money`'
+    correct: true
+    why: '`core.model` is exported to all modules and `app` reads `core`.'
+    java:
+      modules: true
+      files:
+      - name: core/module-info.java
+        content: |
+          module core {
+              exports core.model;
+              exports core.internal to service;
+          }
+      - name: core/core/model/Money.java
+        content: |
+          package core.model;
+
+          public record Money(long cents) { }
+      - name: core/core/internal/Rates.java
+        content: |
+          package core.internal;
+
+          public class Rates {
+              public static long fee() { return 25; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires core;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import core.model.Money;
+
+          public class Main {
+              public static void main(String[] args) {
+                  System.out.println(new Money(5));
+              }
+          }
+      expect:
+        compiles: true
+  - key: b
+    text: '`import core.model.*;` — then uses `Money`'
+    correct: true
+    why: A type-import-on-demand of an exported, readable package is fine.
+    java:
+      modules: true
+      files:
+      - name: core/module-info.java
+        content: |
+          module core {
+              exports core.model;
+              exports core.internal to service;
+          }
+      - name: core/core/model/Money.java
+        content: |
+          package core.model;
+
+          public record Money(long cents) { }
+      - name: core/core/internal/Rates.java
+        content: |
+          package core.internal;
+
+          public class Rates {
+              public static long fee() { return 25; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires core;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import core.model.*;
+
+          public class Main {
+              public static void main(String[] args) {
+                  System.out.println(new Money(5));
+              }
+          }
+      expect:
+        compiles: true
+  - key: c
+    text: '`import module core;` — then uses `Money`'
+    correct: true
+    why: A module import declaration (final in Java 25, JEP 511) imports the public top-level types of every package `core` exports to `app` — here `core.model`.
+    java:
+      modules: true
+      files:
+      - name: core/module-info.java
+        content: |
+          module core {
+              exports core.model;
+              exports core.internal to service;
+          }
+      - name: core/core/model/Money.java
+        content: |
+          package core.model;
+
+          public record Money(long cents) { }
+      - name: core/core/internal/Rates.java
+        content: |
+          package core.internal;
+
+          public class Rates {
+              public static long fee() { return 25; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires core;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import module core;
+
+          public class Main {
+              public static void main(String[] args) {
+                  System.out.println(new Money(5));
+              }
+          }
+      expect:
+        compiles: true
+  - key: d
+    text: '`import core.internal.Rates;` — then uses `Rates`'
+    why: '`core.internal` is exported only `to service`; for `app` it behaves like a non-exported package.'
+    java:
+      modules: true
+      files:
+      - name: core/module-info.java
+        content: |
+          module core {
+              exports core.model;
+              exports core.internal to service;
+          }
+      - name: core/core/model/Money.java
+        content: |
+          package core.model;
+
+          public record Money(long cents) { }
+      - name: core/core/internal/Rates.java
+        content: |
+          package core.internal;
+
+          public class Rates {
+              public static long fee() { return 25; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires core;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import core.internal.Rates;
+
+          public class Main {
+              public static void main(String[] args) {
+                  System.out.println(Rates.fee());
+              }
+          }
+      expect:
+        compiles: false
+        errorContains: is not visible
+  - key: e
+    text: '`import core.internal.*;` — then uses `Rates`'
+    why: 'An on-demand import does not bypass module encapsulation: javac reports that the package is not visible to `app`.'
+    java:
+      modules: true
+      files:
+      - name: core/module-info.java
+        content: |
+          module core {
+              exports core.model;
+              exports core.internal to service;
+          }
+      - name: core/core/model/Money.java
+        content: |
+          package core.model;
+
+          public record Money(long cents) { }
+      - name: core/core/internal/Rates.java
+        content: |
+          package core.internal;
+
+          public class Rates {
+              public static long fee() { return 25; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires core;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import core.internal.*;
+
+          public class Main {
+              public static void main(String[] args) {
+                  System.out.println(Rates.fee());
+              }
+          }
+      expect:
+        compiles: false
+        errorContains: is not visible
+  explanation: |
+    `exports core.model;` is an unqualified export: every module that reads `core` can access its public
+    types, whichever import form it uses — single-type, on-demand, or Java 25's `import module core;`.
+    `exports core.internal to service;` is a **qualified export**: only `service` gets access, so for `app`
+    the package is simply not visible and both import forms fail. A qualified export naming a module that
+    does not exist only produces a warning.
+  rule: '`exports p;` exposes p''s public types to all modules that read the module; `exports p to M1, M2;` exposes them only to the listed modules.'
+  misconception: Importing with a wildcard (or a module import) reaches packages that a single-type import cannot.
+  hint: To which modules is `core.internal` exported?
+  examEligible: true
+
+- id: D7-MOD-005
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 60
+  tags:
+  - opens
+  - reflection
+  - module-info
+  prompt: An ORM framework in module `orm` must read and write **private** fields of the entity classes in package `com.shop.entity` (module `com.shop`) with `setAccessible(true)`. No module — not even `orm` — should be able to compile against that package. Which single directive in `com.shop`'s module declaration grants exactly this?
+  options:
+  - key: a
+    text: '`exports com.shop.entity to orm;`'
+    why: A qualified export grants compile-time and run-time access to *public* members only; `setAccessible(true)` on a private field would still throw `InaccessibleObjectException`, and `orm` could compile against the package.
+  - key: b
+    text: '`opens com.shop.entity to orm;`'
+    correct: true
+    why: '`opens` grants run-time deep reflection (all members, including private) without granting compile-time access, and `to orm` restricts it to that module.'
+  - key: c
+    text: '`opens com.shop.entity;`'
+    why: This allows deep reflection, but by every module — more than required.
+  - key: d
+    text: '`requires orm;`'
+    why: '`requires` makes `com.shop` read `orm`; it grants `orm` nothing at all in `com.shop`.'
+  explanation: |
+    `exports` is about **compile-time and run-time access to public types and their public/protected
+    members**. `opens` is about **run-time reflective access to all members**, including private ones, via
+    `setAccessible` — and it does not make the package visible to the compiler. The qualified forms
+    (`exports ... to`, `opens ... to`) restrict the grant to named modules. `open module` opens every package
+    to every module at run time.
+  rule: '`opens p [to M...]` allows deep reflection on p at run time only; `exports p [to M...]` allows compile-time and run-time access to public members of p.'
+  misconception: Exporting a package is enough for frameworks to reflect on its private fields.
+  examEligible: true
+
+- id: D7-MOD-006
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags:
+  - reflection
+  - setAccessible
+  - InaccessibleObjectException
+  - exports
+  prompt: The modules are compiled together and launched with `java -p out -m app/app.Main`. What is the result?
+  code: |
+    // file: model/module-info.java
+    module model {
+        exports model;
+    }
+
+    // file: model/model/User.java
+    package model;
+
+    public class User {
+        private String name = "ana";
+        public String getName() { return name; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires model;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import java.lang.reflect.Field;
+    import model.User;
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            User u = new User();
+            System.out.println(User.class.getMethod("getName").invoke(u));
+            Field f = User.class.getDeclaredField("name");
+            System.out.println("found " + f.getName());
+            f.setAccessible(true);
+            f.set(u, "bob");
+            System.out.println(u.getName());
+        }
+    }
+  options:
+  - key: a
+    text: It prints `ana`, `found name` and `bob`
+    why: That is the class-path behaviour. In a named module that is only exported, `setAccessible(true)` on a private member is refused.
+  - key: b
+    text: It prints `ana` and `found name`, then throws `InaccessibleObjectException`
+    correct: true
+    why: Exporting gives reflective access to public members (so `getMethod(...).invoke` works) and lookup of declared members still works, but suppressing access checks on a private field requires the package to be opened to `app`.
+  - key: c
+    text: It prints `ana`, then throws `NoSuchFieldException`
+    why: '`getDeclaredField` finds private fields regardless of modules; only *using* them is restricted.'
+  - key: d
+    text: Compilation fails because `Main` refers to the private field `name`
+    why: The field is named only inside a string; the compiler does not check reflective lookups.
+  explanation: |
+    Reflection obeys module encapsulation. Because `model` **exports** `model`, `app` can reflectively call the
+    public `getName()`, and `getDeclaredField("name")` still returns the `Field` object. But
+    `setAccessible(true)` on a private member succeeds only if the package is **open** to the caller's module
+    (`opens model;`, `opens model to app;` or `open module model`). Otherwise it throws
+    `java.lang.reflect.InaccessibleObjectException` (an unchecked exception, since Java 9);
+    `trySetAccessible()` would return `false` instead.
+  rule: AccessibleObject.setAccessible(true) on a member of a type in another named module requires that the package be open to the caller's module; otherwise InaccessibleObjectException is thrown.
+  misconception: '`setAccessible(true)` always works for code that has permission to load the class.'
+  hint: Which directive enables deep reflection, as opposed to normal access?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: model/module-info.java
+      content: |
+        module model {
+            exports model;
+        }
+    - name: model/model/User.java
+      content: |
+        package model;
+
+        public class User {
+            private String name = "ana";
+            public String getName() { return name; }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires model;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import java.lang.reflect.Field;
+        import model.User;
+
+        public class Main {
+            public static void main(String[] args) throws Exception {
+                User u = new User();
+                System.out.println(User.class.getMethod("getName").invoke(u));
+                Field f = User.class.getDeclaredField("name");
+                System.out.println("found " + f.getName());
+                f.setAccessible(true);
+                f.set(u, "bob");
+                System.out.println(u.getName());
+            }
+        }
+    expect:
+      compiles: true
+      stdout: |-
+        ana
+        found name
+      exception: java.lang.reflect.InaccessibleObjectException
+
+- id: D7-MOD-007
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags:
+  - opens
+  - open-module
+  - exports
+  - reflection
+  prompt: Keep `User` and `app` from the code below unchanged. Which declarations of module `model` make the program compile **and** print `ana`, `found name`, `bob` when launched with `java -p out -m app/app.Main`? Choose two.
+  code: |
+    // file: model/model/User.java
+    package model;
+
+    public class User {
+        private String name = "ana";
+        public String getName() { return name; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires model;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import java.lang.reflect.Field;
+    import model.User;
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            User u = new User();
+            System.out.println(User.class.getMethod("getName").invoke(u));
+            Field f = User.class.getDeclaredField("name");
+            System.out.println("found " + f.getName());
+            f.setAccessible(true);
+            f.set(u, "bob");
+            System.out.println(u.getName());
+        }
+    }
+  options:
+  - key: a
+    text: '`module model { exports model; opens model to app; }`'
+    correct: true
+    why: Export gives compile-time access to `User`; the qualified `opens` allows deep reflection by `app`.
+    java:
+      modules: true
+      mainModule: app/app.Main
+      files:
+      - name: model/module-info.java
+        content: |
+          module model { exports model; opens model to app; }
+      - name: model/model/User.java
+        content: |
+          package model;
+
+          public class User {
+              private String name = "ana";
+              public String getName() { return name; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires model;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import java.lang.reflect.Field;
+          import model.User;
+
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  User u = new User();
+                  System.out.println(User.class.getMethod("getName").invoke(u));
+                  Field f = User.class.getDeclaredField("name");
+                  System.out.println("found " + f.getName());
+                  f.setAccessible(true);
+                  f.set(u, "bob");
+                  System.out.println(u.getName());
+              }
+          }
+      expect: &id001
+        compiles: true
+        stdout: |-
+          ana
+          found name
+          bob
+  - key: b
+    text: '`open module model { exports model; }`'
+    correct: true
+    why: An open module opens all its packages to all modules at run time; the export still provides compile-time access.
+    java:
+      modules: true
+      mainModule: app/app.Main
+      files:
+      - name: model/module-info.java
+        content: |
+          open module model { exports model; }
+      - name: model/model/User.java
+        content: |
+          package model;
+
+          public class User {
+              private String name = "ana";
+              public String getName() { return name; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires model;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import java.lang.reflect.Field;
+          import model.User;
+
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  User u = new User();
+                  System.out.println(User.class.getMethod("getName").invoke(u));
+                  Field f = User.class.getDeclaredField("name");
+                  System.out.println("found " + f.getName());
+                  f.setAccessible(true);
+                  f.set(u, "bob");
+                  System.out.println(u.getName());
+              }
+          }
+      expect: *id001
+  - key: c
+    text: '`module model { opens model; }`'
+    why: '`opens` alone gives no compile-time access, so `import model.User;` in `app` fails: the package is not visible.'
+    java:
+      modules: true
+      files:
+      - name: model/module-info.java
+        content: |
+          module model { opens model; }
+      - name: model/model/User.java
+        content: |
+          package model;
+
+          public class User {
+              private String name = "ana";
+              public String getName() { return name; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires model;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import java.lang.reflect.Field;
+          import model.User;
+
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  User u = new User();
+                  System.out.println(User.class.getMethod("getName").invoke(u));
+                  Field f = User.class.getDeclaredField("name");
+                  System.out.println("found " + f.getName());
+                  f.setAccessible(true);
+                  f.set(u, "bob");
+                  System.out.println(u.getName());
+              }
+          }
+      expect:
+        compiles: false
+        errorContains: is not visible
+  - key: d
+    text: '`open module model { exports model; opens model; }`'
+    why: An open module may not contain `opens` directives — everything is already open — so javac rejects the declaration.
+    java:
+      modules: true
+      files:
+      - name: model/module-info.java
+        content: |
+          open module model { exports model; opens model; }
+      - name: model/model/User.java
+        content: |
+          package model;
+
+          public class User {
+              private String name = "ana";
+              public String getName() { return name; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires model;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import java.lang.reflect.Field;
+          import model.User;
+
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  User u = new User();
+                  System.out.println(User.class.getMethod("getName").invoke(u));
+                  Field f = User.class.getDeclaredField("name");
+                  System.out.println("found " + f.getName());
+                  f.setAccessible(true);
+                  f.set(u, "bob");
+                  System.out.println(u.getName());
+              }
+          }
+      expect:
+        compiles: false
+        errorContains: '''opens'' only allowed in strong modules'
+  - key: e
+    text: '`module model { exports model to app; }`'
+    why: 'A qualified export compiles, but it is still only an export: `setAccessible(true)` throws `InaccessibleObjectException` at run time.'
+    java:
+      modules: true
+      mainModule: app/app.Main
+      files:
+      - name: model/module-info.java
+        content: |
+          module model { exports model to app; }
+      - name: model/model/User.java
+        content: |
+          package model;
+
+          public class User {
+              private String name = "ana";
+              public String getName() { return name; }
+          }
+      - name: app/module-info.java
+        content: |
+          module app {
+              requires model;
+          }
+      - name: app/app/Main.java
+        content: |
+          package app;
+
+          import java.lang.reflect.Field;
+          import model.User;
+
+          public class Main {
+              public static void main(String[] args) throws Exception {
+                  User u = new User();
+                  System.out.println(User.class.getMethod("getName").invoke(u));
+                  Field f = User.class.getDeclaredField("name");
+                  System.out.println("found " + f.getName());
+                  f.setAccessible(true);
+                  f.set(u, "bob");
+                  System.out.println(u.getName());
+              }
+          }
+      expect:
+        compiles: true
+        stdout: |-
+          ana
+          found name
+        exception: java.lang.reflect.InaccessibleObjectException
+  explanation: |
+    The program needs two different grants: **compile-time** access to `model.User` (from `exports`) and
+    **run-time deep reflection** on its private field (from `opens` or an `open module`). Option a combines a
+    normal export with a qualified open; option b uses an open module plus an export. `opens` without
+    `exports` fails at compile time because `app` names `User` in source. Inside an `open module`, an `opens`
+    directive is a compile error, because every package is already open.
+  rule: '`open module` opens every package at run time and may not contain `opens` directives; `opens` does not imply `exports` and vice versa.'
+  misconception: '`opens` is a stronger form of `exports` that also gives compile-time access.'
+  hint: List what the program needs at compile time and what it needs at run time separately.
+  examEligible: true
+
+- id: D7-MOD-008
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - opens
+  - reflection
+  - Class.forName
+  prompt: Module `model` opens its package but does not export it. The modules are compiled together and launched with `java -p out -m app/app.Main`. What is the result?
+  code: |
+    // file: model/module-info.java
+    module model {
+        opens model;
+    }
+
+    // file: model/model/User.java
+    package model;
+
+    public class User {
+        private String name = "ana";
+        public String getName() { return name; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires model;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    public class Main {
+        public static void main(String[] args) throws Exception {
+            Class<?> type = Class.forName("model.User");
+            Object u = type.getConstructor().newInstance();
+            var f = type.getDeclaredField("name");
+            f.setAccessible(true);
+            f.set(u, "bob");
+            System.out.println(type.getMethod("getName").invoke(u));
+        }
+    }
+  options:
+  - key: a
+    text: '`bob`'
+    correct: true
+    why: '`app` never names `model.User` in source, so compilation succeeds; at run time an opened package grants reflective access to all its members — public constructor, private field and public method alike.'
+  - key: b
+    text: Compilation fails because package `model` is not exported
+    why: The compiler only checks types that the source names; `"model.User"` is just a string.
+  - key: c
+    text: '`IllegalAccessException` is thrown by `newInstance()` because the package is not exported'
+    why: That is what happens when the package is neither exported nor open. `opens` grants run-time reflective access to public members too, not only to private ones.
+  - key: d
+    text: '`InaccessibleObjectException` is thrown by `setAccessible(true)`'
+    why: Deep reflection is exactly what `opens model;` allows — for every module, since the directive is unqualified.
+  explanation: |
+    `opens` is a purely **run-time** grant: the package stays invisible to the compiler, but all of its types
+    and members — public and private — are reflectively accessible to the modules it is opened to. Because
+    `Main` only loads the class by name, nothing in its source needs compile-time access. Without the
+    `opens` (and without `exports`), `Class.forName` would still load the class, but
+    `getConstructor().newInstance()` would throw `IllegalAccessException` because the package is neither
+    exported nor open to `app`.
+  rule: An opened package is accessible to reflection at run time (all members, with setAccessible for non-public ones) but is not accessible at compile time unless it is also exported.
+  misconception: '`opens` only matters for private members; public members of a non-exported package stay inaccessible to reflection.'
+  hint: Does `Main` name any type from package `model` in its source code?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: model/module-info.java
+      content: |
+        module model {
+            opens model;
+        }
+    - name: model/model/User.java
+      content: |
+        package model;
+
+        public class User {
+            private String name = "ana";
+            public String getName() { return name; }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires model;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        public class Main {
+            public static void main(String[] args) throws Exception {
+                Class<?> type = Class.forName("model.User");
+                Object u = type.getConstructor().newInstance();
+                var f = type.getDeclaredField("name");
+                f.setAccessible(true);
+                f.set(u, "bob");
+                System.out.println(type.getMethod("getName").invoke(u));
+            }
+        }
+    expect:
+      compiles: true
+      stdout: bob
+
+- id: D7-MOD-009
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 180
+  tags:
+  - services
+  - ServiceLoader
+  - provides
+  - provider-method
+  prompt: The three modules are compiled together and launched with `java -p out -m app/app.Main`. Note that `app` does not require `impl`, and `impl` exports nothing. What is the output?
+  code: |
+    // file: api/module-info.java
+    module api {
+        exports api;
+    }
+
+    // file: api/api/Greeter.java
+    package api;
+
+    public interface Greeter {
+        String greet(String name);
+    }
+
+    // file: impl/module-info.java
+    module impl {
+        requires api;
+        provides api.Greeter with impl.Polite, impl.Loud;
+    }
+
+    // file: impl/impl/Polite.java
+    package impl;
+
+    import api.Greeter;
+
+    public class Polite implements Greeter {
+        public String greet(String name) { return "Hello " + name; }
+    }
+
+    // file: impl/impl/Loud.java
+    package impl;
+
+    import api.Greeter;
+
+    public class Loud {
+        private Loud() { }
+        public static Greeter provider() {
+            return name -> "HEY " + name.toUpperCase();
+        }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires api;
+        uses api.Greeter;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import api.Greeter;
+    import java.util.ServiceLoader;
+
+    public class Main {
+        public static void main(String[] args) {
+            ServiceLoader.load(Greeter.class).stream()
+                .map(p -> p.get().greet("ana"))
+                .sorted()
+                .forEach(System.out::println);
+        }
+    }
+  options:
+  - key: a
+    text: |-
+      HEY ANA
+      Hello ana
+    correct: true
+    why: 'Both providers are found: `Polite` through its public no-arg constructor, `Loud` through its public static `provider()` method. Sorting puts `"HEY ANA"` first because `''E''` sorts before `''e''`.'
+  - key: b
+    text: '`Hello ana`'
+    why: '`Loud` does not need to implement `Greeter`: when a provider class declares a public static no-arg `provider()` method, that method''s return value is the service instance.'
+  - key: c
+    text: A `ServiceConfigurationError` is thrown because `Loud`'s constructor is private
+    why: The constructor is ignored when a `provider()` method exists, so its access does not matter.
+  - key: d
+    text: Nothing is printed, because `app` does not require `impl`
+    why: 'Service binding: when `app` declares `uses api.Greeter`, module resolution adds every observable module that `provides` the service to the module graph, without any `requires`.'
+  - key: e
+    text: Compilation fails because `impl` does not export package `impl`
+    why: Provider classes do not have to be in exported packages; `ServiceLoader` instantiates them on the consumer's behalf.
+  explanation: |
+    A service consumer declares `uses S`; a provider module declares `provides S with C1, C2`. At start-up the
+    module system **binds** providers: modules that provide a used service are resolved even though nobody
+    `requires` them, and their packages need not be exported. For each provider class `ServiceLoader` first
+    looks for a `public static` no-arg method named `provider()` (whose return type must be the service type
+    or a subtype); only if there is none does it require the class to implement `S` and have a public
+    no-arg constructor. `stream()` yields lazy `ServiceLoader.Provider` objects; `get()` instantiates.
+  rule: 'ServiceLoader in named modules: a provider is obtained from a public static no-arg provider() method if declared, otherwise from a public no-arg constructor of a class that implements the service.'
+  misconception: A provider class must implement the service interface, have a public constructor, and live in an exported package.
+  hint: How does ServiceLoader obtain an instance from a class that declares `public static ... provider()`?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: api/module-info.java
+      content: |
+        module api {
+            exports api;
+        }
+    - name: api/api/Greeter.java
+      content: |
+        package api;
+
+        public interface Greeter {
+            String greet(String name);
+        }
+    - name: impl/module-info.java
+      content: |
+        module impl {
+            requires api;
+            provides api.Greeter with impl.Polite, impl.Loud;
+        }
+    - name: impl/impl/Polite.java
+      content: |
+        package impl;
+
+        import api.Greeter;
+
+        public class Polite implements Greeter {
+            public String greet(String name) { return "Hello " + name; }
+        }
+    - name: impl/impl/Loud.java
+      content: |
+        package impl;
+
+        import api.Greeter;
+
+        public class Loud {
+            private Loud() { }
+            public static Greeter provider() {
+                return name -> "HEY " + name.toUpperCase();
+            }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires api;
+            uses api.Greeter;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import api.Greeter;
+        import java.util.ServiceLoader;
+
+        public class Main {
+            public static void main(String[] args) {
+                ServiceLoader.load(Greeter.class).stream()
+                    .map(p -> p.get().greet("ana"))
+                    .sorted()
+                    .forEach(System.out::println);
+            }
+        }
+    expect:
+      compiles: true
+      stdout: |-
+        HEY ANA
+        Hello ana
+
+- id: D7-MOD-010
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags:
+  - services
+  - uses
+  - ServiceConfigurationError
+  prompt: The modules are compiled together and launched with `java -p out -m app/app.Main` plus `--add-modules impl`. What is the result?
+  code: |
+    // file: api/module-info.java
+    module api {
+        exports api;
+    }
+
+    // file: api/api/Greeter.java
+    package api;
+
+    public interface Greeter {
+        String greet(String name);
+    }
+
+    // file: impl/module-info.java
+    module impl {
+        requires api;
+        provides api.Greeter with impl.Polite;
+    }
+
+    // file: impl/impl/Polite.java
+    package impl;
+
+    import api.Greeter;
+
+    public class Polite implements Greeter {
+        public String greet(String name) { return "Hello " + name; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires api;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import api.Greeter;
+    import java.util.ServiceLoader;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println("loading");
+            for (Greeter g : ServiceLoader.load(Greeter.class)) {
+                System.out.println(g.greet("ana"));
+            }
+        }
+    }
+  options:
+  - key: a
+    text: It prints `loading` and `Hello ana`
+    why: The provider is present, but a named module may only load a service it declares with `uses`.
+  - key: b
+    text: It prints `loading`, then `ServiceLoader.load` throws `ServiceConfigurationError`
+    correct: true
+    why: '`ServiceLoader.load` checks that the caller''s module declares `uses api.Greeter`; `app` does not, so it fails with *module app does not declare `uses`*.'
+  - key: c
+    text: Compilation fails because `app` lacks `uses api.Greeter;`
+    why: javac does not check calls to `ServiceLoader.load`; the check happens at run time.
+  - key: d
+    text: It prints only `loading`, because without `uses` no provider is bound
+    why: 'Missing `uses` is not silently ignored: `ServiceLoader` throws an error instead of returning an empty loader.'
+  explanation: |
+    In a named module, `ServiceLoader.load(S.class)` requires the caller's module to declare `uses S`; otherwise
+    it throws `java.util.ServiceConfigurationError` (an `Error`, not an `Exception`). The `uses` directive is
+    also what drives service binding during resolution. javac does not cross-check `uses` against code that
+    calls `ServiceLoader`, so this mistake shows up only at run time. Code in the unnamed module (class path)
+    needs no `uses`.
+  rule: A named module that calls ServiceLoader.load(S) must declare `uses S;`, otherwise ServiceConfigurationError is thrown at run time.
+  misconception: '`uses` is documentation only; ServiceLoader finds providers anyway.'
+  hint: What does ServiceLoader check about the module that calls `load`?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    javaArgs:
+    - --add-modules
+    - impl
+    files:
+    - name: api/module-info.java
+      content: |
+        module api {
+            exports api;
+        }
+    - name: api/api/Greeter.java
+      content: |
+        package api;
+
+        public interface Greeter {
+            String greet(String name);
+        }
+    - name: impl/module-info.java
+      content: |
+        module impl {
+            requires api;
+            provides api.Greeter with impl.Polite;
+        }
+    - name: impl/impl/Polite.java
+      content: |
+        package impl;
+
+        import api.Greeter;
+
+        public class Polite implements Greeter {
+            public String greet(String name) { return "Hello " + name; }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires api;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import api.Greeter;
+        import java.util.ServiceLoader;
+
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("loading");
+                for (Greeter g : ServiceLoader.load(Greeter.class)) {
+                    System.out.println(g.greet("ana"));
+                }
+            }
+        }
+    expect:
+      compiles: true
+      stdout: loading
+      exception: java.util.ServiceConfigurationError
+
+- id: D7-MOD-011
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - services
+  - provides
+  - constructor
+  prompt: The modules below are compiled together with `javac --module-source-path`. What is the result?
+  code: |
+    // file: api/module-info.java
+    module api {
+        exports api;
+    }
+
+    // file: api/api/Greeter.java
+    package api;
+
+    public interface Greeter {
+        String greet(String name);
+    }
+
+    // file: impl/module-info.java
+    module impl {
+        requires api;
+        provides api.Greeter with impl.Polite;
+    }
+
+    // file: impl/impl/Polite.java
+    package impl;
+
+    import api.Greeter;
+
+    public class Polite implements Greeter {
+        Polite() { }
+        public String greet(String name) { return "Hello " + name; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires api;
+        uses api.Greeter;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import api.Greeter;
+    import java.util.ServiceLoader;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println("loading");
+            for (Greeter g : ServiceLoader.load(Greeter.class)) {
+                System.out.println(g.greet("ana"));
+            }
+        }
+    }
+  options:
+  - key: a
+    text: It compiles; running it prints `loading` and `Hello ana`
+    why: The provider's constructor is package-private, which `ServiceLoader` cannot use.
+  - key: b
+    text: It compiles, but iterating the loader throws `ServiceConfigurationError`
+    why: 'In a named module the provider is validated by the compiler: the `provides` directive itself is rejected.'
+  - key: c
+    text: 'Compilation fails: the `provides` directive in `impl`''s module declaration is rejected because `Polite` has no public no-arg constructor'
+    correct: true
+    why: javac requires a provider named in `provides` to have a public static `provider()` method or a public no-arg constructor.
+  - key: d
+    text: Compilation fails in `app`, because `Polite` is not exported
+    why: '`app` never names `Polite`; provider packages do not need to be exported.'
+  explanation: |
+    For `provides S with C;` javac checks the provider: `C` must be in the same module, and either declare a
+    `public static` no-arg `provider()` method returning `S` (or a subtype), or be a subtype of `S` with a
+    **public** no-arg constructor. Here the constructor has package access, so javac reports *the no arguments
+    constructor of the service implementation is not public* on the module declaration. On the class path
+    (META-INF/services), the same mistake would only surface at run time as a `ServiceConfigurationError`.
+  rule: A provider named in `provides ... with` must be in the same module and have a public static no-arg provider() method or a public no-arg constructor (and then implement the service).
+  misconception: Provider validation happens only when ServiceLoader instantiates the provider.
+  hint: javac checks `provides` directives when it compiles module-info.java.
+  examEligible: true
+  java:
+    modules: true
+    files:
+    - name: api/module-info.java
+      content: |
+        module api {
+            exports api;
+        }
+    - name: api/api/Greeter.java
+      content: |
+        package api;
+
+        public interface Greeter {
+            String greet(String name);
+        }
+    - name: impl/module-info.java
+      content: |
+        module impl {
+            requires api;
+            provides api.Greeter with impl.Polite;
+        }
+    - name: impl/impl/Polite.java
+      content: |
+        package impl;
+
+        import api.Greeter;
+
+        public class Polite implements Greeter {
+            Polite() { }
+            public String greet(String name) { return "Hello " + name; }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires api;
+            uses api.Greeter;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import api.Greeter;
+        import java.util.ServiceLoader;
+
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("loading");
+                for (Greeter g : ServiceLoader.load(Greeter.class)) {
+                    System.out.println(g.greet("ana"));
+                }
+            }
+        }
+    expect:
+      compiles: false
+      errorContains: is not public
+
+- id: D7-MOD-012
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 150
+  tags:
+  - requires-static
+  - module-resolution
+  - NoClassDefFoundError
+  prompt: Both modules are compiled into `out` and the application is launched with `java -p out -m app/app.Main` (no other options). What is the result?
+  code: |
+    // file: lib/module-info.java
+    module lib {
+        exports lib;
+    }
+
+    // file: lib/lib/Tool.java
+    package lib;
+
+    public class Tool {
+        public static String hi() { return "tool"; }
+    }
+
+    // file: app/module-info.java
+    module app {
+        requires static lib;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println("start");
+            System.out.println(lib.Tool.hi());
+        }
+    }
+  options:
+  - key: a
+    text: It prints `start` and `tool`
+    why: '`lib` is on the module path, but a `requires static` dependency is not resolved at run time unless something else requires it or it is added with `--add-modules lib`.'
+  - key: b
+    text: It prints `start`, then throws `NoClassDefFoundError`
+    correct: true
+    why: '`requires static` is mandatory at compile time but optional at run time. `lib` is not resolved into the boot layer, so linking `lib.Tool` fails when that line executes.'
+  - key: c
+    text: 'Compilation fails: `requires static` may only be used for annotation processors'
+    why: '`requires static` is legal for any module; it is typically used for optional integrations and compile-time-only annotations.'
+  - key: d
+    text: The launcher fails with `FindException` before `start` is printed
+    why: A missing *static* dependency never stops start-up; that is the whole point of the modifier.
+  explanation: |
+    `requires static M` means *M is required at compile time, but optional at run time*. During resolution
+    the module system does not follow `requires static` edges, so `lib` is not part of the boot layer even
+    though it sits in `out`. The program starts, prints `start`, and fails with
+    `java.lang.NoClassDefFoundError: lib/Tool` when it first touches `Tool`. Launching with
+    `--add-modules lib` (or having another resolved module require `lib`) makes it print `tool`. Code using an
+    optional dependency should therefore check for it first, for example with
+    `ModuleLayer.boot().findModule("lib").isPresent()`.
+  rule: '`requires static` = required at compile time, optional at run time: the module is read if it is resolved, but resolution does not pull it in.'
+  misconception: '`requires static` only changes compile-time behaviour; at run time it acts like a normal `requires` whenever the module is on the module path.'
+  hint: Which modules end up in the boot layer when only `app` is the root?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: lib/module-info.java
+      content: |
+        module lib {
+            exports lib;
+        }
+    - name: lib/lib/Tool.java
+      content: |
+        package lib;
+
+        public class Tool {
+            public static String hi() { return "tool"; }
+        }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires static lib;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println("start");
+                System.out.println(lib.Tool.hi());
+            }
+        }
+    expect:
+      compiles: true
+      stdout: start
+      exception: java.lang.NoClassDefFoundError
+
+- id: D7-MOD-013
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - split-package
+  - readability
+  prompt: The three modules are compiled together with `javac --module-source-path`. What is the result?
+  code: |
+    // file: alpha/module-info.java
+    module alpha {
+        exports util;
+    }
+
+    // file: alpha/util/A.java
+    package util;
+
+    public class A { }
+
+    // file: beta/module-info.java
+    module beta {
+        exports util;
+    }
+
+    // file: beta/util/B.java
+    package util;
+
+    public class B { }
+
+    // file: app/module-info.java
+    module app {
+        requires alpha;
+        requires beta;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(new util.A().getClass().getModule().getName());
+        }
+    }
+  options:
+  - key: a
+    text: It compiles and prints `alpha`
+    why: Each class exists only once, but the *package* `util` exists in two modules — a split package.
+  - key: b
+    text: 'Compilation fails: module `app` reads package `util` from both `alpha` and `beta`'
+    correct: true
+    why: A module may not read the same package from two different modules; javac reports this on `app`'s module declaration.
+  - key: c
+    text: It compiles, but the boot layer fails at start-up because of a split package
+    why: The conflict is already detected at compile time because `app` reads both modules.
+  - key: d
+    text: It compiles; `util` resolves to the module named in the first `requires`
+    why: The order of `requires` directives has no meaning; there is no "first wins" rule.
+  explanation: |
+    A package must come from exactly one module in the view of any module that reads it. Here `alpha` and
+    `beta` both export `util`, so `app` would read `util` from two modules — a **split package**. javac reports
+    *module app reads package util from both alpha and beta*. Even when no module reads both, two modules in
+    the same layer (same class loader) that contain the same package fail at start-up. The fix is to merge
+    the package into one module or rename one of the packages.
+  rule: A module must not read two modules that export the same package, and two modules in the same layer must not contain the same package.
+  misconception: Split packages are fine as long as the class names inside them are different.
+  hint: Look at package names, not class names.
+  examEligible: true
+  java:
+    modules: true
+    files:
+    - name: alpha/module-info.java
+      content: |
+        module alpha {
+            exports util;
+        }
+    - name: alpha/util/A.java
+      content: |
+        package util;
+
+        public class A { }
+    - name: beta/module-info.java
+      content: |
+        module beta {
+            exports util;
+        }
+    - name: beta/util/B.java
+      content: |
+        package util;
+
+        public class B { }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires alpha;
+            requires beta;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        public class Main {
+            public static void main(String[] args) {
+                System.out.println(new util.A().getClass().getModule().getName());
+            }
+        }
+    expect:
+      compiles: false
+      errorContains: reads package util from both
+
+- id: D7-MOD-014
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - module-info
+  - directives
+  - cyclic-dependence
+  prompt: Module `lib` contains one package, `lib`, with a public class `X`. Which declarations of `lib` compile (with `javac --module-source-path`, together with any other module shown in the option)? Choose two.
+  options:
+  - key: a
+    text: '`module lib { requires java.base; exports lib; }`'
+    correct: true
+    why: Every module implicitly requires `java.base`; writing it explicitly is allowed (and redundant).
+    java:
+      modules: true
+      files:
+      - name: lib/module-info.java
+        content: |
+          module lib { requires java.base; exports lib; }
+      - name: lib/lib/X.java
+        content: |
+          package lib;
+
+          public class X { }
+      expect:
+        compiles: true
+  - key: b
+    text: '`module lib { exports lib; exports lib to reporting; }`'
+    why: A package may appear in only one `exports` directive; javac reports *duplicate or conflicting exports*.
+    java:
+      modules: true
+      files:
+      - name: lib/module-info.java
+        content: |
+          module lib { exports lib; exports lib to reporting; }
+      - name: lib/lib/X.java
+        content: |
+          package lib;
+
+          public class X { }
+      expect:
+        compiles: false
+        errorContains: duplicate or conflicting exports
+  - key: c
+    text: '`module lib { exports lib to reporting; }` — and no module `reporting` exists'
+    correct: true
+    why: A qualified export to an unknown module is only a warning (*module not found*), so that a library can name optional friends.
+    java:
+      modules: true
+      files:
+      - name: lib/module-info.java
+        content: |
+          module lib { exports lib to reporting; }
+      - name: lib/lib/X.java
+        content: |
+          package lib;
+
+          public class X { }
+      expect:
+        compiles: true
+  - key: d
+    text: '`module lib { exports lib; uses java.sql.Driver; }`'
+    why: 'The service type in `uses` must be accessible: `lib` does not read `java.sql`, so the package `java.sql` is not visible. Adding `requires java.sql;` fixes it.'
+    java:
+      modules: true
+      files:
+      - name: lib/module-info.java
+        content: |
+          module lib { exports lib; uses java.sql.Driver; }
+      - name: lib/lib/X.java
+        content: |
+          package lib;
+
+          public class X { }
+      expect:
+        compiles: false
+        errorContains: is not visible
+  - key: e
+    text: '`module lib { requires util; exports lib; }` with `module util { requires lib; }`'
+    why: Module dependencies must form an acyclic graph at compile time; javac reports *cyclic dependence involving lib/util*.
+    java:
+      modules: true
+      files:
+      - name: lib/module-info.java
+        content: |
+          module lib { requires util; exports lib; }
+      - name: lib/lib/X.java
+        content: |
+          package lib;
+
+          public class X { }
+      - name: util/module-info.java
+        content: |
+          module util { requires lib; }
+      - name: util/util/U.java
+        content: |
+          package util;
+
+          public class U { }
+      expect:
+        compiles: false
+        errorContains: cyclic dependence
+  explanation: |
+    `java.base` is required implicitly by every module, and an explicit `requires java.base;` is legal. Each
+    package can be the subject of at most one `exports` (and at most one `opens`) directive, so mixing an
+    unqualified and a qualified export of the same package is a conflict. Qualified exports and opens may
+    name modules that are not observable — javac only warns. Types named in `uses` and `provides` follow the
+    normal accessibility rules, and the `requires` graph must not contain cycles.
+  rule: 'Module declarations: at most one exports/opens per package; requires must not form cycles; uses/provides types must be accessible; java.base is always read.'
+  misconception: A module may only be named in `exports ... to` if it exists at compile time.
+  hint: 'Test each declaration against: duplicates, readability of named types, and cycles.'
+  examEligible: true
+
+- id: D7-MOD-015
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - import-module
+  - JEP-511
+  - ambiguity
+  prompt: What is the result of compiling and running this program on Java 25?
+  code: |
+    import module java.base;
+    import module java.sql;
+
+    public class Main {
+        public static void main(String[] args) {
+            Date d = new Date(0L);
+            System.out.println(d.getTime());
+        }
+    }
+  options:
+  - key: a
+    text: '`0`'
+    why: Both `java.util.Date` (from `java.base`) and `java.sql.Date` (from `java.sql`) are imported by the module imports, so the simple name is ambiguous.
+  - key: b
+    text: Compilation fails at line 6 because the reference to `Date` is ambiguous
+    correct: true
+    why: Two module imports bring in `java.util.Date` and `java.sql.Date`; neither shadows the other, so using the simple name is an error.
+  - key: c
+    text: Compilation fails at line 2 because two imported modules export types with the same simple name
+    why: Overlapping module imports are legal; the ambiguity is only an error where the simple name is actually used.
+  - key: d
+    text: '`0`, because `java.base` is imported first and wins'
+    why: Import order never matters in Java; there is no first-wins rule.
+  explanation: |
+    `import module M;` (final in Java 25, JEP 511) imports, on demand, all public top-level types of the
+    packages that `M` exports, plus those of the modules `M` reads through `requires transitive`. Both
+    modules here supply a `Date`, and module imports have the same priority as each other, so the reference
+    on line 6 is ambiguous. The fix is a **single-type import** such as `import java.sql.Date;`, which shadows
+    every on-demand and module import of that name.
+  rule: Types imported by two module import declarations with the same simple name are ambiguous when used; a single-type import of one of them resolves the ambiguity (JEP 511).
+  misconception: Imports are processed in order and the first matching type wins.
+  hint: Which `Date` classes are exported by `java.base` and by `java.sql`?
+  examEligible: true
+  java:
+    expect:
+      compiles: false
+      errorContains: reference to Date is ambiguous
+      errorLine: 6
+
+- id: D7-MOD-016
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 180
+  tags:
+  - import-module
+  - JEP-511
+  - shadowing
+  - requires-transitive
+  prompt: Each option shows the import declarations of an ordinary `Main.java` (class `Main` in the unnamed module) followed by a statement in `main`. Which programs compile on Java 25? Choose three.
+  options:
+  - key: a
+    text: '`import module java.base; import module java.sql; import java.sql.Date;` — `Date d = new Date(0L);`'
+    correct: true
+    why: The single-type import shadows the `Date` types brought in by both module imports.
+    java:
+      source: |
+        import module java.base;
+        import module java.sql;
+        import java.sql.Date;
+
+        public class Main {
+            public static void main(String[] args) {
+                Date d = new Date(0L);
+                System.out.println(d.getClass().getName());
+            }
+        }
+      expect:
+        compiles: true
+        stdout: java.sql.Date
+  - key: b
+    text: '`import module java.desktop; import java.util.*;` — `List<String> l = List.of("x");`'
+    correct: true
+    why: '`java.desktop` exports `java.awt.List`, but a type-import-on-demand (`java.util.*`) shadows module imports, so `List` means `java.util.List`.'
+    java:
+      source: |
+        import module java.desktop;
+        import java.util.*;
+
+        public class Main {
+            public static void main(String[] args) {
+                List<String> l = List.of("x");
+                System.out.println(l.size());
+            }
+        }
+      expect:
+        compiles: true
+        stdout: '1'
+  - key: c
+    text: '`import module java.sql;` — `List<String> l = List.of();`'
+    why: '`java.sql` does not require `java.base` transitively (no module does, except `java.se`), so `import module java.sql;` does not import `java.util.List`.'
+    java:
+      source: |
+        import module java.sql;
+
+        public class Main {
+            public static void main(String[] args) {
+                List<String> l = List.of();
+            }
+        }
+      expect:
+        compiles: false
+        errorContains: cannot find symbol
+  - key: d
+    text: '`import module java.sql;` — `Logger log = Logger.getLogger("app");`'
+    correct: true
+    why: '`java.sql` declares `requires transitive java.logging`, so its module import also imports the packages of `java.logging`, including `java.util.logging.Logger`.'
+    java:
+      source: |
+        import module java.sql;
+
+        public class Main {
+            public static void main(String[] args) {
+                Logger log = Logger.getLogger("app");
+                System.out.println(log.getName());
+            }
+        }
+      expect:
+        compiles: true
+        stdout: app
+  - key: e
+    text: '`import module java.base; import module java.desktop;` — `List<String> l = new ArrayList<>();`'
+    why: '`java.util.List` and `java.awt.List` are both imported by module imports of equal rank, so `List` is ambiguous.'
+    java:
+      source: |
+        import module java.base;
+        import module java.desktop;
+
+        public class Main {
+            public static void main(String[] args) {
+                List<String> l = new ArrayList<>();
+            }
+        }
+      expect:
+        compiles: false
+        errorContains: reference to List is ambiguous
+  explanation: |
+    Name lookup for imported types has a strict priority: a **single-type import** shadows a
+    **type-import-on-demand** (`p.*`), which shadows a **module import** (`import module M`). Two imports at
+    the same level that supply the same simple name make that name ambiguous where it is used. A module
+    import covers the packages exported by `M` and by every module `M` requires *transitively* — `java.sql`
+    re-exports `java.logging`, `java.xml` and `java.transaction.xa`, but not `java.base`.
+  rule: 'JEP 511: single-type imports shadow on-demand imports, which shadow module imports; `import module M` also covers modules that M requires transitively.'
+  misconception: '`import module java.sql;` brings in the whole JDK API that `java.sql` depends on, including `java.util`.'
+  hint: Rank the three kinds of imports, then check what `java.sql` requires transitively.
+  examEligible: true
+
+- id: D7-MOD-017
+  objective: D7.1
+  lesson: pkg-modules-services
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags:
+  - import-module
+  - JEP-511
+  - qualified-exports
+  - named-module
+  prompt: The modules are compiled together with `javac --module-source-path` on Java 25 and launched with `java -p out -m app/app.Main`. What is the result?
+  code: |
+    // file: shop/module-info.java
+    module shop {
+        exports shop.api;
+        exports shop.spi to app;
+    }
+
+    // file: shop/shop/api/Order.java
+    package shop.api;
+
+    public record Order(String id) { }
+
+    // file: shop/shop/spi/Pricer.java
+    package shop.spi;
+
+    public interface Pricer {
+        long price(String id);
+    }
+
+    // file: shop/shop/internal/Audit.java
+    package shop.internal;
+
+    public class Audit { }
+
+    // file: app/module-info.java
+    module app {
+        requires shop;
+    }
+
+    // file: app/app/Main.java
+    package app;
+
+    import module shop;
+
+    public class Main {
+        public static void main(String[] args) {
+            Order o = new Order("A1");
+            Pricer p = id -> id.length() * 10L;
+            System.out.println(o.id() + "=" + p.price(o.id()));
+        }
+    }
+  options:
+  - key: a
+    text: '`A1=20`'
+    correct: true
+    why: '`import module shop;` imports the public top-level types of every package that `shop` exports *to `app`* — the unqualified `shop.api` and the qualified `shop.spi` — but not `shop.internal`.'
+  - key: b
+    text: 'Compilation fails: `Pricer` cannot be found, because module imports only cover unqualified exports'
+    why: JEP 511 defines the imported packages as those exported to the importing module, so a qualified export to `app` counts.
+  - key: c
+    text: 'Compilation fails: `import module` can only be used in compact source files or in the unnamed module'
+    why: Module import declarations are allowed in any compilation unit, including those of named modules, as long as the current module reads the imported module.
+  - key: d
+    text: 'Compilation fails: `import module shop;` is invalid because `shop` contains the non-exported package `shop.internal`'
+    why: Non-exported packages are simply not imported; their presence does not make the declaration invalid.
+  explanation: |
+    A module import declaration imports, on demand, every public top-level type in the packages that the named
+    module exports **to the current module** — so qualified exports to `app` are included and non-exported
+    packages are not. In a named module the declaration also requires readability: `app` must read `shop`
+    (here via `requires shop`); otherwise javac reports *module app does not read: shop*. Module import
+    declarations are final in Java 25 (JEP 511) and usable in any compilation unit.
+  rule: '`import module M;` imports all public top-level types of packages exported by M to the current module (plus those of modules M requires transitively); the current module must read M.'
+  misconception: Module imports ignore qualified exports, or are only for scripts and compact source files.
+  hint: To which modules is `shop.spi` exported?
+  examEligible: true
+  java:
+    modules: true
+    mainModule: app/app.Main
+    files:
+    - name: shop/module-info.java
+      content: |
+        module shop {
+            exports shop.api;
+            exports shop.spi to app;
+        }
+    - name: shop/shop/api/Order.java
+      content: |
+        package shop.api;
+
+        public record Order(String id) { }
+    - name: shop/shop/spi/Pricer.java
+      content: |
+        package shop.spi;
+
+        public interface Pricer {
+            long price(String id);
+        }
+    - name: shop/shop/internal/Audit.java
+      content: |
+        package shop.internal;
+
+        public class Audit { }
+    - name: app/module-info.java
+      content: |
+        module app {
+            requires shop;
+        }
+    - name: app/app/Main.java
+      content: |
+        package app;
+
+        import module shop;
+
+        public class Main {
+            public static void main(String[] args) {
+                Order o = new Order("A1");
+                Pricer p = id -> id.length() * 10L;
+                System.out.println(o.id() + "=" + p.price(o.id()));
+            }
+        }
+    expect:
+      compiles: true
+      stdout: A1=20
+
+- id: D7-PKG-001
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 75
+  tags:
+  - compact-source-file
+  - instance-main
+  - JEP-512
+  - IO
+  prompt: The file `Hello.java` contains exactly the code below and is launched with `java Hello.java` on Java 25. What is the output?
+  code: |
+    String greeting = "Hi";
+    int count;
+
+    void main() {
+        count++;
+        List<String> names = List.of("ana", "bo");
+        for (String n : names) {
+            IO.println(greeting + " " + n + " " + count);
+        }
+        IO.println(getClass().getName());
+    }
+  options:
+  - key: a
+    text: |-
+      Hi ana 1
+      Hi bo 1
+      Hello
+    correct: true
+    why: The file declares an implicit class named `Hello` (after the file); its fields are instance fields of the object the launcher creates before calling the instance `main()`.
+  - key: b
+    text: Compilation fails because `List` is not imported
+    why: Every compact source file implicitly imports `module java.base`, which includes `java.util.List`.
+  - key: c
+    text: Compilation fails because `main` uses the instance field `count` without an object
+    why: '`main()` is an instance method; the launcher instantiates the implicit class and calls `main()` on it.'
+  - key: d
+    text: |-
+      Hi ana 1
+      Hi bo 1
+      Main
+    why: The implicitly declared class is named after the source file, not `Main`.
+  explanation: |
+    A **compact source file** (final in Java 25, JEP 512) has methods and fields outside any class
+    declaration. The compiler wraps them in an **implicitly declared class**: final, in the unnamed package,
+    extending `Object`, named after the file (`Hello`). The file implicitly has `import module java.base;`, so
+    `List` needs no import, and `java.lang.IO` (a `java.lang` class) provides `println`. Because `main()` is an
+    instance method, the launcher creates an instance and then calls it.
+  rule: 'JEP 512: a compact source file declares an implicit final top-level class named after the file, implicitly imports module java.base, and may use an instance main method.'
+  misconception: Code outside a class is a script with only static members, and imports still have to be written by hand.
+  examEligible: true
+  java:
+    fileName: Hello.java
+    expect:
+      compiles: true
+      stdout: |-
+        Hi ana 1
+        Hi bo 1
+        Hello
+
+- id: D7-PKG-002
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 75
+  tags:
+  - compact-source-file
+  - IO
+  - JEP-512
+  prompt: The file `Greet.java` contains exactly the code below. What happens with `java Greet.java` on Java 25?
+  code: |
+    void main() {
+        String name = "Duke";
+        println("Hello, " + name);
+    }
+  options:
+  - key: a
+    text: It prints `Hello, Duke`
+    why: Preview versions of this feature imported `println` statically; the final Java 25 design does not. You must write `IO.println(...)`.
+  - key: b
+    text: Compilation fails at line 3
+    correct: true
+    why: No method `println(String)` exists in the implicit class or its imports; `IO`'s methods are *not* statically imported into compact source files.
+  - key: c
+    text: Compilation fails at line 1 because `main` must be `public static`
+    why: Since Java 25, `main` may be an instance method with no parameters and any non-private access.
+  - key: d
+    text: It compiles, but the launcher reports that no `main(String[])` method exists
+    why: A no-arg `void main()` is a valid entry point under the Java 25 launch protocol.
+  explanation: |
+    In Java 25 a compact source file implicitly imports **module `java.base`** — and nothing else. The console
+    helper class is `java.lang.IO` (automatically visible like every `java.lang` type), but its static methods
+    are not imported, so you write `IO.println(...)`, `IO.print(...)` or `IO.readln(...)`. Earlier previews
+    (JDK 21–24) imported them statically, so older tutorials show a bare `println`. Adding
+    `import static java.lang.IO.*;` would also make the bare call compile.
+  rule: 'JEP 512 (final in 25): compact source files implicitly import module java.base only; static members of java.lang.IO must be qualified (IO.println) or imported explicitly.'
+  misconception: '`println` can be called unqualified in a compact source file.'
+  examEligible: true
+  java:
+    fileName: Greet.java
+    expect:
+      compiles: false
+      errorContains: cannot find symbol
+      errorLine: 3
+
+- id: D7-PKG-003
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 120
+  tags:
+  - launch-protocol
+  - instance-main
+  - JEP-512
+  - inheritance
+  prompt: '`Main.java` is compiled and launched with `java Main` on Java 25. What is the output?'
+  code: |
+    class Launcher {
+        public static void main(String[] args) {
+            System.out.println("Launcher.main(String[])");
+        }
+    }
+
+    public class Main extends Launcher {
+        void main() {
+            System.out.println("Main.main()");
+        }
+    }
+  options:
+  - key: a
+    text: '`Main.main()`'
+    why: The launch protocol does not prefer methods declared in the launched class; it prefers a `main` with a `String[]` parameter, and inherited methods count.
+  - key: b
+    text: '`Launcher.main(String[])`'
+    correct: true
+    why: The launcher first looks for a non-private `main(String[])` that the class declares **or inherits**; `Main` inherits one from `Launcher`, so `main()` is never considered.
+  - key: c
+    text: Compilation fails because `Main` declares `main()` while inheriting `main(String[])`
+    why: The two methods have different signatures — an overload, not an override conflict.
+  - key: d
+    text: The launcher reports that the main method is ambiguous
+    why: The protocol has a fixed order (String[] first), so there is never an ambiguity between these forms.
+  explanation: |
+    Java 25's launch protocol (JEP 512) picks the entry point in a fixed order: if the class declares or
+    **inherits** a non-private `main(String[])`, that method is used; only otherwise is a non-private `main()`
+    with no parameters chosen. If the chosen method is static it is invoked directly; if it is an instance
+    method, the launcher first creates an object through a non-private no-arg constructor. Here the inherited
+    `public static void main(String[])` wins over the class's own `main()`.
+  rule: 'Launch protocol (JEP 512): choose a non-private main(String[]) declared or inherited; otherwise a non-private main(); static → invoke, instance → instantiate via a non-private no-arg constructor first.'
+  misconception: The main method declared in the launched class always wins over an inherited one.
+  hint: Which parameter list does the launch protocol look for first?
+  examEligible: true
+  java:
+    expect:
+      compiles: true
+      stdout: Launcher.main(String[])
+
+- id: D7-PKG-004
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - launch-protocol
+  - instance-main
+  - JEP-512
+  prompt: Each option is the complete content of `Main.java`, compiled and launched with `java Main` on Java 25. Which ones print `run`? Choose three.
+  options:
+  - key: a
+    text: '`public class Main { void main() { System.out.println("run"); } }`'
+    correct: true
+    why: An instance `main()` with package access is a valid entry point; the launcher uses the implicit public no-arg constructor.
+    java:
+      source: |
+        public class Main { void main() { System.out.println("run"); } }
+      expect:
+        compiles: true
+        stdout: run
+  - key: b
+    text: '`public class Main { private Main() { } void main() { System.out.println("run"); } }`'
+    why: An instance `main` needs a non-private no-arg constructor; the launcher fails with *no non-private zero argument constructor found*.
+    java:
+      source: |
+        public class Main { private Main() { } void main() { System.out.println("run"); } }
+      expect: &id001
+        compiles: true
+        stdout: ''
+        exitCode: 1
+  - key: c
+    text: '`public class Main { static void main() { System.out.println("run"); } }`'
+    correct: true
+    why: A static no-arg `main()` is valid; no instance is created.
+    java:
+      source: |
+        public class Main { static void main() { System.out.println("run"); } }
+      expect:
+        compiles: true
+        stdout: run
+  - key: d
+    text: '`public class Main { private static void main(String[] args) { System.out.println("run"); } }`'
+    why: Private `main` methods are never candidates, and there is no other `main`, so the launcher reports *Main method not found*.
+    java:
+      source: |
+        public class Main { private static void main(String[] args) { System.out.println("run"); } }
+      expect: *id001
+  - key: e
+    text: '`public class Main { protected void main(String[] args) { System.out.println("run"); } }`'
+    correct: true
+    why: Any non-private access works since Java 25, and an instance `main(String[])` is allowed.
+    java:
+      source: |
+        public class Main { protected void main(String[] args) { System.out.println("run"); } }
+      expect:
+        compiles: true
+        stdout: run
+  explanation: |
+    Since Java 25 (JEP 512) a launchable `main` may be static or instance, may take `String[]` or nothing, and
+    may have any access except `private`. For an instance `main` the launcher must create the object, so the
+    class needs a **non-private no-arg constructor**; otherwise launching fails with an error (exit code 1),
+    even though the class compiles. A `private` main is ignored, as if it did not exist.
+  rule: 'Java 25 entry points: [static] void main(String[]) or [static] void main(), any non-private access; instance main requires a non-private zero-argument constructor.'
+  misconception: Only `public static void main(String[])` can start a program, or conversely every method named main works.
+  hint: Check access of the method and, for instance methods, the constructor.
+  examEligible: true
+
+- id: D7-PKG-005
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - IO
+  - readln
+  - compact-source-file
+  - JEP-512
+  prompt: '`Ask.java` is launched with `java Ask.java`, and the user types `Ana` ⏎ then `42` ⏎. Ignoring the echo of the typed input, what does the program write to standard output?'
+  code: |
+    void main() {
+        String name = IO.readln("Name: ");
+        int age = Integer.parseInt(IO.readln());
+        IO.print("[" + name + "]");
+        IO.println(age + 1);
+    }
+  options:
+  - key: a
+    text: '`Name: [Ana]43`'
+    correct: true
+    why: '`readln(prompt)` prints the prompt without a line break, then reads a line; `print` adds no newline; `age + 1` is integer addition.'
+  - key: b
+    text: '`[Ana]43`'
+    why: '`IO.readln(String prompt)` writes the prompt to standard output before reading.'
+  - key: c
+    text: '`Name: [Ana]421`'
+    why: '`age` is an `int`, and `age + 1` is evaluated before being passed to `println`, so it is 43, not string concatenation.'
+  - key: d
+    text: Compilation fails because `IO.readln` throws the checked `IOException`
+    why: '`IO` methods throw only unchecked exceptions (`IOError` on I/O failure), so no `throws` clause is needed.'
+  explanation: |
+    `java.lang.IO` (final in Java 25, JEP 512) offers `print(Object)`, `println(Object)`, `println()`,
+    `readln()` and `readln(String prompt)`. `readln(prompt)` writes the prompt, flushes, and returns the next
+    line without its terminator (or `null` at end of input). In Java 25 these methods use `System.out` and
+    `System.in`. None of them declares a checked exception, which is why they are convenient in small
+    programs.
+  rule: 'java.lang.IO: print/println write to System.out; readln(prompt) prints the prompt (no newline) and reads one line; no checked exceptions.'
+  misconception: '`readln(prompt)` only uses the prompt as a label and prints nothing, or prints it with a newline.'
+  examEligible: true
+  java:
+    fileName: Ask.java
+    stdin: |
+      Ana
+      42
+    expect:
+      compiles: true
+      stdout: 'Name: [Ana]43'
+
+- id: D7-PKG-006
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - compact-source-file
+  - JEP-512
+  - import-module
+  prompt: Each option is the complete content of a compact source file `Tool.java`, launched with `java Tool.java` on Java 25. Which ones compile? Choose two.
+  options:
+  - key: a
+    text: '`record Point(int x, int y) { }` and `void main() { IO.println(new Point(1, 2)); }`'
+    correct: true
+    why: Classes, records, interfaces and enums declared in a compact source file become **member** types of the implicit class.
+    java:
+      fileName: Tool.java
+      source: |
+        record Point(int x, int y) { }
+
+        void main() { IO.println(new Point(1, 2)); }
+      expect:
+        compiles: true
+        stdout: Point[x=1, y=2]
+  - key: b
+    text: '`package tools;` and `void main() { }`'
+    why: The implicit class is always in the unnamed package; a compact source file may not have a package declaration.
+    java:
+      fileName: Tool.java
+      source: |
+        package tools;
+
+        void main() { }
+      expect:
+        compiles: false
+        errorContains: should not have package declaration
+  - key: c
+    text: '`Tool() { }` and `void main() { }`'
+    why: The implicit class cannot declare constructors (it has no name you can write); `Tool() { }` is parsed as a method without a return type.
+    java:
+      fileName: Tool.java
+      source: |
+        Tool() { }
+
+        void main() { }
+      expect:
+        compiles: false
+        errorContains: return type required
+  - key: d
+    text: '`static int calls;` and `static void main() { calls++; IO.println(calls); }`'
+    correct: true
+    why: Static fields and a static `main()` are allowed; the members are simply members of the implicit class.
+    java:
+      fileName: Tool.java
+      source: |
+        static int calls;
+
+        static void main() { calls++; IO.println(calls); }
+      expect:
+        compiles: true
+        stdout: '1'
+  - key: e
+    text: '`import module java.desktop;` and `void main() { List<String> l = List.of(); }`'
+    why: The implicit `import module java.base;` and the explicit `import module java.desktop;` both supply a `List` (`java.util.List`, `java.awt.List`), so the name is ambiguous.
+    java:
+      fileName: Tool.java
+      source: |
+        import module java.desktop;
+
+        void main() { List<String> l = List.of(); }
+      expect:
+        compiles: false
+        errorContains: reference to List is ambiguous
+  explanation: |
+    A compact source file can contain imports, fields, methods and nested type declarations; everything
+    becomes a member of the implicitly declared class, which is final, extends `Object`, lives in the unnamed
+    package and cannot be referenced by name from other code. Therefore no `package` declaration and no
+    constructor are possible, and the file must declare a launchable `main` method. The implicit
+    `import module java.base;` behaves like a written one, so an extra module import can create ambiguities —
+    fix them with a single-type import such as `import java.util.List;`.
+  rule: 'Compact source file: no package declaration, no constructors, must contain a main method; members (incl. nested types) belong to the implicit class; implicit `import module java.base;`.'
+  misconception: A compact source file is a free-form script where any statement or declaration is allowed.
+  hint: What can an implicitly declared class *not* have, given that it has no name in the source?
+  examEligible: true
+
+- id: D7-PKG-007
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 60
+  tags:
+  - automatic-module
+  - module-path
+  - migration
+  prompt: '`acme-report-tools-3.2.1.jar` has no `module-info.class` and its manifest has no `Automatic-Module-Name` attribute. It is placed on the **module path**. What is its module name?'
+  options:
+  - key: a
+    text: '`acme.report.tools`'
+    correct: true
+    why: The version suffix `-3.2.1` is dropped, every non-alphanumeric character becomes a dot, and repeated/leading/trailing dots are removed.
+  - key: b
+    text: '`acme-report-tools`'
+    why: A hyphen is not legal in a module name; the derivation replaces it with a dot.
+  - key: c
+    text: '`acme.report.tools.3.2.1`'
+    why: The trailing version is recognised (hyphen followed by a digit) and removed before the name is derived.
+  - key: d
+    text: 'It has no name: a JAR without `module-info` is part of the unnamed module'
+    why: That is only true on the class path. On the module path, a plain JAR becomes an automatic module.
+  explanation: |
+    A non-modular JAR on the module path becomes an **automatic module**. Its name comes from the
+    `Automatic-Module-Name` manifest attribute if present; otherwise it is derived from the file name: drop
+    `.jar`, drop a version suffix that starts with a hyphen followed by a digit, replace every
+    non-alphanumeric character with a dot, collapse repeated dots and trim leading/trailing dots. If the
+    result is not a legal module name (for example a part is a keyword or starts with a digit), the JAR
+    cannot be used as an automatic module.
+  rule: Automatic module name = Automatic-Module-Name manifest attribute, else derived from the JAR file name (strip .jar and -version, non-alphanumerics → dots).
+  misconception: A JAR without module-info is always in the unnamed module, wherever it is placed.
+  examEligible: true
+
+- id: D7-PKG-008
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - automatic-module
+  - unnamed-module
+  - named-module
+  - readability
+  prompt: 'An application has three kinds of code: named module `com.app` (with `module-info`), `legacy.jar` on the **module path** without `module-info`, and `old.jar` on the **class path**. Which statement is true?'
+  options:
+  - key: a
+    text: '`com.app` can declare `requires legacy;` and use every package in `legacy.jar`, while `legacy` can use classes in `old.jar`'
+    correct: true
+    why: An automatic module exports (and opens) all of its packages and reads every other module, including the unnamed module that holds the class path.
+  - key: b
+    text: '`com.app` can use classes from `old.jar` by declaring `requires unnamed;`'
+    why: The unnamed module has no name, so no named module can require it; named modules cannot see the class path at all.
+  - key: c
+    text: '`legacy` exports only the packages listed in its manifest''s `Export-Package` header'
+    why: '`Export-Package` is an OSGi convention, not part of the JPMS: an automatic module exports every package.'
+  - key: d
+    text: Code in `old.jar` can use only the packages that `com.app` exports to `legacy`
+    why: The unnamed module reads every module and can use all packages they export (to everyone); there is no special rule tied to `legacy`.
+  explanation: |
+    Three kinds of modules exist. **Named (explicit)** modules have a `module-info` and see only what they
+    `require`. **Automatic** modules are plain JARs on the module path: they get a name, export and open every
+    package, read every other module, and are the bridge that lets named modules depend on not-yet-modular
+    libraries. The **unnamed module** holds everything on the class path: it reads all modules and exports
+    all its packages, but because it has no name, named modules cannot require it — only automatic modules
+    can reach the class path.
+  rule: 'Automatic modules: export/open all packages, read all modules (incl. the unnamed one). Unnamed module: reads all modules, cannot be required by named modules.'
+  misconception: Named modules can reach class-path code directly, or automatic modules are as encapsulated as named ones.
+  hint: Which kind of module is allowed to read the unnamed module?
+  examEligible: true
+
+- id: D7-PKG-009
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: multi
+  format: concept
+  difficulty: advanced
+  estSeconds: 150
+  tags:
+  - jlink
+  - jdeps
+  - runtime-image
+  - services
+  prompt: The directory `mods` holds modular JARs `com.app` (declares `uses com.spi.Codec`), `com.spi`, and `com.codec.png` (declares `provides com.spi.Codec with ...`; nobody requires it). Which statements are true? Choose three.
+  options:
+  - key: a
+    text: '`jlink --module-path mods --add-modules com.app --output img` creates an image without `com.codec.png`; you must add it with `--add-modules` (or use `--bind-services`)'
+    correct: true
+    why: jlink resolves only the `requires` graph of the root modules; unlike the `java` launcher, it does not bind service providers by default.
+  - key: b
+    text: If `com.app` required an automatic module, jlink would refuse to link it
+    correct: true
+    why: 'jlink only links explicit modules: it reports *automatic module cannot be used with jlink*. Convert the library to a named module first.'
+  - key: c
+    text: '`jdeps --jdk-internals` reports class files that use internal JDK APIs and suggests replacements where known'
+    correct: true
+    why: That is exactly its purpose, typically run before migrating to a newer JDK.
+  - key: d
+    text: The image produced by jlink contains every JDK module, so that any application can run on it
+    why: 'The point of jlink is a minimal runtime: only the resolved modules (here `java.base` and the app modules) are linked.'
+  - key: e
+    text: '`jdeps --list-deps app.jar` adds a `module-info.class` describing the dependencies to `app.jar`'
+    why: jdeps only analyses and reports; `--generate-module-info` writes source files into a directory, and nothing modifies the JAR.
+  explanation: |
+    `jlink` builds a custom runtime image from the root modules (`--add-modules`) and the modules they
+    transitively `require`, found on `--module-path` (JDK modules are found automatically). It needs explicit
+    modules — automatic modules are rejected — and it does not add service providers unless asked
+    (`--add-modules` or `--bind-services`). `--launcher name=module/mainclass` adds a script under `bin/`.
+    `jdeps` is a static analyser: `--list-deps` / `--print-module-deps` list the JDK modules needed (ideal
+    input for jlink), `-s` summarises dependencies, and `--jdk-internals` finds uses of internal APIs.
+  rule: 'jlink: --module-path, --add-modules, --output, --launcher; links explicit modules only and no service providers unless added. jdeps: --list-deps, --jdk-internals, -s, --generate-module-info.'
+  misconception: jlink resolves modules the same way `java` does at start-up, including service binding.
+  examEligible: true
+
+- id: D7-PKG-010
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags:
+  - jar
+  - manifest
+  - class-path
+  - java-launcher
+  prompt: '`dist/app.jar` contains a manifest with `Main-Class: com.acme.Cli` and `Class-Path: lib/json.jar lib/log.jar`. From the project root you run `java -cp extra.jar -jar dist/app.jar`. Which statement is true?'
+  options:
+  - key: a
+    text: The class path is `dist/app.jar`, `dist/lib/json.jar` and `dist/lib/log.jar`; `extra.jar` is ignored
+    correct: true
+    why: With `-jar`, the JAR itself is the whole user class path and `-cp` is ignored; `Class-Path` entries are relative URLs resolved against the JAR's own location.
+  - key: b
+    text: The class path is `extra.jar`, `dist/app.jar`, `lib/json.jar` and `lib/log.jar`
+    why: '`-cp` is ignored when `-jar` is used, and `Class-Path` entries are not relative to the current directory.'
+  - key: c
+    text: The launcher fails because `-cp` and `-jar` cannot be combined
+    why: The combination is accepted; the `-cp` value is silently ignored.
+  - key: d
+    text: '`com.acme.Cli` is ignored unless the main class is also passed on the command line'
+    why: '`Main-Class` is exactly how `java -jar` finds the entry point; you do not pass a class name.'
+  explanation: |
+    `jar --create --file app.jar --main-class com.acme.Cli -C classes .` (short form `jar cfe app.jar
+    com.acme.Cli -C classes .`) writes `Main-Class` into `META-INF/MANIFEST.MF`; a custom manifest is added
+    with `--manifest`/`m`, and its last line must end with a newline. `java -jar app.jar` uses the JAR as the
+    **only** class-path source plus its `Class-Path` header — space-separated relative URLs resolved against
+    the JAR's directory. Any `-cp`/`CLASSPATH` setting is ignored.
+  rule: '`java -jar x.jar`: main class from Main-Class, class path = x.jar + its Class-Path entries (relative to the JAR); -cp and CLASSPATH are ignored.'
+  misconception: '`-cp` entries are appended to the class path of an executable JAR, and Class-Path is relative to the working directory.'
+  examEligible: true
+
+- id: D7-PKG-011
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: advanced
+  estSeconds: 120
+  tags:
+  - source-launcher
+  - multi-file
+  - JEP-458
+  prompt: |-
+    A directory contains three files:
+
+    - `Prog.java`: `class Prog { public static void main(String[] a) { System.out.println(Helper.hi()); } }`
+    - `Helper.java`: `class Helper { static String hi() { return "hi"; } }`
+    - `Broken.java`: `class Broken { int x = ; }` (a syntax error; no other file uses `Broken`)
+
+    What happens with `java Prog.java` on Java 25 (no `javac` was run before)?
+  options:
+  - key: a
+    text: It prints `hi`, and no `.class` files are written to the directory
+    correct: true
+    why: Since Java 22 (JEP 458) the source launcher compiles other source files in the directory tree on demand, in memory; `Broken.java` is never needed, so it is never compiled.
+  - key: b
+    text: It fails because `Broken.java` does not compile
+    why: Files are compiled only when a class they declare is first needed; an unused broken file is never compiled.
+  - key: c
+    text: 'It fails because `Helper` cannot be found: source-file mode compiles only the launched file'
+    why: That was the rule in Java 11–21. Since Java 22 the launcher finds `Helper.java` next to `Prog.java`.
+  - key: d
+    text: It prints `hi` and leaves `Prog.class` and `Helper.class` in the directory
+    why: Source-file mode compiles into memory; nothing is written to disk.
+  explanation: |
+    `java File.java` runs in **source-file mode**: the launched file is compiled in memory and its first
+    top-level class is run. Since Java 22 (JEP 458, *multi-file source-code programs*) classes that the
+    program references are looked up as `.java` files in the directory tree rooted at the launched file's
+    directory (packages map to subdirectories) and compiled **on demand**. Unused files are never compiled,
+    and no class files are written. Libraries in JARs are added with `--class-path`/`-cp` as usual.
+  rule: 'Source-file mode (JEP 330, extended by JEP 458 in Java 22): compiles in memory; other source files are compiled lazily when first referenced; no .class files are written.'
+  misconception: '`java Prog.java` is a shortcut for compiling every file in the folder with javac.'
+  examEligible: true
+
+- id: D7-PKG-012
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 75
+  tags:
+  - javac
+  - java-launcher
+  - module-path
+  - module-source-path
+  prompt: Sources are laid out as `src/com.app/module-info.java`, `src/com.app/com/app/Main.java` and `src/com.util/...` (module `com.app` requires `com.util`). Which pair of commands compiles both modules and runs `com.app.Main` as a module?
+  options:
+  - key: a
+    text: '`javac -d out --module-source-path src -m com.app` then `java -p out -m com.app/com.app.Main`'
+    correct: true
+    why: '`--module-source-path` lets javac find and compile `com.app` and the modules it requires into `out/<module>`; `-p` (`--module-path`) and `-m module/class` launch it as a module.'
+  - key: b
+    text: '`javac -d out --module-source-path src -m com.app` then `java -cp out com.app.Main`'
+    why: '`out` contains one directory per module (`out/com.app/...`), so `com.app.Main` is not found on that class path — and even if it were, it would run in the unnamed module.'
+  - key: c
+    text: '`javac -d out -p src src/com.app/com/app/Main.java` then `java -p out com.app.Main`'
+    why: '`-p` expects compiled modules, not a source tree; and `java -p out com.app.Main` without `-m` treats `com.app.Main` as a class-path main class.'
+  - key: d
+    text: '`javac -d out --module-source-path src -m com.app` then `java -m com.app.Main -p out`'
+    why: '`-m` needs `module/mainclass` (or a module with a recorded main class), and everything after `-m ...` is passed to the program as arguments, so `-p out` comes too late.'
+  explanation: |
+    For several modules, `javac --module-source-path src -m mod1,mod2 -d out` compiles in *multi-module mode*
+    and writes `out/<module-name>/...`. Precompiled dependencies go on `--module-path`/`-p`. To run, put
+    modules on the module path and name the main module and class: `java -p out -m com.app/com.app.Main`
+    (or just `-m com.app` if `jar --main-class` recorded a main class in the modular JAR). Options for the JVM
+    must come before `-m`; anything after the main class is program arguments.
+  rule: 'Compile: javac -d out --module-source-path src -m M (or -p for precompiled modules). Run: java -p path -m module[/mainclass] [args].'
+  misconception: The module path and class path are interchangeable, or launcher options may follow the main module.
+  examEligible: true
+
+- id: D7-PKG-013
+  objective: D7.2
+  lesson: pkg-compile-package-run
+  type: single
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags:
+  - migration
+  - top-down
+  - bottom-up
+  - automatic-module
+  prompt: '`app.jar` depends on `biz.jar`, which depends on `util.jar` and on a third-party `json.jar` that you cannot change. You want to give `app.jar` a `module-info` **first**, while the other JARs stay unchanged for now. Which approach works?'
+  options:
+  - key: a
+    text: 'Top-down: move all four JARs to the module path; the three plain JARs become automatic modules, and `app`''s module-info `requires` them by their automatic names'
+    correct: true
+    why: Automatic modules are what let a named module depend on code that is not modularised yet; top-down migration starts at the top of the graph.
+  - key: b
+    text: 'Bottom-up: keep `biz.jar`, `util.jar` and `json.jar` on the class path and modularise `app` first'
+    why: A named module cannot read the class path (the unnamed module), so `app` could not see `biz`. Bottom-up migration starts with the *lowest* JARs instead.
+  - key: c
+    text: Keep the three JARs on the class path and add `requires ALL-UNNAMED;` to `app`'s module-info
+    why: '`ALL-UNNAMED` is a value for command-line options such as `--add-reads`/`--add-opens`, not a module name you can `require`.'
+  - key: d
+    text: 'It is impossible: every dependency must be converted to a named module before `app` can have a module-info'
+    why: Automatic modules exist precisely so that migration need not wait for third-party libraries.
+  explanation: |
+    **Bottom-up** migration modularises the leaves first (`util`, then `biz`, then `app`): a converted JAR goes
+    to the module path as a named module while the not-yet-converted code stays on the class path, where the
+    unnamed module can read everything. **Top-down** migration puts every JAR on the module path at once so
+    unmodified JARs become automatic modules, then converts from the top (`app`) downward; it is the usual
+    choice when third-party libraries are not modular. Either way, a named module can never depend on the
+    class path directly.
+  rule: 'Bottom-up: modularise dependencies first (unconverted code stays on the class path). Top-down: everything on the module path, plain JARs become automatic modules, convert from the top.'
+  misconception: A named module can depend on class-path JARs as long as the classes are present at run time.
+  examEligible: true

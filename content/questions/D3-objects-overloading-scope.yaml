@@ -1,0 +1,1918 @@
+# D3.1 — objects, references, nested classes, lifecycle & GC
+# D3.3 — overloading & varargs
+# D3.4 — scope, access, encapsulation, immutability, var, unnamed variables
+
+# ───────────────────────────── D3.1 ─────────────────────────────
+
+- id: D3-OBJ-001
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [references, aliasing, pass-by-value]
+  prompt: What is the output?
+  code: |
+    class Box { int v; Box(int v) { this.v = v; } }
+    public class Main {
+        static void reassign(Box b) { b = new Box(99); b.v++; }
+        static void mutate(Box b)   { b.v++; }
+        public static void main(String[] args) {
+            Box a = new Box(1);
+            Box c = a;
+            c.v = 5;
+            reassign(a);
+            mutate(c);
+            System.out.println(a.v + " " + (a == c));
+        }
+    }
+  options:
+    - key: a
+      text: "`6 true`"
+      correct: true
+      why: a and c alias one Box. c.v = 5 changes it; reassign() only redirects its own parameter copy; mutate() increments the shared object to 6.
+    - key: b
+      text: "`1 false`"
+      why: "`Box c = a;` copies the reference, not the object — both variables point to the same Box, so c.v = 5 is visible through a."
+    - key: c
+      text: "`100 true`"
+      why: Assigning a new object to the parameter b inside reassign() does not change the caller's variable a; Java passes the reference by value.
+    - key: d
+      text: "`6 false`"
+      why: Neither a nor c is ever reassigned in main, so they still hold the same reference and == is true.
+  explanation: |
+    `Box c = a;` copies the **reference**: one object, two variables. `c.v = 5` mutates that object.
+    `reassign(a)` receives a copy of the reference; `b = new Box(99)` makes the *parameter* point elsewhere
+    and the increment affects the new, soon-unreachable object. `mutate(c)` follows the copied reference to
+    the shared object and increments it to 6. `a == c` compares references: still the same object.
+  rule: Java is always pass-by-value; for reference types the value passed is the reference (JLS 15.12.4.2). Reassigning a parameter never affects the caller's variable.
+  misconception: '"Objects are passed by reference, so reassigning the parameter changes the caller''s variable."'
+  hint: Which method changes the object, and which only changes where its own parameter points?
+  java:
+    expect: { compiles: true, stdout: "6 true" }
+
+- id: D3-OBJ-002
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [pass-by-value, immutability, arrays]
+  prompt: What does this program print?
+  code: |
+    public class Main {
+        static void change(String s, StringBuilder sb, int[] arr) {
+            s = s + "!";
+            sb.append("!");
+            arr = new int[] {9};
+        }
+        public static void main(String[] args) {
+            String s = "hi";
+            StringBuilder sb = new StringBuilder("hi");
+            int[] arr = {1};
+            change(s, sb, arr);
+            System.out.println(s + " " + sb + " " + arr[0]);
+        }
+    }
+  options:
+    - key: a
+      text: "`hi hi! 1`"
+      correct: true
+      why: Only sb.append mutates an object the caller can see. The String and the array parameters are merely reassigned to new objects.
+    - key: b
+      text: "`hi! hi! 9`"
+      why: s + "!" creates a new String and assigns it to the parameter; the caller's s still refers to "hi". The same is true for the new array.
+    - key: c
+      text: "`hi hi! 9`"
+      why: "`arr = new int[] {9}` reassigns the parameter; the caller's array still contains 1. Writing `arr[0] = 9` would have changed it."
+    - key: d
+      text: "`hi hi 1`"
+      why: append() mutates the StringBuilder object that both the caller and the method reference.
+  explanation: |
+    Three references are copied into `change`. `s = s + "!"` builds a new `String` (Strings are immutable)
+    and rebinds only the parameter. `sb.append("!")` mutates the shared `StringBuilder`. `arr = new int[]{9}`
+    rebinds only the parameter. Back in `main`, `s` is `"hi"`, `sb` is `"hi!"`, `arr[0]` is `1`.
+  rule: A method can change the state of an object passed to it, but can never change which object the caller's variable refers to.
+  misconception: '"String is an object, so changing it in a method changes it for the caller."'
+  hint: For each parameter, ask "is the object mutated, or is the parameter reassigned?"
+  java:
+    expect: { compiles: true, stdout: "hi hi! 1" }
+
+- id: D3-OBJ-003
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [inner-class, static-context]
+  prompt: What is the result of compiling this code?
+  code: |
+    public class Main {
+        class Inner { }
+        public static void main(String[] args) {
+            Inner i = new Inner();
+        }
+    }
+  options:
+    - key: a
+      text: It compiles and runs, printing nothing
+      why: An inner (non-static member) class needs an enclosing Main instance, and static main has none.
+    - key: b
+      text: "Compilation fails at line 4: `non-static variable this cannot be referenced from a static context`"
+      correct: true
+      why: "`new Inner()` implicitly means `this.new Inner()`; there is no `this` in a static method."
+    - key: c
+      text: Compilation fails at line 2 because inner classes must be static
+      why: Inner member classes are perfectly legal; the problem is creating one without an outer instance.
+    - key: d
+      text: It compiles but throws a `NullPointerException` because the enclosing instance is null
+      why: The compiler catches this; the code never runs. (A NullPointerException happens only with an explicit null outer, as in `nullRef.new Inner()`.)
+  explanation: |
+    Every instance of an inner class is bound to an instance of its enclosing class. Inside an instance
+    method, `new Inner()` means `this.new Inner()`. In static `main` there is no `this`, so javac reports
+    *non-static variable this cannot be referenced from a static context*. Fix:
+    `Inner i = new Main().new Inner();` — or declare `static class Inner`.
+  rule: An inner class instance requires an enclosing instance (JLS 15.9.2); unqualified `new Inner()` in a static context does not compile.
+  misconception: '"A member class can be instantiated anywhere in its outer class, just like a top-level class."'
+  hint: What does `new Inner()` implicitly mean inside the outer class?
+  java:
+    expect: { compiles: false, errorContains: "non-static variable this cannot be referenced from a static context", errorLine: 4 }
+
+- id: D3-OBJ-004
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [inner-class, shadowing, qualified-this]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        int x = 1;
+        class A {
+            int x = 2;
+            class B {
+                int x = 3;
+                void p() { System.out.println(x + "" + A.this.x + Main.this.x); }
+            }
+        }
+        public static void main(String[] args) {
+            Main.A.B b = new Main().new A().new B();
+            b.p();
+        }
+    }
+  options:
+    - key: a
+      text: "`321`"
+      correct: true
+      why: Plain x is B's own field (3); A.this.x is the enclosing A instance's field (2); Main.this.x is the outermost (1). The "" forces String concatenation.
+    - key: b
+      text: "`6`"
+      why: Evaluation is left to right; x + "" already produces a String, so the remaining operands are concatenated, not added.
+    - key: c
+      text: "`333`"
+      why: A.this and Main.this refer to the enclosing instances, whose x fields are different variables from B's x.
+    - key: d
+      text: Compilation fails because `new Main().new A().new B()` is not valid syntax
+      why: Qualified instance creation can be chained; each `.new` uses the object on its left as the enclosing instance.
+  explanation: |
+    `new Main().new A().new B()` creates three objects, each inner object bound to the one on its left.
+    Inside `B`, the simple name `x` resolves to the innermost declaration (B's field). `A.this.x` and
+    `Main.this.x` reach the shadowed fields of the enclosing instances. Because `x + ""` is a `String`, the
+    rest is concatenation: `"3" + 2 + 1` → `321`.
+  rule: "`Outer.this` denotes the lexically enclosing instance of class Outer (JLS 15.8.4); a field declared in an inner scope shadows the outer one."
+  hint: Which variable does a simple name refer to when several x are in scope?
+  java:
+    expect: { compiles: true, stdout: "321" }
+
+- id: D3-OBJ-005
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [nested-class, inner-class, instantiation]
+  prompt: |
+    Given the class below, which statements compile when placed (one at a time) at `// INSERT`?
+    Choose two.
+  code: |
+    public class Main {
+        class Inner { }
+        static class Nested { }
+        public static void main(String[] args) {
+            // INSERT
+        }
+    }
+  options:
+    - key: a
+      text: "`Inner a = new Main().new Inner();`"
+      correct: true
+      why: The qualified form supplies the required enclosing instance explicitly.
+      java:
+        source: |
+          public class Main {
+              class Inner { }
+              static class Nested { }
+              public static void main(String[] args) {
+                  Inner a = new Main().new Inner();
+              }
+          }
+        expect: { compiles: true }
+    - key: b
+      text: "`Main.Nested b = new Main.Nested();`"
+      correct: true
+      why: A static nested class needs no outer instance; it is created like a top-level class, using its qualified name.
+      java:
+        source: |
+          public class Main {
+              class Inner { }
+              static class Nested { }
+              public static void main(String[] args) {
+                  Main.Nested b = new Main.Nested();
+              }
+          }
+        expect: { compiles: true }
+    - key: c
+      text: "`Main.Inner c = new Main.Inner();`"
+      why: Qualifying the type name does not provide an enclosing instance; this still needs `this`, which a static method lacks.
+      java:
+        source: |
+          public class Main {
+              class Inner { }
+              static class Nested { }
+              public static void main(String[] args) {
+                  Main.Inner c = new Main.Inner();
+              }
+          }
+        expect: { compiles: false, errorContains: "non-static variable this cannot be referenced" }
+    - key: d
+      text: "`Nested d = new Main().new Nested();`"
+      why: A static nested class has no enclosing instance, so a qualified `outer.new` is rejected (qualified new of static class).
+      java:
+        source: |
+          public class Main {
+              class Inner { }
+              static class Nested { }
+              public static void main(String[] args) {
+                  Nested d = new Main().new Nested();
+              }
+          }
+        expect: { compiles: false, errorContains: "qualified new of static class" }
+    - key: e
+      text: "`Main m = new Main(); Main.Inner e = m.new Main.Inner();`"
+      why: After `outer.new`, only the simple name of the inner class is allowed — `m.new Inner()`.
+      java:
+        source: |
+          public class Main {
+              class Inner { }
+              static class Nested { }
+              public static void main(String[] args) {
+                  Main m = new Main(); Main.Inner e = m.new Main.Inner();
+              }
+          }
+        expect: { compiles: false }
+  explanation: |
+    Inner classes need an enclosing instance: `outerRef.new Inner()` (simple name after `.new`). Static
+    nested classes need none: `new Outer.Nested()` — and they reject the qualified `outer.new` form.
+  rule: JLS 15.9 — qualified class instance creation `Primary.new Identifier(...)` is only for inner classes, and uses the simple class name.
+  misconception: '"Writing the full name Main.Inner is enough to create an inner object from static code."'
+  hint: Which of the two classes is tied to an instance of Main?
+
+- id: D3-OBJ-006
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [garbage-collection, island-of-isolation]
+  prompt: How many of the `Node` objects created in this program are eligible for garbage collection when execution reaches `// HERE`?
+  code: |
+    class Node { Node link; }
+    public class Main {
+        public static void main(String[] args) {
+            Node p = new Node();   // #1
+            Node q = new Node();   // #2
+            Node r = new Node();   // #3
+            p.link = q;
+            q.link = r;
+            r.link = q;
+            q = null;
+            r = null;
+            p.link = new Node();   // #4
+            // HERE
+            System.out.println(p.link != null);
+        }
+    }
+  options:
+    - key: a
+      text: "0"
+      why: "#2 and #3 still reference each other, but references from unreachable objects do not keep anything alive."
+    - key: b
+      text: "1"
+      why: "#2 and #3 form a cycle; once p.link is redirected to #4, neither is reachable, so both are eligible — not just one."
+    - key: c
+      text: "2"
+      correct: true
+      why: "#2 and #3 form an island of isolation: they reference each other, but no live variable or reachable object refers to either."
+    - key: d
+      text: "3"
+      why: "#1 is still referenced by p and #4 by p.link, so at most #2 and #3 can be eligible."
+  explanation: |
+    Reachability is what matters, not reference counts. After `q = null; r = null;`, #2 is still reachable
+    through `p.link`, and #3 through #2. Redirecting `p.link` to #4 cuts the only path into the #2⇄#3 cycle.
+    The cycle is an **island of isolation**: both objects are eligible even though each is referenced by the
+    other. #1 (via `p`) and #4 (via `p.link`) remain reachable.
+  rule: An object is eligible for GC when it is no longer reachable from any live thread or static field (JLS 12.6.1); cycles of unreachable objects are collectable.
+  misconception: '"An object that is still referenced by another object can never be collected."'
+  hint: Draw the arrows from p, q and r after each line, then ask what is reachable from the variables.
+  java:
+    source: |
+      import java.lang.ref.WeakReference;
+      class Node { Node link; }
+      public class Main {
+          public static void main(String[] args) throws Exception {
+              Node p = new Node();
+              Node q = new Node();
+              Node r = new Node();
+              p.link = q;
+              q.link = r;
+              r.link = q;
+              var w1 = new WeakReference<>(p); var w2 = new WeakReference<>(q); var w3 = new WeakReference<>(r);
+              q = null;
+              r = null;
+              p.link = new Node();
+              var w4 = new WeakReference<>(p.link);
+              for (int i = 0; i < 3; i++) { System.gc(); Thread.sleep(20); }
+              int cleared = 0;
+              for (var w : java.util.List.of(w1, w2, w3, w4)) if (w.get() == null) cleared++;
+              System.out.println(cleared);
+              System.out.println(p.link != null);
+          }
+      }
+    expect: { compiles: true, stdout: "2\ntrue" }
+    optionCheck: false
+
+- id: D3-OBJ-007
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: trace
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [garbage-collection, reference-reassignment]
+  prompt: How many `StringBuilder` objects are eligible for garbage collection when execution reaches `// HERE`?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            StringBuilder a = new StringBuilder("A");
+            StringBuilder b = new StringBuilder("B");
+            StringBuilder c = a;
+            a = b;
+            b = new StringBuilder("C");
+            c = b;
+            // HERE
+            System.out.println(a + " " + b + " " + c);
+        }
+    }
+  options:
+    - key: a
+      text: "0"
+      why: The "A" object loses its last reference when c is reassigned.
+    - key: b
+      text: "1"
+      correct: true
+      why: 'Only "A" is unreachable: a refers to "B", and b and c both refer to "C".'
+    - key: c
+      text: "2"
+      why: '"B" is still referenced by a (a = b copied the reference before b was reassigned).'
+    - key: d
+      text: "3"
+      why: Three objects exist, but two of them are still referenced by local variables.
+  explanation: |
+    Track the arrows: after `c = a`, "A" has two references. `a = b` leaves "A" with only `c`. `b = new ...`
+    creates "C"; `c = b` removes the last reference to "A". At `// HERE`: `a → "B"`, `b → "C"`, `c → "C"`.
+    Exactly one object ("A") is eligible.
+  rule: Assigning a new value to a reference variable drops that variable's reference to its old object; an object with no remaining path from live code is eligible for GC.
+  hint: Draw a box per object and move the arrows line by line.
+  java:
+    source: |
+      import java.lang.ref.WeakReference;
+      public class Main {
+          public static void main(String[] args) throws Exception {
+              StringBuilder a = new StringBuilder("A");
+              StringBuilder b = new StringBuilder("B");
+              var wa = new WeakReference<>(a); var wb = new WeakReference<>(b);
+              StringBuilder c = a;
+              a = b;
+              b = new StringBuilder("C");
+              var wc = new WeakReference<>(b);
+              c = b;
+              for (int i = 0; i < 3; i++) { System.gc(); Thread.sleep(20); }
+              int n = 0;
+              for (var w : java.util.List.of(wa, wb, wc)) if (w.get() == null) n++;
+              System.out.println(n);
+              System.out.println(a + " " + b + " " + c);
+          }
+      }
+    expect: { compiles: true, stdout: "1\nB C C" }
+    optionCheck: false
+
+- id: D3-OBJ-008
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [garbage-collection, finalize]
+  prompt: Which statements about garbage collection in Java are true? Choose three.
+  options:
+    - key: a
+      text: "`System.gc()` is only a request; the JVM may ignore it, and you cannot force a collection."
+      correct: true
+      why: The API documents System.gc() as a suggestion; when or whether collection happens is up to the JVM.
+    - key: b
+      text: "`Object.finalize()` is deprecated for removal, and there is no guarantee it ever runs."
+      correct: true
+      why: "finalize() has been deprecated since Java 9 and marked forRemoval (JEP 421); the JVM never promised to call it."
+    - key: c
+      text: Two objects that reference each other but are not reachable from any live variable are both eligible.
+      correct: true
+      why: Java uses reachability, not reference counting, so an island of isolation is collectable.
+    - key: d
+      text: Setting a variable to `null` immediately frees the object's memory.
+      why: It may only make the object eligible; memory is reclaimed later, if ever, when the collector runs.
+    - key: e
+      text: An object becomes eligible only when it goes out of scope at the end of its method.
+      why: Eligibility depends on reachability, which can end earlier (reassignment, null) and is unrelated to scope of objects themselves — only variables have scope.
+  explanation: |
+    You control *eligibility* (by dropping references), never *collection*. `System.gc()` is a hint,
+    `finalize()` is deprecated for removal and unreliable (use try-with-resources / `Cleaner` instead), and
+    the collector reasons about reachability from GC roots, so unreachable cycles are collected.
+  rule: "System.gc() javadoc: 'suggests that the JVM expend effort'; Object.finalize() is @Deprecated(forRemoval=true) (JEP 421)."
+  misconception: '"Calling System.gc() or setting a reference to null frees memory right away."'
+
+- id: D3-OBJ-009
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [identity, equality, records]
+  prompt: What is the output?
+  code: |
+    class Point { int x; Point(int x) { this.x = x; } }
+    record Spot(int x) { }
+    public class Main {
+        public static void main(String[] args) {
+            Point p1 = new Point(1), p2 = new Point(1), p3 = p1;
+            Spot s1 = new Spot(1), s2 = new Spot(1);
+            System.out.println((p1 == p2) + " " + p1.equals(p2) + " "
+                + (p1 == p3) + " " + s1.equals(s2) + " " + (s1 == s2));
+        }
+    }
+  options:
+    - key: a
+      text: "`false false true true false`"
+      correct: true
+      why: Point inherits Object.equals (identity); the record generates a component-wise equals; == always compares references.
+    - key: b
+      text: "`false true true true false`"
+      why: Point does not override equals, so Object.equals is used, which is the same as ==.
+    - key: c
+      text: "`false false true true true`"
+      why: Records override equals, but == still compares references, and s1 and s2 are two distinct objects.
+    - key: d
+      text: "`true true true true true`"
+      why: Each `new` creates a distinct object, so p1 == p2 and s1 == s2 are false.
+  explanation: |
+    `==` on references tests **identity** (same object). `equals` tests whatever the class defines:
+    `Object.equals` is identity, so `p1.equals(p2)` is `false`; records get a state-based `equals`, so
+    `s1.equals(s2)` is `true`. `p3 = p1` copies the reference, so `p1 == p3` is `true`.
+  rule: "Object.equals(Object) returns this == obj unless overridden; records implicitly implement equals by comparing components (java.lang.Record)."
+  misconception: '"equals always compares field values."'
+  hint: Which of the two types overrides equals?
+  java:
+    expect: { compiles: true, stdout: "false false true true false" }
+
+- id: D3-OBJ-010
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 90
+  tags: [local-class, effectively-final, capture]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int base = 10;
+            class Adder { int add(int v) { return base + v; } }
+            Adder a = new Adder();
+            System.out.println(a.add(5));
+            base = 20;
+        }
+    }
+  options:
+    - key: a
+      text: Prints `15`
+      why: The later assignment base = 20 means base is not effectively final, so the local class may not capture it.
+    - key: b
+      text: Prints `25`
+      why: Captured locals are copied when the object is created, so even if allowed the value would be 10. But the code does not compile.
+    - key: c
+      text: "Compilation fails at line 4: local variables referenced from an inner class must be final or effectively final"
+      correct: true
+      why: A variable assigned again anywhere in its scope is not effectively final, even if the assignment comes after the capture.
+    - key: d
+      text: Compilation fails at line 7 because `base` is final after being captured
+      why: base is not declared final; the error is reported at the capturing reference on line 4.
+  explanation: |
+    Local and anonymous classes (and lambdas) may only capture local variables that are `final` or
+    **effectively final** — never assigned after initialization. Effectively-final status is decided for
+    the whole scope, so `base = 20;` on line 7 disqualifies the use on line 4. javac reports the error at
+    the reference inside the local class.
+  rule: A local variable used but not declared in a local/anonymous class must be final or effectively final (JLS 8.1.3, 4.12.4).
+  misconception: '"Only assignments before the capture matter."'
+  hint: Is base ever assigned after its declaration?
+  java:
+    expect: { compiles: false, errorContains: "must be final or effectively final", errorLine: 4 }
+
+- id: D3-OBJ-011
+  objective: D3.1
+  lesson: oop-objects-lifecycle
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [anonymous-class, shadowing, qualified-this, state]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        private String tag = "outer";
+        interface Op { String run(); }
+        Op make() {
+            String tag = "local";
+            return new Op() {
+                private String tag = "anon";
+                int calls;
+                public String run() { calls++; return tag + calls + "," + Main.this.tag; }
+            };
+        }
+        public static void main(String[] args) {
+            Op op = new Main().make();
+            op.run();
+            System.out.println(op.run());
+        }
+    }
+  options:
+    - key: a
+      text: "`anon2,outer`"
+      correct: true
+      why: The anonymous class's own field tag shadows both the local variable and the outer field; calls is per-object state, incremented twice.
+    - key: b
+      text: "`local2,outer`"
+      why: Inside the anonymous class body, its member field tag is the innermost declaration and shadows the enclosing method's local tag.
+    - key: c
+      text: "`anon1,outer`"
+      why: The same Op object is used for both calls, and its calls field keeps its value between calls.
+    - key: d
+      text: Compilation fails because the anonymous class declares a field with the same name as a local variable
+      why: Shadowing a local by a member of a nested class is legal; only redeclaring a local in the same method scope is an error.
+  explanation: |
+    An anonymous class is a full class: it can declare fields and keep state across calls. Inside it, the
+    simple name `tag` resolves to its own field (`"anon"`), shadowing the captured local `"local"` and the
+    field `Main.tag`, which is still reachable as `Main.this.tag`. `calls` is 2 at the second call.
+  rule: Scope of a member declared in a class body includes the whole body and shadows outer declarations of the same name (JLS 6.4.1); Outer.this reaches the enclosing instance.
+  hint: Which declaration of tag is closest to the use?
+  java:
+    expect: { compiles: true, stdout: "anon2,outer" }
+
+# ───────────────────────────── D3.3 ─────────────────────────────
+
+- id: D3-OVL-001
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: does-it-compile
+  difficulty: foundation
+  estSeconds: 60
+  tags: [overloading, signature, return-type]
+  prompt: What is the result of compiling this class?
+  code: |
+    public class Main {
+        static int  parse(String s) { return Integer.parseInt(s); }
+        static long parse(String text) { return Long.parseLong(text); }
+        public static void main(String[] args) {
+            System.out.println(parse("7"));
+        }
+    }
+  options:
+    - key: a
+      text: Prints `7`
+      why: The code does not compile; two methods may not share the same name and parameter types.
+    - key: b
+      text: "Compilation fails at line 3: method parse(String) is already defined"
+      correct: true
+      why: The signature is the name plus parameter types. Return types and parameter names are not part of it, so these are duplicates.
+    - key: c
+      text: Compilation fails at line 5 because the call is ambiguous
+      why: The declaration itself is already illegal; javac reports the duplicate method, not an ambiguous call.
+    - key: d
+      text: Prints `7` using the `long` version because it is declared last
+      why: Declaration order never matters for overload resolution, and these are not overloads at all.
+  explanation: |
+    A method's **signature** is its name plus the number, order and types of its parameters (JLS §8.4.2).
+    Return type, parameter names, `throws` clause and modifiers like `static` are not part of it.
+    `parse(String)` appears twice, so javac reports *method parse(String) is already defined in class Main*.
+  rule: "JLS 8.4.2: two methods have the same signature if they have the same name and parameter types; a class may not declare two methods with override-equivalent signatures."
+  misconception: '"Changing the return type is enough to overload a method."'
+  hint: What exactly is part of a method signature?
+  java:
+    expect: { compiles: false, errorContains: "is already defined", errorLine: 3 }
+
+- id: D3-OVL-002
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: overload-resolution
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [overloading, widening, boxing, char]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static void m(long x)      { System.out.println("long"); }
+        static void m(Character c) { System.out.println("Character"); }
+        static void m(Object o)    { System.out.println("Object"); }
+        public static void main(String[] args) {
+            m('z');
+            Character ch = 'q';
+            m(ch);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        long
+        Character
+      correct: true
+      why: For 'z', phase 1 finds m(long) by widening char→long, before boxing is considered. For ch, m(Character) is an identity match in phase 1.
+    - key: b
+      text: |
+        Character
+        Character
+      why: Boxing char→Character is a phase-2 conversion; phase 1 already succeeds with widening char→long.
+    - key: c
+      text: |
+        long
+        long
+      why: For a Character argument, m(Character) and m(Object) are applicable in phase 1 without unboxing; Character is the most specific.
+    - key: d
+      text: |
+        Object
+        Character
+      why: Reaching Object from a char needs boxing (phase 2), and phase 1 already succeeded with m(long).
+  explanation: |
+    Phase 1 (JLS §15.12.2.2) allows only identity and widening conversions. A `char` widens to `int`,
+    `long`, `float`, `double`, so `m(long)` applies and wins before boxing is ever tried. A `Character`
+    argument matches `m(Character)` and `m(Object)` in phase 1 (identity and widening reference); the most
+    specific, `Character`, is chosen. Unboxing to reach `m(long)` would require phase 2.
+  rule: "JLS 15.12.2: phase 1 = no boxing/unboxing, no varargs; phase 2 = adds boxing/unboxing; phase 3 = adds varargs. The first phase with an applicable method decides."
+  misconception: '"A char argument prefers Character because they are the same kind of thing."'
+  hint: Is widening or boxing tried first?
+  java:
+    expect: { compiles: true, stdout: "long\nCharacter" }
+
+- id: D3-OVL-003
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 120
+  tags: [overloading, ambiguity, boxing]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static void m(Integer a, long b) { System.out.println("Integer,long"); }
+        static void m(long a, Integer b) { System.out.println("long,Integer"); }
+        public static void main(String[] args) {
+            m(1, 1);
+        }
+    }
+  options:
+    - key: a
+      text: Prints `Integer,long`
+      why: Both methods need exactly one boxing and one widening; neither is more specific, so the call is ambiguous.
+    - key: b
+      text: Prints `long,Integer`
+      why: Declaration order and argument position do not break ties in overload resolution.
+    - key: c
+      text: "Compilation fails at line 5: reference to m is ambiguous"
+      correct: true
+      why: Neither method applies in phase 1 (both need boxing). In phase 2 both apply, and neither parameter list is a subtype-wise match for the other.
+    - key: d
+      text: Compilation fails at line 3 because the two methods have the same erasure
+      why: (Integer, long) and (long, Integer) are different parameter lists, so the declarations are legal overloads.
+  explanation: |
+    Phase 1 fails: each method needs `int → Integer` boxing for one argument. In phase 2 both are
+    applicable. To be *more specific*, one method's parameter types would have to be usable for the other's
+    in every position: `Integer` vs `long` is incompatible in both directions, so neither wins and javac
+    reports *reference to m is ambiguous*. Declaring both methods is fine — the error is at the call.
+  rule: If more than one method is applicable in a phase and none is strictly more specific (JLS 15.12.2.5), the invocation is ambiguous — a compile-time error at the call site.
+  misconception: '"The compiler picks the first declared method when both need the same number of conversions."'
+  hint: Can either method be chosen in phase 1? If not, which one is more specific in phase 2?
+  java:
+    expect: { compiles: false, errorContains: "reference to m is ambiguous", errorLine: 5 }
+
+- id: D3-OVL-004
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: overload-resolution
+  difficulty: foundation
+  estSeconds: 60
+  tags: [overloading, "null", most-specific]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static void show(Object o) { System.out.println("Object"); }
+        static void show(String s) { System.out.println("String"); }
+        public static void main(String[] args) {
+            Object o = "text";
+            show(o);
+            show(null);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        Object
+        String
+      correct: true
+      why: Overloads are chosen from the static (declared) type, so show(o) picks Object; null fits both, and String is more specific.
+    - key: b
+      text: |
+        String
+        String
+      why: Overload resolution uses the compile-time type Object of o, not the runtime String object.
+    - key: c
+      text: |
+        Object
+        Object
+      why: For null, both methods apply and the most specific (String, a subtype of Object) is chosen.
+    - key: d
+      text: Compilation fails because `show(null)` is ambiguous
+      why: It is ambiguous only when neither candidate type is a subtype of the other; String extends Object.
+  explanation: |
+    Overload selection happens at **compile time** using the declared types of the arguments: `o` is an
+    `Object`, so `show(Object)` is chosen even though it holds a `String`. `null` is assignable to every
+    reference type, so both overloads apply; `String` is a subtype of `Object`, hence more specific.
+  rule: The most specific applicable method is chosen (JLS 15.12.2.5); for reference parameters, m1 is more specific than m2 if its parameter type is a subtype of m2's.
+  hint: Is overloading resolved with the variable's declared type or the object's runtime type?
+  java:
+    expect: { compiles: true, stdout: "Object\nString" }
+
+- id: D3-OVL-005
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 90
+  tags: [overloading, "null", ambiguity]
+  prompt: What is the result of compiling this program?
+  code: |
+    public class Main {
+        static void m(String s)         { System.out.println("String"); }
+        static void m(StringBuilder sb) { System.out.println("StringBuilder"); }
+        static void m(Object o)         { System.out.println("Object"); }
+        public static void main(String[] args) {
+            m("x");
+            m(null);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        String
+        String
+      why: String and StringBuilder are unrelated, so neither is more specific for a null argument.
+    - key: b
+      text: |
+        String
+        Object
+      why: Object is the least specific candidate; the compiler never falls back to it when more specific candidates tie.
+    - key: c
+      text: "Compilation fails at line 7: reference to m is ambiguous"
+      correct: true
+      why: null is applicable to all three; String and StringBuilder are both more specific than Object, but neither is more specific than the other.
+    - key: d
+      text: Compilation fails at line 6 because a String literal could also match `CharSequence`
+      why: There is no CharSequence overload; "x" is exactly a String, so line 6 is fine.
+  explanation: |
+    With `null`, every reference-typed overload is applicable. The compiler then looks for one method that
+    is more specific than **all** others. `String` and `StringBuilder` are unrelated siblings (both extend
+    `Object`), so there is no single most specific method: *reference to m is ambiguous*. Fix it with a cast:
+    `m((String) null)`.
+  rule: JLS 15.12.2.5 — if no applicable method is more specific than all others, the call is ambiguous.
+  misconception: '"With null the compiler just picks Object, the safest type."'
+  hint: Is String a subtype of StringBuilder, or vice versa?
+  java:
+    expect: { compiles: false, errorContains: "reference to m is ambiguous", errorLine: 7 }
+
+- id: D3-OVL-006
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: overload-resolution
+  difficulty: advanced
+  estSeconds: 150
+  tags: [overloading, phases, varargs, boxing, widening]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static int m(int a)     { return 1; }
+        static int m(int... a)  { return 2; }
+        static int m(Integer a) { return 3; }
+        static int m(long a)    { return 4; }
+        public static void main(String[] args) {
+            Integer i = 0;
+            System.out.println("" + m(1) + m(i) + m(1, 2) + m(1L) + m('a'));
+        }
+    }
+  options:
+    - key: a
+      text: "`13241`"
+      correct: true
+      why: "m(1) exact int; m(i) identity Integer in phase 1; m(1, 2) only varargs fits; m(1L) only long fits; m('a') widens char→int, and int is more specific than long."
+    - key: b
+      text: "`11241`"
+      why: "For an Integer argument, m(Integer) is an identity match in phase 1; unboxing to int would need phase 2."
+    - key: c
+      text: "`13244`"
+      why: "char widens to both int and long, but m(int) is more specific because int widens to long."
+    - key: d
+      text: "`13243`"
+      why: "Boxing char gives Character, not Integer, so m(Integer) is never applicable to 'a'."
+  explanation: |
+    Walk each call through the phases. `m(1)`: phase 1, `int` identity (also `long` by widening; `int` is
+    more specific) → 1. `m(i)`: phase 1 accepts `Integer` identity → 3 (unboxing is phase 2). `m(1, 2)`: only
+    varargs takes two ints → 2. `m(1L)`: `long` identity → 4. `m('a')`: phase 1, `char` widens to `int` and
+    `long`; `int` is more specific → 1.
+  rule: "JLS 15.12.2.2–15.12.2.4: strict/loose invocation (phases 1–2) before variable-arity invocation (phase 3); among primitives, the narrower type that widens to the other is more specific."
+  hint: Do each call separately, checking phase 1 first.
+  java:
+    expect: { compiles: true, stdout: "13241" }
+
+- id: D3-OVL-007
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [varargs, "null"]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        static void count(int... values) { System.out.println(values.length); }
+        public static void main(String[] args) {
+            count();
+            count(new int[] {4, 5});
+            count(null);
+        }
+    }
+  options:
+    - key: a
+      text: Prints `0` and `2`, then throws a `NullPointerException`
+      correct: true
+      why: Zero arguments give an empty array; an int[] is passed as the array itself; null is passed as the array reference, so values.length throws.
+    - key: b
+      text: Prints `0`, `2` and `1`
+      why: null is assignable to int[], so it is passed as the array itself, not wrapped in a one-element array.
+    - key: c
+      text: Compilation fails because `count()` passes no argument for `values`
+      why: A varargs parameter accepts zero arguments; the method receives an empty array, not null.
+    - key: d
+      text: Prints `1` and `2`, then throws a `NullPointerException`
+      why: With no arguments the varargs array has length 0.
+  explanation: |
+    A varargs parameter `int... values` is an `int[]`. `count()` → `new int[0]`; `count(new int[]{4,5})` →
+    the array is passed directly; `count(null)` → `null` is a valid `int[]` value, so it is passed as the
+    array reference itself and `values.length` throws `NullPointerException`.
+  rule: "JLS 15.12.4.2: for a variable-arity call, if the argument is assignable to the array type T[] it is passed as-is (phase 1/2); otherwise the arguments are collected into a new array."
+  misconception: '"A varargs parameter is never null."'
+  hint: Is `null` assignable to `int[]`?
+  java:
+    expect: { compiles: true, stdout: "0\n2", exception: java.lang.NullPointerException }
+
+- id: D3-OVL-008
+  objective: D3.3
+  lesson: oop-overloading
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [varargs, declaration]
+  prompt: Which method declarations compile? Choose three.
+  options:
+    - key: a
+      text: "`static void a(String... names) { }`"
+      correct: true
+      why: A single varargs parameter is fine.
+      java:
+        source: |
+          public class Main {
+              static void a(String... names) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: b
+      text: "`static void b(int id, String... names) { }`"
+      correct: true
+      why: Other parameters may come before the varargs parameter.
+      java:
+        source: |
+          public class Main {
+              static void b(int id, String... names) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: c
+      text: "`static void c(String... names, int id) { }`"
+      why: The varargs parameter must be the last parameter.
+      java:
+        source: |
+          public class Main {
+              static void c(String... names, int id) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "varargs parameter must be the last parameter" }
+    - key: d
+      text: "`static void d(int... ids, String... names) { }`"
+      why: Only one varargs parameter is allowed, and it must be last.
+      java:
+        source: |
+          public class Main {
+              static void d(int... ids, String... names) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "varargs parameter must be the last parameter" }
+    - key: e
+      text: "`static void e(String[]... rows) { }`"
+      correct: true
+      why: The element type of a varargs parameter can itself be an array; rows is a String[][].
+      java:
+        source: |
+          public class Main {
+              static void e(String[]... rows) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: f
+      text: "`static void f(String names...) { }`"
+      why: The ellipsis goes after the type, not after the parameter name.
+      java:
+        source: |
+          public class Main {
+              static void f(String names...) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false }
+  explanation: |
+    A method may have **one** varargs parameter, written `Type... name`, and it must be the **last**
+    parameter. Its type is an array (`String[]... rows` is a `String[][]`).
+  rule: "JLS 8.4.1: only the last formal parameter may be a variable arity parameter."
+  hint: Where may the `...` appear, and how many times?
+
+- id: D3-OVL-009
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: polymorphism
+  difficulty: advanced
+  estSeconds: 120
+  tags: [overloading-vs-overriding, static-type]
+  prompt: What is the output?
+  code: |
+    class Animal { void speak(Object o) { System.out.println("Animal Object"); } }
+    class Dog extends Animal { void speak(String s) { System.out.println("Dog String"); } }
+    public class Main {
+        public static void main(String[] args) {
+            Animal a = new Dog();
+            a.speak("woof");
+            ((Dog) a).speak("woof");
+            new Dog().speak(42);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        Animal Object
+        Dog String
+        Animal Object
+      correct: true
+      why: Dog.speak(String) overloads rather than overrides. Through an Animal reference only speak(Object) is visible; through a Dog reference the String version is more specific for "woof"; 42 only fits speak(Object).
+    - key: b
+      text: |
+        Dog String
+        Dog String
+        Animal Object
+      why: Dynamic dispatch only selects among overrides of the chosen signature; speak(String) does not override speak(Object), so a.speak("woof") runs Animal's method.
+    - key: c
+      text: |
+        Animal Object
+        Dog String
+        Dog String
+      why: 42 boxes to Integer, which is not a String, so only the inherited speak(Object) applies.
+    - key: d
+      text: Compilation fails because `Dog` changes the parameter type of `speak`
+      why: Declaring a method with the same name but a different parameter type is a legal overload.
+  explanation: |
+    The compiler picks a **signature** using the static type of the target and arguments; at runtime, the
+    JVM only chooses among **overrides** of that signature. `Animal` has only `speak(Object)`, and Dog does
+    not override it (different parameter type), so `a.speak("woof")` prints `Animal Object`. With a `Dog`
+    reference both are visible and `speak(String)` is more specific. `@Override` on Dog's method would have
+    exposed the mistake at compile time.
+  rule: Overload resolution is compile-time (static types); overriding is runtime (dynamic dispatch on the receiver's class) — JLS 15.12.
+  misconception: '"Dog''s speak(String) overrides speak(Object) because String is an Object."'
+  hint: First decide which signature the compiler chooses for each call; then ask whether Dog overrides it.
+  java:
+    expect: { compiles: true, stdout: "Animal Object\nDog String\nAnimal Object" }
+
+- id: D3-OVL-010
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 120
+  tags: [overloading, static-context, most-specific]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static void log(long v) { System.out.println("static long"); }
+        void log(int v)         { System.out.println("instance int"); }
+        public static void main(String[] args) {
+            log(5);
+        }
+    }
+  options:
+    - key: a
+      text: Prints `static long`
+      why: The compiler does not skip instance methods when resolving a call in a static context; it chooses first, then checks.
+    - key: b
+      text: Prints `instance int`
+      why: There is no receiver object in static main, so the instance method cannot actually be invoked.
+    - key: c
+      text: "Compilation fails at line 5: non-static method log(int) cannot be referenced from a static context"
+      correct: true
+      why: Overload resolution picks the most specific method, log(int), and only afterwards checks that a static context cannot call it.
+    - key: d
+      text: Compilation fails at line 3 because a static and an instance method cannot share a name
+      why: They have different signatures (long vs int), so they are legal overloads.
+  explanation: |
+    Static and instance methods take part in the same overload resolution. For `log(5)`, both apply in
+    phase 1 and `log(int)` is more specific. Only **after** choosing does the compiler check the
+    invocation mode (JLS §15.12.3): an instance method from a static context is an error. It does not fall
+    back to `log(long)`.
+  rule: "JLS 15.12.3: after the most specific method is chosen, it is a compile-time error if it is an instance method invoked from a static context."
+  misconception: '"The compiler only considers static methods when the call is in a static method."'
+  hint: Does the static/instance check happen before or after the most specific method is chosen?
+  java:
+    expect: { compiles: false, errorContains: "non-static method log(int) cannot be referenced from a static context", errorLine: 5 }
+
+- id: D3-OVL-011
+  objective: D3.3
+  lesson: oop-overloading
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [overloading, signature, generics, erasure]
+  prompt: Each option shows two methods declared in the same class. Which pairs are legal overloads? Choose two.
+  options:
+    - key: a
+      text: "`void add(int x)` and `void add(long x)`"
+      correct: true
+      why: Different parameter types make different signatures.
+      java:
+        source: |
+          public class Main {
+              void add(int x) { }
+              void add(long x) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: b
+      text: "`void add(List<String> x)` and `void add(List<Integer> x)`"
+      why: Both erase to add(List); javac reports a name clash (same erasure).
+      java:
+        source: |
+          import java.util.List;
+          public class Main {
+              void add(List<String> x) { }
+              void add(List<Integer> x) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "have the same erasure" }
+    - key: c
+      text: "`void add(List<String> x)` and `void add(Set<String> x)`"
+      correct: true
+      why: List and Set are different types even after erasure.
+      java:
+        source: |
+          import java.util.*;
+          public class Main {
+              void add(List<String> x) { }
+              void add(Set<String> x) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: d
+      text: "`void add(int[] x)` and `void add(int... x)`"
+      why: A varargs parameter is an array; both have parameter type int[], so they cannot both be declared.
+      java:
+        source: |
+          public class Main {
+              void add(int[] x) { }
+              void add(int... x) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot declare both" }
+    - key: e
+      text: "`static void add(int x)` and `void add(int x)`"
+      why: static is not part of the signature; the two methods have the same signature.
+      java:
+        source: |
+          public class Main {
+              static void add(int x) { }
+              void add(int x) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "is already defined" }
+    - key: f
+      text: "`void add(int x) throws Exception` and `void add(int y)`"
+      why: Neither the throws clause nor parameter names are part of the signature.
+      java:
+        source: |
+          public class Main {
+              void add(int x) throws Exception { }
+              void add(int y) { }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "is already defined" }
+  explanation: |
+    Only the name and the parameter types (after erasure) distinguish overloads. `List<String>` and
+    `List<Integer>` both erase to `List`, so they clash. `int...` is `int[]`. `static`, `throws` and
+    parameter names never distinguish methods.
+  rule: "JLS 8.4.2 / 8.4.8.3: two methods in a class may not have the same signature or the same erasure."
+  misconception: '"Different generic type arguments make different overloads."'
+  hint: Erase the generics and strip everything except name and parameter types.
+
+- id: D3-OVL-012
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: overload-resolution
+  difficulty: expert
+  estSeconds: 150
+  tags: [varargs, arrays, phases]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static void m(Object o)      { System.out.println("Object"); }
+        static void m(Integer... xs) { System.out.println("Integer..."); }
+        public static void main(String[] args) {
+            Integer[] arr = {1, 2};
+            m(arr);
+            m(1);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        Integer...
+        Object
+      correct: true
+      why: An Integer[] matches the varargs method's array type directly in phase 1 and is more specific than Object. For m(1), phase 2 boxes to Integer → Object applies before varargs (phase 3) is considered.
+    - key: b
+      text: |
+        Object
+        Integer...
+      why: In phase 1 a varargs method is treated as taking an Integer[] parameter, and Integer[] is more specific than Object. And for 1, boxing (phase 2) beats varargs (phase 3).
+    - key: c
+      text: |
+        Integer...
+        Integer...
+      why: m(Object) is applicable to 1 via boxing in phase 2, so phase 3 (variable arity) is never reached.
+    - key: d
+      text: Compilation fails because `m(arr)` is ambiguous
+      why: Integer[] is a subtype of Object, so the Integer... (as Integer[]) method is strictly more specific.
+  explanation: |
+    In phases 1 and 2 a varargs method is still applicable — as a *fixed-arity* method whose last parameter
+    is the array type. `m(arr)` therefore sees `m(Integer[])` and `m(Object)`; `Integer[]` is more specific.
+    For `m(1)`, phase 1 finds nothing, phase 2 boxes `1` to `Integer` which widens to `Object`, so `m(Object)`
+    wins before the variable-arity form is ever considered.
+  rule: "JLS 15.12.2.2–15.12.2.4: variable-arity invocation (spreading individual arguments into a new array) is only tried in phase 3."
+  misconception: '"Passing an array to a varargs method or passing a single element both go through varargs matching."'
+  hint: In phases 1 and 2, how is `Integer... xs` treated?
+  java:
+    expect: { compiles: true, stdout: "Integer...\nObject" }
+
+- id: D3-OVL-013
+  objective: D3.3
+  lesson: oop-overloading
+  type: single
+  format: overload-resolution
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [overloading, widening, boxing]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static void print(long x)   { System.out.print("L"); }
+        static void print(float x)  { System.out.print("F"); }
+        static void print(Object x) { System.out.print("O"); }
+        public static void main(String[] args) {
+            print(1); print(1L); print(1.0); print('a'); print((short) 1);
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`LLOLL`"
+      correct: true
+      why: int, long, char and short all widen to both long and float; long is more specific because long widens to float. A double widens to neither, so it boxes to Double → Object.
+    - key: b
+      text: "`LLFLL`"
+      why: double → float is a narrowing conversion, which method invocation never performs.
+    - key: c
+      text: "`FLOFF`"
+      why: Among long and float, long is more specific (long can widen to float, not vice versa).
+    - key: d
+      text: "`LLOOL`"
+      why: char widens to long in phase 1; boxing to Character (and then Object) is only phase 2.
+  explanation: |
+    In phase 1 the compiler considers widening primitive conversions only. `int`, `char`, `short` and
+    `long` all widen to `long` and `float`; between the two, `long` is more specific since `long <: float`
+    in the primitive subtyping used by JLS §4.10.1. `1.0` is a `double`: it cannot be narrowed, so phase 1
+    fails and phase 2 boxes it to `Double`, matching `Object`.
+  rule: Primitive widening order byte→short→int→long→float→double (char→int); method invocation never narrows (JLS 5.3).
+  hint: Can a double be passed where a float is expected?
+  java:
+    expect: { compiles: true, stdout: "LLOLL" }
+
+# ───────────────────────────── D3.4 ─────────────────────────────
+
+- id: D3-SCP-001
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 75
+  tags: [scope, block-scope, for-loop]
+  prompt: Which line causes the first compilation error?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int x = 1;
+            { int y = 2; }
+            int y = 3;
+            for (int i = 0; i < 2; i++) { x += i; }
+            System.out.println(x + y + i);
+        }
+    }
+  options:
+    - key: a
+      text: Line 4
+      why: Declaring y in a nested block is fine; no other y is in scope at that point.
+    - key: b
+      text: Line 5
+      why: The block-scoped y on line 4 is already out of scope, so redeclaring y here is legal.
+    - key: c
+      text: Line 6
+      why: i is a new variable scoped to the for statement; x is in scope and assignable.
+    - key: d
+      text: Line 7
+      correct: true
+      why: i was declared in the for header, so its scope ends with the loop — it cannot be found on line 7.
+  explanation: |
+    A local variable's scope runs from its declaration to the end of the enclosing block. The inner `y` on
+    line 4 dies at the closing brace, so line 5 may declare a new `y`. The loop variable `i` exists only in
+    the `for` statement, so line 7 fails with *cannot find symbol: variable i*. (The reverse — declaring an
+    inner `y` while an outer `y` is still in scope — would be *already defined*.)
+  rule: The scope of a local variable is the rest of its block; the scope of a for-init variable is the for statement (JLS 6.3).
+  hint: Where does the scope of `i` end?
+  java:
+    expect: { compiles: false, errorContains: "cannot find symbol", errorLine: 7 }
+
+- id: D3-SCP-002
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [shadowing, this]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        int value = 10;
+        void set(int value)  { value = value; }
+        void set2(int value) { this.value = value; }
+        public static void main(String[] args) {
+            Main m = new Main();
+            m.set(5);
+            System.out.print(m.value + " ");
+            m.set2(7);
+            System.out.println(m.value);
+        }
+    }
+  options:
+    - key: a
+      text: "`10 7`"
+      correct: true
+      why: In set(), the parameter shadows the field, so value = value assigns the parameter to itself. set2() uses this.value to reach the field.
+    - key: b
+      text: "`5 7`"
+      why: Without `this.`, the simple name value refers to the parameter in both positions; the field is never touched.
+    - key: c
+      text: "`10 10`"
+      why: set2() explicitly writes the field via this.value.
+    - key: d
+      text: Compilation fails because a parameter cannot have the same name as a field
+      why: Parameters may shadow fields; that is exactly why `this.value` exists.
+  explanation: |
+    A parameter (or local) with the same name as a field **shadows** the field for the whole method body.
+    `value = value` is a self-assignment of the parameter. `this.value` names the field explicitly.
+  rule: A local variable or parameter shadows a field of the same name within its scope (JLS 6.4.1); use this.name to access the field.
+  misconception: '"The left side of an assignment automatically refers to the field."'
+  hint: Inside set(), which variable does `value` name?
+  java:
+    expect: { compiles: true, stdout: "10 7" }
+
+- id: D3-SCP-003
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [definite-assignment, constant-expression]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int n;
+            boolean ready = true;
+            if (ready) n = 1;
+            System.out.println(n);
+        }
+    }
+  options:
+    - key: a
+      text: Prints `1`
+      why: The compiler does not track the value of a non-constant variable; it must assume the if might be false.
+    - key: b
+      text: Prints `0`
+      why: Local variables never get default values — only fields and array elements do.
+    - key: c
+      text: "Compilation fails at line 6: variable n might not have been initialized"
+      correct: true
+      why: ready is not a constant variable, so the condition is not a constant expression and n is not definitely assigned on the false path.
+    - key: d
+      text: "Compilation fails at line 5: `if` without braces cannot assign a variable"
+      why: A single statement without braces is a legal if body.
+  explanation: |
+    Definite assignment is a **compile-time, flow-based** analysis. Because `ready` is not `final`,
+    `if (ready)` is not a constant expression and the compiler considers both branches; on the false branch
+    `n` is unassigned, so reading it fails. Declaring `final boolean ready = true;` makes the condition a
+    constant expression and the program compiles and prints `1`.
+  rule: "JLS ch. 16: a local variable must be definitely assigned before use; only constant expressions (JLS 15.29) are treated as known true/false."
+  misconception: '"The compiler can see that ready is true."'
+  hint: Is `ready` a constant variable?
+  java:
+    expect: { compiles: false, errorContains: "might not have been initialized", errorLine: 6 }
+
+- id: D3-SCP-004
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [access-modifiers, protected, packages]
+  prompt: |
+    `Animal` is in package `zoo`; `Main` is in package `safari`. Which statements compile when placed
+    (one at a time) at `// INSERT`? Choose three.
+  code: |
+    // file zoo/Animal.java
+    package zoo;
+    public class Animal {
+        protected String name = "generic";
+        protected Animal() { }
+        protected void eat() { System.out.println(name + " eats"); }
+    }
+
+    // file safari/Main.java
+    package safari;
+    import zoo.Animal;
+    public class Main extends Animal {
+        void test(Main other, Animal plain) {
+            // INSERT
+        }
+        public static void main(String[] args) { }
+    }
+  options:
+    - key: a
+      text: "`eat();`"
+      correct: true
+      why: Inherited protected members are accessible in the subclass body through this (implicitly).
+      java:
+        source: |
+          package safari;
+          import zoo.Animal;
+          public class Main extends Animal {
+              void test(Main other, Animal plain) {
+                  eat();
+              }
+              public static void main(String[] args) { }
+          }
+        files:
+          - name: Animal.java
+            content: |
+              package zoo;
+              public class Animal {
+                  protected String name = "generic";
+                  protected Animal() { }
+                  protected void eat() { System.out.println(name + " eats"); }
+              }
+        expect: { compiles: true }
+    - key: b
+      text: "`other.eat();`"
+      correct: true
+      why: Access through a reference whose type is Main (the accessing subclass itself) is allowed.
+      java:
+        source: |
+          package safari;
+          import zoo.Animal;
+          public class Main extends Animal {
+              void test(Main other, Animal plain) {
+                  other.eat();
+              }
+              public static void main(String[] args) { }
+          }
+        files:
+          - name: Animal.java
+            content: |
+              package zoo;
+              public class Animal {
+                  protected String name = "generic";
+                  protected Animal() { }
+                  protected void eat() { System.out.println(name + " eats"); }
+              }
+        expect: { compiles: true }
+    - key: c
+      text: "`plain.eat();`"
+      why: Outside zoo, a protected instance member may be accessed only through a reference of type Main (or a subclass of Main), not through an Animal reference.
+      java:
+        source: |
+          package safari;
+          import zoo.Animal;
+          public class Main extends Animal {
+              void test(Main other, Animal plain) {
+                  plain.eat();
+              }
+              public static void main(String[] args) { }
+          }
+        files:
+          - name: Animal.java
+            content: |
+              package zoo;
+              public class Animal {
+                  protected String name = "generic";
+                  protected Animal() { }
+                  protected void eat() { System.out.println(name + " eats"); }
+              }
+        expect: { compiles: false, errorContains: "eat() has protected access" }
+    - key: d
+      text: "`Animal a = new Animal();`"
+      why: A protected constructor can be used from another package only via super(...) or an anonymous subclass body, not by a plain new expression.
+      java:
+        source: |
+          package safari;
+          import zoo.Animal;
+          public class Main extends Animal {
+              void test(Main other, Animal plain) {
+                  Animal a = new Animal();
+              }
+              public static void main(String[] args) { }
+          }
+        files:
+          - name: Animal.java
+            content: |
+              package zoo;
+              public class Animal {
+                  protected String name = "generic";
+                  protected Animal() { }
+                  protected void eat() { System.out.println(name + " eats"); }
+              }
+        expect: { compiles: false, errorContains: "Animal() has protected access" }
+    - key: e
+      text: "`name = \"lion\";`"
+      correct: true
+      why: The inherited protected field is accessed via the implicit this, whose type is Main.
+      java:
+        source: |
+          package safari;
+          import zoo.Animal;
+          public class Main extends Animal {
+              void test(Main other, Animal plain) {
+                  name = "lion";
+              }
+              public static void main(String[] args) { }
+          }
+        files:
+          - name: Animal.java
+            content: |
+              package zoo;
+              public class Animal {
+                  protected String name = "generic";
+                  protected Animal() { }
+                  protected void eat() { System.out.println(name + " eats"); }
+              }
+        expect: { compiles: true }
+  explanation: |
+    `protected` = package access **plus** access from subclasses in other packages — but with a catch
+    (JLS §6.6.2): outside the package, code in subclass `S` may access a protected instance member only
+    through an expression whose type is `S` or a subclass of `S`. So `eat()`, `this.name`, `other.eat()`
+    are fine; `plain.eat()` (type `Animal`) is not. A protected constructor is usable from another package
+    only via `super(...)` or an anonymous subclass (`new Animal() { }`), not via `new Animal()`.
+  rule: "JLS 6.6.2.1: outside its package, a protected instance member is accessible in subclass S only via E.Id where E's type is S or a subclass of S; JLS 6.6.2.2 for protected constructors."
+  misconception: '"A subclass can call a protected method on any object of the superclass type."'
+  hint: In each option, what is the static type of the expression before the dot?
+
+- id: D3-SCP-005
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [immutability, defensive-copy, encapsulation]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    final class Team {
+        private final List<String> members;
+        Team(List<String> members) { this.members = members; }
+        List<String> members() { return members; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            List<String> src = new ArrayList<>(List.of("a"));
+            Team t = new Team(src);
+            src.add("b");
+            t.members().add("c");
+            System.out.println(t.members());
+        }
+    }
+  options:
+    - key: a
+      text: "`[a, b, c]`"
+      correct: true
+      why: The constructor stores the caller's list and the accessor hands it out, so both outside modifications affect Team's state.
+    - key: b
+      text: "`[a]`"
+      why: That would need a defensive copy in the constructor and an unmodifiable result from the accessor.
+    - key: c
+      text: "`[a, c]`"
+      why: The constructor did not copy src, so adding "b" to src also changes Team's list.
+    - key: d
+      text: An `UnsupportedOperationException` is thrown
+      why: The list is an ArrayList (copied from List.of), so it is modifiable, and the accessor returns it directly.
+  explanation: |
+    `final` on the field only stops it being **reassigned**; the `ArrayList` it points to is still mutable.
+    `Team` neither copies the list on the way in nor protects it on the way out, so the caller can change
+    it both ways. Fix: `this.members = List.copyOf(members);` — then the accessor is safe too.
+  rule: "A final reference field makes the reference constant, not the object; immutable classes need defensive copies of mutable inputs and outputs."
+  misconception: '"A final class with private final fields is automatically immutable."'
+  hint: How many List objects exist in this program?
+  java:
+    expect: { compiles: true, stdout: "[a, b, c]" }
+
+- id: D3-SCP-006
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 90
+  tags: [immutability, List.copyOf, defensive-copy]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    final class Team {
+        private final List<String> members;
+        Team(List<String> members) { this.members = List.copyOf(members); }
+        List<String> members() { return members; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            List<String> src = new ArrayList<>(List.of("a"));
+            Team t = new Team(src);
+            src.add("b");
+            System.out.println(t.members());
+            t.members().add("c");
+        }
+    }
+  options:
+    - key: a
+      text: Prints `[a]`, then throws `UnsupportedOperationException`
+      correct: true
+      why: List.copyOf takes an independent snapshot, and the copy it returns is unmodifiable, so add() throws.
+    - key: b
+      text: Prints `[a, b]`, then throws `UnsupportedOperationException`
+      why: copyOf copied the elements when the Team was built; later changes to src are not seen.
+    - key: c
+      text: Prints `[a]` and terminates normally
+      why: The accessor returns the unmodifiable copy itself, so add("c") is rejected at runtime.
+    - key: d
+      text: Compilation fails because an unmodifiable list has no `add` method
+      why: Unmodifiable lists still implement List; add() exists but throws at runtime.
+  explanation: |
+    `List.copyOf` returns an **unmodifiable** list containing the current elements (and rejects `null`
+    elements). The copy is independent of `src`, so `"b"` never appears, and because it is unmodifiable
+    the accessor can return it directly — `add` throws `UnsupportedOperationException`.
+  rule: "java.util.List.copyOf(Collection) returns an unmodifiable List containing the given elements; mutators throw UnsupportedOperationException."
+  hint: Is the list returned by List.copyOf modifiable? Is it a view or a copy?
+  java:
+    expect: { compiles: true, stdout: "[a]", exception: java.lang.UnsupportedOperationException }
+
+- id: D3-SCP-007
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [var, type-inference]
+  prompt: Which local variable declarations compile inside a method? Choose three.
+  options:
+    - key: a
+      text: "`var nums = {1, 2, 3};`"
+      why: An array initializer needs an explicit target type; write `var nums = new int[] {1, 2, 3};`.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var nums = {1, 2, 3}; } }
+        expect: { compiles: false, errorContains: "array initializer needs an explicit target-type" }
+    - key: b
+      text: "`var var = 1;`"
+      correct: true
+      why: var is a reserved type name, not a keyword, so it may still be used as a variable name.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var var = 1; } }
+        expect: { compiles: true }
+    - key: c
+      text: "`var none = null;`"
+      why: null alone has no usable type to infer.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var none = null; } }
+        expect: { compiles: false, errorContains: "variable initializer is 'null'" }
+    - key: d
+      text: "`var a = 1, b = 2;`"
+      why: var cannot be used in a compound declaration.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var a = 1, b = 2; } }
+        expect: { compiles: false, errorContains: "'var' is not allowed in a compound declaration" }
+    - key: e
+      text: "`var list = new java.util.ArrayList<>();`"
+      correct: true
+      why: Legal — the diamond infers ArrayList<Object>, which is usually not what you want, but it compiles.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var list = new java.util.ArrayList<>(); list.add(1); list.add("x"); } }
+        expect: { compiles: true }
+    - key: f
+      text: "`var s = (String) null;`"
+      correct: true
+      why: The cast gives the initializer the type String, so s is inferred as String.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { var s = (String) null; } }
+        expect: { compiles: true }
+  explanation: |
+    `var` infers a local variable's type from its initializer, so it needs one with a usable type: not
+    missing, not bare `null`, not a bare array initializer or lambda. It declares exactly one variable.
+    `var` is a *reserved type name*, so `var var = 1;` is legal (but you cannot name a class `var`).
+  rule: "JLS 14.4.1: local variable type inference requires a single declarator with an initializer that is not null, an array initializer, a lambda or a method reference."
+  misconception: '"var is a keyword, so it can never be an identifier."'
+  hint: What type would the compiler infer in each case?
+
+- id: D3-SCP-008
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [var, type-inference, char]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            var c = 'a';
+            var d = c + 1;
+            var e = c;
+            e++;
+            System.out.println(d + " " + e);
+        }
+    }
+  options:
+    - key: a
+      text: "`98 b`"
+      correct: true
+      why: c + 1 is an int expression, so d is an int (98); e is inferred as char, and e++ keeps it a char ('b').
+    - key: b
+      text: "`b b`"
+      why: Binary numeric promotion makes c + 1 an int, so var infers int for d.
+    - key: c
+      text: "`98 98`"
+      why: e is inferred from c, which is a char; ++ on a char yields the next character.
+    - key: d
+      text: "`b 98`"
+      why: Mixes up both inferences; var takes the exact static type of each initializer.
+  explanation: |
+    `var` uses the **static type of the initializer**: `'a'` → `char`, `c + 1` → `int` (binary numeric
+    promotion), `c` → `char`. `e++` increments a `char` and keeps its type, so it prints `b`.
+  rule: The inferred type of a var local is the type of its initializer expression (JLS 14.4.1); arithmetic on char promotes to int (JLS 5.6).
+  hint: What is the type of the expression `c + 1`?
+  java:
+    expect: { compiles: true, stdout: "98 b" }
+
+- id: D3-SCP-009
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [unnamed-variables, java22, jep456]
+  prompt: What is the output when compiled and run with Java 25?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int count = 0;
+            for (var _ : new String[] {"a", "b", "c"}) count++;
+            try {
+                Integer.parseInt("x" + count);
+            } catch (NumberFormatException _) {
+                System.out.println("bad " + count);
+            }
+            var _ = count++;
+            var _ = count++;
+            System.out.println(count);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        bad 3
+        5
+      correct: true
+      why: _ declares unnamed variables (JEP 456); several may coexist in one scope, and their initializers still run, so count++ executes twice.
+    - key: b
+      text: |
+        bad 3
+        3
+      why: An unnamed variable's initializer is still evaluated; only the variable itself is nameless.
+    - key: c
+      text: Compilation fails because `_` is declared twice in the same scope
+      why: Unnamed variables do not introduce a name, so several of them in one scope are allowed.
+    - key: d
+      text: Compilation fails because `_` cannot be used as a catch parameter
+      why: An unnamed catch parameter is one of the places JEP 456 explicitly allows.
+  explanation: |
+    Since Java 22 (JEP 456), `_` declares an **unnamed variable**: it can appear in for-each loops, catch
+    clauses, local declarations, try-with-resources, lambda parameters and patterns. It cannot be read, and
+    because it has no name, many may exist in the same scope. Side effects of initializers still happen.
+  rule: "JEP 456 / JLS 6.1: an unnamed variable is declared with _, introduces no name and may be declared multiple times in the same scope."
+  hint: Does `var _ = count++;` still evaluate `count++`?
+  java:
+    expect: { compiles: true, stdout: "bad 3\n5" }
+
+- id: D3-SCP-010
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [unnamed-variables, java22, jep456]
+  prompt: Which uses of the underscore `_` compile with Java 25? Choose three.
+  options:
+    - key: a
+      text: "`BiFunction<String, Integer, String> f = (s, _) -> s.strip();`"
+      correct: true
+      why: Unnamed lambda parameters are allowed.
+      java:
+        source: |
+          import java.util.function.BiFunction;
+          public class Main { public static void main(String[] args) { BiFunction<String, Integer, String> f = (s, _) -> s.strip(); } }
+        expect: { compiles: true }
+    - key: b
+      text: "`int _ = 5; System.out.println(_);`"
+      why: An unnamed variable can never be read; `_` is not an expression.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { int _ = 5; System.out.println(_); } }
+        expect: { compiles: false, errorContains: "underscore not allowed here" }
+    - key: c
+      text: "`static int _ = 1;` (a field)"
+      why: Fields cannot be unnamed; JEP 456 covers locals, parameters of lambdas and catch clauses, resources and patterns.
+      java:
+        source: |
+          public class Main { static int _ = 1; public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "underscore not allowed here" }
+    - key: d
+      text: "`void m(int _) { }` (a method parameter)"
+      why: Method parameters cannot be unnamed — only lambda parameters can.
+      java:
+        source: |
+          public class Main { void m(int _) { } public static void main(String[] args) { } }
+        expect: { compiles: false, errorContains: "underscore not allowed here" }
+    - key: e
+      text: "`try (var _ = new java.io.StringReader(\"x\")) { }`"
+      correct: true
+      why: An unnamed resource is still closed automatically; you just never refer to it.
+      java:
+        source: |
+          public class Main { public static void main(String[] args) { try (var _ = new java.io.StringReader("x")) { } } }
+        expect: { compiles: true }
+    - key: f
+      text: "`if (obj instanceof Point(int x, _)) { }` where `record Point(int x, int y)`"
+      correct: true
+      why: An unnamed pattern ignores a record component.
+      java:
+        source: |
+          public class Main {
+              record Point(int x, int y) { }
+              public static void main(String[] args) { Object obj = new Point(1, 2); if (obj instanceof Point(int x, _)) { } }
+          }
+        expect: { compiles: true }
+  explanation: |
+    JEP 456 (final in Java 22) allows `_` for local variables, for-each and basic `for` variables, catch
+    parameters, try-with-resources resources, lambda parameters, and in patterns. It does not allow `_` for
+    fields or method/constructor parameters, and an unnamed variable can never be used as an expression.
+  rule: "JEP 456: unnamed variables and patterns — allowed declaration contexts are locals, resources, catch/lambda parameters, loop variables and patterns."
+  misconception: '"_ is just a short variable name like x."'
+  hint: Is the declaration a local-ish one (local, catch, lambda, resource, pattern) or a member/method parameter?
+
+- id: D3-SCP-011
+  objective: D3.4
+  lesson: oop-encapsulation-scope
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 75
+  tags: [immutability, encapsulation]
+  prompt: You are designing an immutable class `Invoice` holding a `List<LineItem>`. Which steps are needed? Choose three.
+  options:
+    - key: a
+      text: Mark the class `final` (or make all constructors private) so no subclass can add mutable state or override accessors.
+      correct: true
+      why: A subclass could otherwise expose or change state and break the immutability guarantee.
+    - key: b
+      text: Make every field `private final` and assign it once in the constructor.
+      correct: true
+      why: private prevents outside writes; final prevents reassignment after construction.
+    - key: c
+      text: Copy the incoming list (e.g. `List.copyOf`) instead of storing the caller's reference, and never return a modifiable internal list.
+      correct: true
+      why: Without defensive copies, the caller keeps a handle to your internal state.
+    - key: d
+      text: Provide setters that return `this` so callers can chain calls.
+      why: Any setter that changes the object breaks immutability; immutable APIs return a new object ("withers") instead.
+    - key: e
+      text: Make the fields `public final` so accessors are unnecessary.
+      why: A public final field pointing to a mutable List still lets anyone call add() on it; access should go through methods that protect the state.
+  explanation: |
+    The immutable-class recipe: `final` class, `private final` fields, no mutators, defensive copies of
+    mutable inputs **and** outputs (or unmodifiable copies), and "with" methods returning new objects for
+    changes.
+  rule: "Immutable class recipe: final class, private final fields, no setters, defensive copies in and out (cf. java.lang.String, java.time.LocalDate)."

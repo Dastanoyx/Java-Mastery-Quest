@@ -1,0 +1,228 @@
+# D3 — enum coding exercises
+
+- id: D3-EX-010
+  objective: D3.7
+  lesson: oop-enums
+  title: Repair an HttpStatus enum with fields, constant bodies and a lookup table
+  difficulty: intermediate
+  kind: repair
+  prompt: |
+    The enum `HttpStatus` below does not even compile — and once it compiles, it still misbehaves. Repair it.
+    Keep all nine constants in the same order, and keep the public API:
+
+    1. Each constant stores its numeric `code()` and its `reason()` phrase, set by the enum's constructor.
+    2. `toString()` returns the status line `code + " " + reason`, e.g. `"404 Not Found"`. `name()` and
+       `HttpStatus.valueOf(...)` keep working with the constant names.
+    3. `isError()` is `true` for codes **400 and above**.
+    4. `retryable()` is `true` only for `TOO_MANY_REQUESTS` and `SERVICE_UNAVAILABLE`. Implement it with
+       **constant-specific class bodies** that override a default `retryable()` — not with an `if`/`switch`
+       on `this`.
+    5. `static HttpStatus fromCode(int code)` finds the constant with that code through a `Map` that is built
+       **once**. An unknown code throws `IllegalArgumentException` whose message contains the code, e.g.
+       `"Unknown status code: 999"`.
+    6. `static HttpStatus parse(String name)` accepts a constant name ignoring case and surrounding whitespace
+       (`" not_found "` → `NOT_FOUND`). An unknown name **or `null`** throws `IllegalArgumentException`.
+  fileName: HttpStatus.java
+  starter: |
+    import java.util.*;
+
+    public enum HttpStatus {
+        OK(200, "OK"),
+        CREATED(201, "Created"),
+        NO_CONTENT(204, "No Content"),
+        MOVED_PERMANENTLY(301, "Moved Permanently"),
+        BAD_REQUEST(400, "Bad Request"),
+        NOT_FOUND(404, "Not Found"),
+        TOO_MANY_REQUESTS(429, "Too Many Requests"),
+        INTERNAL_SERVER_ERROR(500, "Internal Server Error"),
+        SERVICE_UNAVAILABLE(503, "Service Unavailable");
+
+        private static final Map<Integer, HttpStatus> BY_CODE = new HashMap<>();
+
+        private final int code;
+        private final String reason;
+
+        public HttpStatus(int code, String reason) {
+            this.code = code;
+            this.reason = reason;
+            BY_CODE.put(code, this);              // register every constant for fromCode
+        }
+
+        public int code() { return code; }
+
+        public String reason() { return reason; }
+
+        public boolean isError() { return code > 400; }
+
+        public boolean retryable() { return this == SERVICE_UNAVAILABLE; }
+
+        @Override
+        public String toString() { return name() + " " + code; }
+
+        public static HttpStatus fromCode(int code) {
+            return BY_CODE.get(code);
+        }
+
+        public static HttpStatus parse(String name) {
+            return valueOf(name);
+        }
+    }
+  solution: |
+    import java.util.*;
+
+    public enum HttpStatus {
+        OK(200, "OK"),
+        CREATED(201, "Created"),
+        NO_CONTENT(204, "No Content"),
+        MOVED_PERMANENTLY(301, "Moved Permanently"),
+        BAD_REQUEST(400, "Bad Request"),
+        NOT_FOUND(404, "Not Found"),
+        TOO_MANY_REQUESTS(429, "Too Many Requests") {
+            @Override public boolean retryable() { return true; }
+        },
+        INTERNAL_SERVER_ERROR(500, "Internal Server Error"),
+        SERVICE_UNAVAILABLE(503, "Service Unavailable") {
+            @Override public boolean retryable() { return true; }
+        };
+
+        // Filled AFTER all constants exist: static initializers run in textual order,
+        // and the constants are the first static fields of the enum.
+        private static final Map<Integer, HttpStatus> BY_CODE = new HashMap<>();
+        static {
+            for (HttpStatus s : values()) BY_CODE.put(s.code, s);
+        }
+
+        private final int code;
+        private final String reason;
+
+        HttpStatus(int code, String reason) {         // implicitly private
+            this.code = code;
+            this.reason = reason;
+        }
+
+        public int code() { return code; }
+
+        public String reason() { return reason; }
+
+        public boolean isError() { return code >= 400; }
+
+        public boolean retryable() { return false; }  // overridden by constant-specific bodies
+
+        @Override
+        public String toString() { return code + " " + reason; }
+
+        public static HttpStatus fromCode(int code) {
+            HttpStatus s = BY_CODE.get(code);
+            if (s == null) throw new IllegalArgumentException("Unknown status code: " + code);
+            return s;
+        }
+
+        public static HttpStatus parse(String name) {
+            if (name == null) throw new IllegalArgumentException("name is null");
+            return valueOf(name.strip().toUpperCase(Locale.ROOT));   // IAE for unknown names
+        }
+    }
+  harness: |
+    import java.util.*;
+    import java.util.function.Supplier;
+
+    public class Main {
+        static void check(String name, boolean ok, Object detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+        static String thrown(Supplier<?> s) {
+            try { return "returned " + s.get(); }
+            catch (RuntimeException e) { return e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage()); }
+        }
+
+        public static void main(String[] args) {
+            test("fields set by the constructor", () -> {
+                var s = HttpStatus.NOT_FOUND;
+                check("fields set by the constructor", s.code() == 404 && s.reason().equals("Not Found")
+                        && HttpStatus.TOO_MANY_REQUESTS.code() == 429,
+                        s.code() + " / " + s.reason());
+            });
+            test("toString is the status line", () -> {
+                var s = HttpStatus.INTERNAL_SERVER_ERROR;
+                check("toString is the status line",
+                        s.toString().equals("500 Internal Server Error") && s.name().equals("INTERNAL_SERVER_ERROR")
+                        && String.valueOf(HttpStatus.OK).equals("200 OK"),
+                        "toString=\"" + s + "\", name=\"" + s.name() + "\"");
+            });
+            test("isError from 400 upwards", () -> {
+                boolean ok = !HttpStatus.OK.isError() && !HttpStatus.MOVED_PERMANENTLY.isError()
+                        && HttpStatus.BAD_REQUEST.isError() && HttpStatus.NOT_FOUND.isError()
+                        && HttpStatus.SERVICE_UNAVAILABLE.isError();
+                check("isError from 400 upwards", ok,
+                        "OK=" + HttpStatus.OK.isError() + ", 301=" + HttpStatus.MOVED_PERMANENTLY.isError()
+                        + ", 400=" + HttpStatus.BAD_REQUEST.isError() + ", 404=" + HttpStatus.NOT_FOUND.isError());
+            });
+            test("retryable only for 429 and 503", () -> {
+                List<HttpStatus> retryable = new ArrayList<>();
+                for (HttpStatus s : HttpStatus.values()) if (s.retryable()) retryable.add(s);
+                check("retryable only for 429 and 503",
+                        retryable.equals(List.of(HttpStatus.TOO_MANY_REQUESTS, HttpStatus.SERVICE_UNAVAILABLE)),
+                        retryable.stream().map(HttpStatus::name).toList());
+            });
+            test("fromCode finds every constant", () -> {
+                List<String> wrong = new ArrayList<>();
+                for (HttpStatus s : HttpStatus.values())
+                    if (HttpStatus.fromCode(s.code()) != s) wrong.add(s.name() + "->" + HttpStatus.fromCode(s.code()));
+                check("fromCode finds every constant",
+                        wrong.isEmpty() && HttpStatus.values().length == 9 && HttpStatus.fromCode(204) == HttpStatus.NO_CONTENT,
+                        wrong.isEmpty() ? HttpStatus.values().length + " constants (expected 9)" : wrong);
+            });
+            test("fromCode rejects unknown codes", () -> {
+                String r = thrown(() -> HttpStatus.fromCode(999));
+                String r2 = thrown(() -> HttpStatus.fromCode(-1));
+                check("fromCode rejects unknown codes",
+                        r.startsWith("IllegalArgumentException") && r.contains("999") && r2.startsWith("IllegalArgumentException"),
+                        "fromCode(999) -> " + r + "; fromCode(-1) -> " + r2);
+            });
+            test("parse ignores case and surrounding spaces", () -> {
+                var a = HttpStatus.parse(" not_found ");
+                var b = HttpStatus.parse("Service_Unavailable");
+                check("parse ignores case and surrounding spaces",
+                        a == HttpStatus.NOT_FOUND && b == HttpStatus.SERVICE_UNAVAILABLE, a + " / " + b);
+            });
+            test("parse rejects unknown names and null", () -> {
+                String unknown = thrown(() -> HttpStatus.parse("TEAPOT"));
+                String byLine = thrown(() -> HttpStatus.parse("404 Not Found"));
+                String nul = thrown(() -> HttpStatus.parse(null));
+                check("parse rejects unknown names and null",
+                        unknown.startsWith("IllegalArgumentException") && byLine.startsWith("IllegalArgumentException")
+                        && nul.startsWith("IllegalArgumentException"),
+                        "TEAPOT -> " + unknown + "; \"404 Not Found\" -> " + byLine + "; null -> " + nul);
+            });
+            test("valueOf still uses the constant name", () -> {
+                check("valueOf still uses the constant name",
+                        HttpStatus.valueOf("CREATED") == HttpStatus.CREATED && HttpStatus.CREATED.ordinal() == 1,
+                        HttpStatus.valueOf("CREATED") + ", ordinal " + HttpStatus.CREATED.ordinal());
+            });
+        }
+    }
+  explanation: |
+    The two compile errors are classic exam traps. Enum constructors are implicitly `private`: declaring one
+    `public` or `protected` does not compile (writing `private` is allowed but redundant), and constants can
+    only be created by the constant list, never with `new`. Second, the enum constants are the first static
+    fields of the enum and are created, in order, while the class is being initialized — *before* any other
+    static field initializer has run. A constructor or instance initializer is therefore not allowed to refer
+    to a non-constant static field such as `BY_CODE` (it would still be `null`); the compiler reports
+    "illegal reference to static field from initializer". The fix is a `static { ... }` block after the field
+    that loops over `values()`.
+
+    A constant with a class body is an instance of an anonymous subclass of the enum, so it can override
+    `retryable()` while all other constants use the default implementation. `toString()` may be overridden,
+    but `name()`, `ordinal()`, `equals()` and `compareTo()` are `final`, and `valueOf(String)` always matches
+    the exact constant **name**, never `toString()`. `valueOf` throws `IllegalArgumentException` for an unknown
+    name but `NullPointerException` for `null`, which is why `parse` checks for `null` itself. A `Map` lookup
+    returns `null` for a missing key, so `fromCode` must turn that into the exception the API promises.
+    Normalising with `toUpperCase(Locale.ROOT)` avoids locale surprises such as the Turkish dotless i.
+  hints:
+    - "Read the compiler errors first: an enum constructor may not be `public` (it is implicitly private), and a constructor may not use the enum's non-constant static fields, because the constants are created before `BY_CODE` is initialized."
+    - "Fill the map once in a `static { ... }` block placed after the field, looping over `values()`; then make `fromCode` throw when the lookup returns `null`."
+    - 'A constant-specific body looks like `SERVICE_UNAVAILABLE(503, "Service Unavailable") { @Override public boolean retryable() { return true; } },`. Remember that `valueOf(null)` throws `NullPointerException`, not `IllegalArgumentException`.'

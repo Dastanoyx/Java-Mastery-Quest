@@ -1,0 +1,929 @@
+# D1.1 — Primitives, wrappers, promotion, casting, operators and the Math API
+# Remediation lesson: values-primitives-operators (content/lessons/D1/01-primitives-operators.md)
+
+- id: D1-PRM-001
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [literals, underscores, octal, long-literal, constant-narrowing]
+  prompt: Which of the following declarations compile? Choose three.
+  options:
+    - key: a
+      text: "`int a = 0_7;`"
+      correct: true
+      why: The leading 0 makes this an octal literal and the underscore sits between two digits (0 and 7), so it is legal; the value is 7.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int a = 0_7; System.out.println(a); } }
+        expect: { compiles: true, stdout: "7" }
+    - key: b
+      text: "`long b = 2_147_483_648;`"
+      why: An integer literal without an L suffix is an int literal, and 2 147 483 648 is one more than Integer.MAX_VALUE, so javac reports "integer number too large" even though the target is long.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { long b = 2_147_483_648; System.out.println(b); } }
+        expect: { compiles: false, errorContains: "integer number too large" }
+    - key: c
+      text: "`float c = 1_0.5f;`"
+      correct: true
+      why: The underscore is between the digits 1 and 0, and the f suffix makes the literal a float, so no lossy double-to-float conversion is involved.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { float c = 1_0.5f; System.out.println(c); } }
+        expect: { compiles: true, stdout: "10.5" }
+    - key: d
+      text: "`int d = 0x_FF;`"
+      why: An underscore may only appear between digits; directly after the 0x prefix it is illegal.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int d = 0x_FF; System.out.println(d); } }
+        expect: { compiles: false, errorContains: "illegal underscore" }
+    - key: e
+      text: "`char e = 65_000;`"
+      correct: true
+      why: 65 000 is an int constant expression whose value fits in char's unsigned range 0–65 535, so assignment-context constant narrowing allows it without a cast.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { char e = 65_000; System.out.println((int) e); } }
+        expect: { compiles: true, stdout: "65000" }
+    - key: f
+      text: "`int f = 09;`"
+      why: A leading 0 means octal, and 9 is not an octal digit, so the literal is rejected even though it looks like plain decimal nine.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int f = 09; System.out.println(f); } }
+        expect: { compiles: false, errorContains: "illegal digit in an octal literal" }
+  explanation: |
+    Integer literals are `int` unless suffixed with `L`, so an out-of-range value fails before the target type
+    is even considered. A leading `0` selects octal (digits 0–7 only), `0x` hex and `0b` binary. Underscores are
+    allowed only **between two digits** — never at the start or end, next to the `0x`/`0b` prefix, next to the
+    decimal point or next to a type suffix. Finally, an `int` constant whose value fits may be assigned to
+    `byte`, `short` or `char` without a cast.
+  rule: "Underscores in numeric literals must appear between digits; an int literal must fit in int; constant int expressions that fit may be narrowed to byte/short/char in assignment context (JLS 3.10.1, 5.2)."
+  misconception: The declared target type decides whether a literal is too large, and underscores may appear anywhere for readability.
+  hint: Look at the character immediately before and after every underscore, and at what a leading 0 means.
+
+- id: D1-PRM-002
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [promotion, compound-assignment, constant-narrowing, short]
+  prompt: Which line causes a compilation error?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            final byte x = 10, y = 20;
+            byte b = 5;
+            short s = 7;
+            byte sum = x + y;
+            b += 300;
+            s = s * 2;
+            char c = 'A' + 2;
+            System.out.println(sum + " " + b + " " + s + " " + c);
+        }
+    }
+  options:
+    - key: a
+      text: Line 6
+      why: "`x` and `y` are final variables initialized with constants, so `x + y` is a constant expression (30) that fits in a byte and needs no cast."
+    - key: b
+      text: Line 7
+      why: "Compound assignment hides a cast: `b += 300` means `b = (byte) (b + 300)`. It compiles (and silently wraps around)."
+    - key: c
+      text: Line 8
+      correct: true
+      why: "`s * 2` is promoted to int, and `s` is not a constant, so assigning the int result to a short needs an explicit cast: possible lossy conversion from int to short."
+    - key: d
+      text: Line 9
+      why: "`'A' + 2` is a constant int expression with value 67, which fits in char, so constant narrowing applies."
+    - key: e
+      text: The code compiles and prints `30 49 14 C`
+      why: Line 8 is a plain assignment of an int expression built from a non-constant variable; only compound assignment carries an implicit cast.
+  explanation: |
+    Binary numeric promotion turns `s * 2` into an `int`. A simple assignment of an `int` to a `short` is only
+    allowed without a cast when the right-hand side is a **constant expression** whose value fits — `s` is not
+    final, so line 8 fails with *possible lossy conversion from int to short*. Line 6 and line 9 are constant
+    expressions that fit, and line 7 uses compound assignment, which is defined as `b = (byte) (b + 300)`.
+  rule: "Compound assignment E1 op= E2 is E1 = (T)((E1) op (E2)) (JLS 15.26.2); simple assignment narrowing without a cast is only allowed for constant expressions that fit (JLS 5.2)."
+  misconception: If the value obviously fits at runtime, the compiler will accept the narrowing assignment.
+  hint: Which of these right-hand sides are compile-time constant expressions, and which statements are compound assignments?
+  java:
+    expect: { compiles: false, errorContains: "possible lossy conversion from int to short", errorLine: 8 }
+
+- id: D1-PRM-003
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [casting, precision, narrowing, nan, saturation]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int big = 123_456_789;
+            float f = big;
+            System.out.println((int) f - big);
+            System.out.println((int) 1e10 + " " + (byte) 300 + " " + (short) -32769);
+            System.out.println((int) Double.NaN + " " + (char) 98.7 + " " + (long) -2.9f);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        3
+        2147483647 44 32767
+        0 b -2
+      correct: true
+      why: int→float rounds to 123456792; a double→int cast saturates at Integer.MAX_VALUE; integral narrowing keeps the low bits (300→44, -32769→32767); NaN→0; 98.7→98 = 'b'; -2.9 truncates toward zero to -2.
+    - key: b
+      text: |
+        0
+        2147483647 44 32767
+        0 b -2
+      why: Widening int to float is allowed without a cast, but float has only 24 bits of precision, so 123 456 789 cannot be represented exactly.
+    - key: c
+      text: |
+        3
+        1410065408 44 32767
+        0 b -3
+      why: Floating-point to integer casts do not keep low bits — they saturate at the target's min/max — and they truncate toward zero, so -2.9 becomes -2, not -3.
+    - key: d
+      text: |
+        3
+        2147483647 127 -32768
+        0 c -2
+      why: Integral narrowing does not clamp to the range; it discards high-order bits. And (char) 98.7 truncates to 98 ('b'); it does not round to 99.
+  explanation: |
+    Three different conversions are at work. **int → float** is a widening conversion but may lose precision
+    (float has a 24-bit significand), so `(float) 123456789` is `123456792`. **Floating → integral** narrowing
+    truncates toward zero, maps `NaN` to 0 and saturates out-of-range values at `MAX_VALUE`/`MIN_VALUE`.
+    **Integral → narrower integral** simply keeps the low-order bits: 300 = 0x12C → 0x2C = 44, and -32769 wraps
+    to 32767.
+  rule: "JLS 5.1.3: double/float → int/long rounds toward zero, NaN → 0, out-of-range saturates; int → byte/short/char discards high-order bits. JLS 5.1.2: int → float widening may lose precision."
+  misconception: All narrowing casts behave the same way, either always clamping or always wrapping.
+  hint: Is the source of each cast an integral type or a floating-point type?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        3
+        2147483647 44 32767
+        0 b -2
+
+- id: D1-PRM-004
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [division, remainder, floorDiv, floorMod, negative]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(7 / -2 + " " + 7 % -2 + " " + -7 % -2);
+            System.out.println(Math.floorDiv(7, -2) + " " + Math.floorMod(7, -2));
+            System.out.println(10 % 3.5 + " " + (-10 / 4 * 4 + -10 % 4));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        -3 1 -1
+        -4 -1
+        3.0 -10
+      correct: true
+      why: "/ truncates toward zero (-3.5 → -3); % takes the sign of the dividend (7 % -2 = 1, -7 % -2 = -1); floorDiv rounds down (-4); floorMod takes the divisor's sign (-1); (a/b)*b + a%b is always a."
+    - key: b
+      text: |
+        -4 -1 -1
+        -4 -1
+        3.0 -10
+      why: Integer division truncates toward zero, not toward negative infinity — that is what floorDiv does.
+    - key: c
+      text: |
+        -3 -1 1
+        -4 1
+        3.0 -10
+      why: The sign of % follows the dividend (left operand), not the divisor; floorMod is the one that follows the divisor.
+    - key: d
+      text: |
+        -3 1 -1
+        -4 -1
+        Compilation fails
+      why: "% works on floating-point operands too: 10 % 3.5 is 3.0 (10 - 2 × 3.5)."
+  explanation: |
+    Java's integer `/` **truncates toward zero** and `%` is defined so that `(a / b) * b + a % b == a`; therefore
+    the remainder has the **sign of the dividend**. `Math.floorDiv` rounds toward negative infinity instead, and
+    `Math.floorMod` is consistent with it, so its result has the **sign of the divisor**. `%` also works on
+    `double`: `10 % 3.5` is `3.0`.
+  rule: "JLS 15.17.2/15.17.3: integer division rounds toward zero; (a/b)*b + (a%b) == a. Math.floorMod(x, y) has the sign of y."
+  misconception: The remainder always takes the sign of the divisor, as in Python's % operator.
+  hint: Write out (a / b) * b + a % b = a and solve for the remainder.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        -3 1 -1
+        -4 -1
+        3.0 -10
+
+- id: D1-PRM-005
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [division-by-zero, arithmetic-exception, infinity, nan]
+  prompt: |
+    Given `int zero = 0;` and `double dz = 0.0;`, which expressions throw an `ArithmeticException` when
+    evaluated? Choose three.
+  options:
+    - key: a
+      text: "`5 / zero`"
+      correct: true
+      why: Both operands are int, so integer division is used and division by zero throws ArithmeticException.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int zero = 0; System.out.println(5 / zero); } }
+        expect: { compiles: true, exception: java.lang.ArithmeticException }
+    - key: b
+      text: "`5.0 / zero`"
+      why: One operand is a double, so zero is promoted to 0.0 and IEEE 754 division yields Infinity — no exception.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int zero = 0; System.out.println(5.0 / zero); } }
+        expect: { compiles: true, stdout: "Infinity" }
+    - key: c
+      text: "`5 % zero`"
+      correct: true
+      why: Integer remainder by zero throws ArithmeticException just like integer division.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int zero = 0; System.out.println(5 % zero); } }
+        expect: { compiles: true, exception: java.lang.ArithmeticException }
+    - key: d
+      text: "`0.0 / dz`"
+      why: Floating-point 0.0 / 0.0 is NaN, not an exception.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { double dz = 0.0; System.out.println(0.0 / dz); } }
+        expect: { compiles: true, stdout: "NaN" }
+    - key: e
+      text: "`5L % zero`"
+      correct: true
+      why: Promotion makes this long arithmetic, which is still integral, so a zero divisor throws.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int zero = 0; System.out.println(5L % zero); } }
+        expect: { compiles: true, exception: java.lang.ArithmeticException }
+    - key: f
+      text: "`(int) (5 / dz)`"
+      why: 5 / 0.0 is Infinity (double), and casting Infinity to int saturates to Integer.MAX_VALUE without throwing.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { double dz = 0.0; System.out.println((int) (5 / dz)); } }
+        expect: { compiles: true, stdout: "2147483647" }
+  explanation: |
+    Whether a division by zero throws depends on the **promoted type** of the operation, not on the variable
+    names. If both operands end up `int` or `long`, `/` and `%` by zero throw `ArithmeticException: / by zero`.
+    If either operand is `float` or `double`, the operation follows IEEE 754 and produces `Infinity`,
+    `-Infinity` or `NaN`. A later cast of `Infinity` to `int` saturates to `Integer.MAX_VALUE`.
+  rule: "Integer / and % throw ArithmeticException for a zero divisor (JLS 15.17.2, 15.17.3); floating-point division by zero yields an infinity or NaN."
+  misconception: Any division by zero throws an exception in Java.
+  hint: Determine the promoted type of each operation first.
+
+- id: D1-PRM-006
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [conditional-operator, ternary, numeric-promotion, char, boxing]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int i = 66;
+            char c = 'A';
+            System.out.println(true ? 1 : 2.0);
+            System.out.println(false ? c : 66);
+            System.out.println(false ? c : i);
+            Object o = true ? 1 : "one";
+            System.out.println(o + " " + (true ? Integer.valueOf(1) : Double.valueOf(2)));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        1.0
+        B
+        66
+        1 1.0
+      correct: true
+      why: int and double promote to double; char with an int constant that fits gives char ('B'); char with a non-constant int promotes to int (66); int with String boxes to Object (1); Integer and Double unbox and promote to double (1.0).
+    - key: b
+      text: |
+        1
+        B
+        B
+        1 1
+      why: "The result type of ?: is decided at compile time from both operands, not by the branch that runs; and the char special case needs a constant int, which `i` is not."
+    - key: c
+      text: |
+        1.0
+        66
+        66
+        1 1.0
+      why: When one operand is char and the other an int constant representable as char, the result type is char, so 66 prints as 'B'.
+    - key: d
+      text: |
+        1.0
+        B
+        66
+        1.0 1.0
+      why: With a String operand the conditional is a reference conditional; 1 is boxed to Integer and no numeric promotion to double happens.
+  explanation: |
+    The type of `b ? x : y` is fixed at compile time. Two numeric operands (including boxed ones such as
+    `Integer` and `Double`) undergo binary numeric promotion, so `true ? 1 : 2.0` is `1.0`. The exception: if
+    one operand is `char` and the other is an **int constant** representable as `char`, the result is `char`
+    — `false ? c : 66` prints `B` — but with a non-constant `int` variable the result is `int`. If one operand is
+    not numeric (a `String`), the conditional is a reference conditional and the `1` is boxed to `Integer`.
+  rule: "JLS 15.25: numeric conditional expressions apply binary numeric promotion, except that a char/byte/short operand paired with a representable int constant keeps the narrower type; otherwise the operands are boxed to a common reference type."
+  misconception: The conditional operator simply returns whichever operand is selected, with that operand's own type.
+  hint: For each line, classify the conditional as numeric or reference, then apply the special constant rule.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        1.0
+        B
+        66
+        1 1.0
+
+- id: D1-PRM-007
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [math, round, floor, ceil, max, overload]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Math.round(-3.5) + " " + Math.round(-3.51) + " " + Math.round(3.49f));
+            System.out.println(Math.floor(-1.1) + " " + Math.ceil(-1.9) + " " + Math.ceil(2.000001));
+            System.out.println(Math.max(3, 7L) + Math.min(-0.0, 0.0) + " " + Math.pow(2, 3));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        -3 -4 3
+        -2.0 -1.0 3.0
+        7.0 8.0
+      correct: true
+      why: round is floor(x + 0.5) (-3.5 → -3, -3.51 → -4); floor/ceil return doubles (-2.0, -1.0, 3.0); max(int, long) is the long 7, adding the double -0.0 gives 7.0; pow returns double 8.0.
+    - key: b
+      text: |
+        -4 -4 3
+        -2.0 -1.0 3.0
+        7.0 8.0
+      why: Math.round does not round half away from zero; it adds 0.5 and takes the floor, so -3.5 becomes -3.
+    - key: c
+      text: |
+        -3 -4 3
+        -2 -1 3
+        7 8
+      why: floor, ceil and pow always return double, and adding a double to a long produces a double, so every value on lines 2–3 prints with a decimal point.
+    - key: d
+      text: |
+        -3 -4 3
+        -1.0 -2.0 2.0
+        7.0 8.0
+      why: floor rounds toward negative infinity (-1.1 → -2.0) and ceil toward positive infinity (-1.9 → -1.0, 2.000001 → 3.0); they do not truncate toward zero.
+  explanation: |
+    `Math.round(x)` returns `floor(x + 0.5)` as a `long` (for `double`) or `int` (for `float`), so halves round
+    **up** toward positive infinity: `-3.5` → `-3`. `floor` and `ceil` round toward negative/positive infinity
+    and return `double`. `Math.max(3, 7L)` resolves to `max(long, long)`, and `long + double` is a `double`.
+    `Math.pow` always returns `double`.
+  rule: "Math.round(double) returns (long) Math.floor(x + 0.5) for ordinary values; Math.floor/ceil/pow return double; Math.max/min are overloaded for int, long, float and double."
+  misconception: Math.round rounds .5 away from zero, and floor/ceil return integers.
+  hint: Add 0.5 and take the floor for every round; check the return type of each Math method.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        -3 -4 3
+        -2.0 -1.0 3.0
+        7.0 8.0
+
+- id: D1-PRM-008
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [increment, decrement, evaluation-order, post-increment]
+  prompt: What does the program print?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int x = 3;
+            int y = x++ + x++ * --x;
+            x = x++ + x;
+            int k = 5;
+            k = k++;
+            System.out.println(x + " " + y + " " + k);
+        }
+    }
+  options:
+    - key: a
+      text: "`9 19 5`"
+      correct: true
+      why: "Operands are evaluated left to right: 3 (x→4) + 4 (x→5) * 4 (x→4) = 19; then 4 (x→5) + 5 = 9; k = k++ saves 5, increments, then assigns the saved 5 back."
+    - key: b
+      text: "`9 19 6`"
+      why: In `k = k++` the assignment happens after the increment and stores the old value, so the increment is overwritten.
+    - key: c
+      text: "`10 23 5`"
+      why: Precedence does not change evaluation order — the leftmost x++ is evaluated first (yielding 3) even though * binds tighter than +.
+    - key: d
+      text: "`9 16 5`"
+      why: The first post-increment's old value 3 is still part of the sum; only the multiplication operands are 4 and 4.
+  explanation: |
+    Java evaluates operands **left to right**, and each operand completely (including its side effect) before
+    the next one. Precedence only decides how the results are grouped. So `x++ + x++ * --x` with `x = 3`
+    evaluates `3` (x becomes 4), then `4` (x becomes 5), then `--x` gives `4`, and computes `3 + 4 * 4 = 19`.
+    In `k = k++`, the value `5` is saved, `k` becomes 6, and then the saved `5` is assigned back.
+  rule: "JLS 15.7: operands are evaluated left to right; the postfix ++ expression's value is the value before the increment (JLS 15.14.2)."
+  misconception: Higher-precedence subexpressions are evaluated before lower-precedence ones, regardless of position.
+  hint: Write down x after every single operand, from left to right.
+  java:
+    expect: { compiles: true, stdout: "9 19 5" }
+
+- id: D1-PRM-009
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [short-circuit, logical-operators, side-effects]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int x = 0, y = 0;
+            if (x++ > 0 && y++ > 0) { x += 10; }
+            if (x++ > 0 | y++ > 0) { y += 10; }
+            System.out.println(x + " " + y);
+        }
+    }
+  options:
+    - key: a
+      text: "`2 11`"
+      correct: true
+      why: The first && stops after the false left side (x becomes 1, y untouched). The | evaluates both sides (x 2, y 1) and is true, so y becomes 11.
+    - key: b
+      text: "`2 12`"
+      why: "`&&` short-circuits: since `x++ > 0` is false, `y++` on the first if never runs."
+    - key: c
+      text: "`2 10`"
+      why: A single `|` on booleans is not short-circuit, so `y++` in the second if runs even though the left side is already true.
+    - key: d
+      text: "`12 11`"
+      why: The first condition is false (0 > 0), so its body does not execute.
+  explanation: |
+    `&&` and `||` are **conditional** operators: the right operand is evaluated only when it can change the
+    result. `&`, `|` and `^` applied to `boolean`s are **logical** operators that always evaluate both operands,
+    so their side effects always happen.
+  rule: "JLS 15.23/15.24: && and || evaluate the right operand only if needed; & | ^ on booleans always evaluate both operands (JLS 15.22.2)."
+  misconception: "`|` is just another spelling of `||`."
+  hint: Which operator in the second condition does not skip its right operand?
+  java:
+    expect: { compiles: true, stdout: "2 11" }
+
+- id: D1-PRM-010
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [wrapper, integer-cache, equals, autoboxing, identity]
+  prompt: What is the output when run with default JVM settings?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int same = 0;
+            for (int i = 120; i < 135; i++) {
+                Integer x = i, y = i;
+                if (x == y) same++;
+            }
+            Long big = 127L;
+            Integer n = 127;
+            System.out.println(same + " " + big.equals(127) + " " + (big == 127) + " " + n.equals(big.intValue()));
+            System.out.println((Boolean.valueOf("TRUE") == Boolean.TRUE) + " " + (Double.valueOf(0.5) == Double.valueOf(0.5)));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        8 false true true
+        true false
+      correct: true
+      why: "Autoboxing uses the -128..127 cache, so only 120–127 (8 values) share objects; Long.equals(Integer) is false; Long == int unboxes; Boolean.valueOf returns the cached TRUE; Double is never cached."
+    - key: b
+      text: |
+        15 false true true
+        true false
+      why: "`==` between two Integer references compares identity; above 127 autoboxing creates distinct objects by default."
+    - key: c
+      text: |
+        8 true true true
+        true false
+      why: "`127` is autoboxed to an Integer, and Long.equals returns false for any argument that is not a Long, even if the numeric values match."
+    - key: d
+      text: |
+        8 false true true
+        true true
+      why: Double.valueOf has no cache, so two calls produce two distinct objects and == is false.
+  explanation: |
+    Autoboxing calls `Integer.valueOf`, which returns cached instances for -128 … 127, so `x == y` (two
+    references) is true only for 120–127. `big.equals(127)` boxes `127` to an `Integer`, and `Long.equals`
+    first checks `instanceof Long`, so it is false. `big == 127` compares a wrapper with a primitive, so `big`
+    is unboxed and values are compared. `Boolean.valueOf` always returns one of the two constants; `Float`
+    and `Double` are never cached. The upper bound of the `Integer` cache can be raised with a JVM option,
+    which is one more reason to compare wrappers with `equals`.
+  rule: "Integer.valueOf caches at least -128..127 (also Byte, Short, Long, Character 0..127, Boolean); wrapper equals() requires the same wrapper type; == between a wrapper and a primitive unboxes (JLS 5.1.7, 15.21.1)."
+  misconception: Two boxed values that are numerically equal are always == and equals() to each other.
+  hint: For each comparison, decide whether it compares two references or a reference with a primitive.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        8 false true true
+        true false
+
+- id: D1-PRM-011
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 120
+  tags: [unboxing, null-reference, conditional-operator, npe, map]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    public class Main {
+        public static void main(String[] args) {
+            Map<String, Integer> stock = new HashMap<>();
+            stock.put("apple", 3);
+            boolean known = false;
+            Integer qty = known ? 0 : stock.get("pear");
+            System.out.println("qty=" + qty);
+        }
+    }
+  options:
+    - key: a
+      text: It prints `qty=null`
+      why: The target variable is an Integer, but the type of the conditional is decided by its operands — int and Integer give int, so null is unboxed first.
+    - key: b
+      text: It prints `qty=0`
+      why: The condition is false, so the second operand is selected; its null is not replaced by 0.
+    - key: c
+      text: A `NullPointerException` is thrown
+      correct: true
+      why: An int operand and an Integer operand make the conditional of type int, so stock.get("pear") (null) is unboxed with intValue() and throws.
+    - key: d
+      text: Compilation fails because `0` and `Integer` are incompatible operand types
+      why: int and Integer are compatible in a conditional; the Integer is unboxed and the expression has type int.
+  explanation: |
+    When one operand of `?:` is a primitive `int` and the other an `Integer`, the conditional is a **numeric
+    conditional expression** of type `int` (JLS §15.25). The selected `Integer` is therefore unboxed — and
+    unboxing `null` throws `NullPointerException`, before the result is re-boxed for the assignment to `qty`.
+    Fix it with `known ? Integer.valueOf(0) : stock.get("pear")` or `stock.getOrDefault("pear", 0)`.
+  rule: "JLS 15.25: if one operand is of primitive type T and the other is the boxed type of T, the conditional has type T; unboxing a null reference throws NullPointerException (JLS 5.1.8)."
+  misconception: Assigning the result to a wrapper variable prevents any unboxing inside the expression.
+  hint: What is the compile-time type of the whole conditional expression?
+  java:
+    expect: { compiles: true, exception: java.lang.NullPointerException }
+
+- id: D1-PRM-012
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [precedence, shift, bitwise, assignment-in-condition, unary]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int a = 6, b = 3;
+            System.out.println(a + b * 2 >> 1);
+            System.out.println(a & b | 8 ^ 2);
+            System.out.println(-a % 4 + ~b);
+            boolean flag = false;
+            if (flag = a > b == true) System.out.print("set ");
+            System.out.println(flag);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        6
+        10
+        -6
+        set true
+      correct: true
+      why: "+ binds tighter than >> ((6+6)>>1 = 6); & before ^ before | gives 2 | 10 = 10; -6 % 4 = -2 and ~3 = -4; = has the lowest precedence, so flag = ((a > b) == true) = true."
+    - key: b
+      text: |
+        12
+        10
+        -6
+        set true
+      why: Shift has lower precedence than additive operators, so the whole sum 12 is shifted right by 1.
+    - key: c
+      text: |
+        6
+        8
+        -6
+        set true
+      why: "The bitwise operators have three different precedence levels: & then ^ then |. Evaluating strictly left to right ((6 & 3) | 8) ^ 2 would give 8."
+    - key: d
+      text: |
+        6
+        10
+        -6
+        false
+      why: "`flag = ...` is an assignment whose value is the assigned boolean; it compiles and makes the condition true."
+  explanation: |
+    Precedence decides grouping: multiplicative > additive > shift > relational > equality > `&` > `^` > `|`
+    > `&&` > `||` > `?:` > assignment. So `a + b * 2 >> 1` is `(a + (b * 2)) >> 1`, `a & b | 8 ^ 2` is
+    `(a & b) | (8 ^ 2)`, and `flag = a > b == true` is `flag = ((a > b) == true)`. An assignment used as an `if`
+    condition compiles only because its type is `boolean`. `~b` is `-b - 1`.
+  rule: "Operator precedence (JLS 15): shifts bind looser than + and -; &, ^, | are three separate levels; assignment has the lowest precedence and an assignment expression has the value of the assigned variable."
+  misconception: Bitwise operators share one precedence level, and shifts bind tighter than addition.
+  hint: Fully parenthesise each expression before computing it.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        6
+        10
+        -6
+        set true
+
+- id: D1-PRM-013
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [math, abs, addExact, round, overload, nan]
+  prompt: Which statements about the `Math` API are true? Choose three.
+  options:
+    - key: a
+      text: "`Math.abs(Integer.MIN_VALUE)` is negative."
+      correct: true
+      why: +2 147 483 648 does not fit in an int, so the negation overflows back to Integer.MIN_VALUE.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Math.abs(Integer.MIN_VALUE) < 0); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: b
+      text: "`Math.addExact(Integer.MAX_VALUE, 1)` returns `Integer.MIN_VALUE`."
+      why: The *Exact methods exist precisely to detect overflow; they throw ArithmeticException("integer overflow") instead of wrapping.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Math.addExact(Integer.MAX_VALUE, 1)); } }
+        expect: { compiles: true, exception: java.lang.ArithmeticException }
+    - key: c
+      text: "`int r = Math.round(2.5f);` compiles."
+      correct: true
+      why: Math.round(float) returns int, so no cast is needed.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int r = Math.round(2.5f); System.out.println(r); } }
+        expect: { compiles: true, stdout: "3" }
+    - key: d
+      text: "`int r = Math.round(2.5);` compiles."
+      why: 2.5 is a double literal, and Math.round(double) returns long, which cannot be assigned to int without a cast.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { int r = Math.round(2.5); System.out.println(r); } }
+        expect: { compiles: false, errorContains: "possible lossy conversion from long to int" }
+    - key: e
+      text: "The expression `Math.max(1, 2L)` has type `long`."
+      correct: true
+      why: Overload resolution picks max(long, long) because 1 widens to long, so the result is a long (boxed as Long when assigned to Object).
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { Object o = Math.max(1, 2L); System.out.println(o.getClass().getSimpleName() + " " + o); } }
+        expect: { compiles: true, stdout: "Long 2" }
+    - key: f
+      text: "`Math.sqrt(-4)` throws an `ArithmeticException`."
+      why: Floating-point Math methods never throw for invalid input; the square root of a negative number is NaN.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Math.sqrt(-4)); } }
+        expect: { compiles: true, stdout: "NaN" }
+  explanation: |
+    Plain integer arithmetic (including `Math.abs`) wraps around silently, which is why `abs(MIN_VALUE)` stays
+    negative. The `*Exact` family (`addExact`, `multiplyExact`, `toIntExact`, …) throws `ArithmeticException`
+    on overflow. `Math.round` returns `int` for a `float` and `long` for a `double`; `max`/`min` are overloaded
+    and widen to the larger type. Floating-point functions such as `sqrt` return `NaN` rather than throwing.
+  rule: "Math.abs(Integer.MIN_VALUE) == Integer.MIN_VALUE; Math.xxxExact throws ArithmeticException on overflow; Math.round(float) → int, Math.round(double) → long; Math.sqrt of a negative argument is NaN."
+  misconception: Math methods always protect you from overflow and invalid input by throwing.
+  hint: Check the return type of each overload and whether the method is one of the *Exact variants.
+
+- id: D1-PRM-014
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [parseInt, valueOf, NumberFormatException, wrapper]
+  prompt: Which calls throw a `NumberFormatException`? Choose three.
+  options:
+    - key: a
+      text: "`Integer.parseInt(\"08\")`"
+      why: parseInt always uses radix 10 unless told otherwise; a leading zero is not an octal prefix in a String, so the result is 8.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Integer.parseInt("08")); } }
+        expect: { compiles: true, stdout: "8" }
+    - key: b
+      text: "`Integer.parseInt(\" 8\")`"
+      correct: true
+      why: parseInt does not trim; a leading space is not a digit or sign, so the input is rejected.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Integer.parseInt(" 8")); } }
+        expect: { compiles: true, exception: java.lang.NumberFormatException }
+    - key: c
+      text: "`Integer.valueOf(\"+8\")`"
+      why: A leading + or - sign is accepted; valueOf returns the Integer 8.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Integer.valueOf("+8")); } }
+        expect: { compiles: true, stdout: "8" }
+    - key: d
+      text: "`Integer.parseInt(\"8.0\")`"
+      correct: true
+      why: Integer parsing accepts only an optional sign and digits; a decimal point makes the string invalid even if the value is integral.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Integer.parseInt("8.0")); } }
+        expect: { compiles: true, exception: java.lang.NumberFormatException }
+    - key: e
+      text: "`Long.parseLong(\"8L\")`"
+      correct: true
+      why: The L suffix is Java source-code syntax for literals; it is not part of the text format accepted by parseLong.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Long.parseLong("8L")); } }
+        expect: { compiles: true, exception: java.lang.NumberFormatException }
+    - key: f
+      text: "`Integer.parseInt(\"ff\", 16)`"
+      why: With radix 16 the hex digits f are valid, giving 255.
+      java:
+        source: |
+          public class Main { public static void main(String[] x) { System.out.println(Integer.parseInt("ff", 16)); } }
+        expect: { compiles: true, stdout: "255" }
+  explanation: |
+    `Integer.parseInt(String)` returns a primitive `int`; `Integer.valueOf(String)` returns an `Integer` (using
+    the cache for small values). Both accept exactly an optional `+`/`-` sign followed by digits of the given
+    radix (10 by default). Whitespace, decimal points, literal suffixes such as `L`, an empty string and `null`
+    all cause `NumberFormatException`. Leading zeros are simply decimal digits.
+  rule: "Integer.parseInt/valueOf accept an optional sign followed by digits in the radix (default 10); anything else throws NumberFormatException. parseInt returns int, valueOf returns Integer."
+  misconception: Parsing methods understand Java literal syntax (octal 0, L suffix) and ignore surrounding spaces.
+  hint: Would each string be exactly "sign + digits"?
+
+- id: D1-PRM-015
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [char, arithmetic, promotion, concatenation]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            char c = 'a';
+            c++;
+            System.out.println(c + 1);
+            System.out.println((char) (c + 1));
+            System.out.println("" + c + 1);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        99
+        c
+        b1
+      correct: true
+      why: c++ moves 'a' to 'b' (98); 'b' + 1 is the int 99; casting 99 back to char gives 'c'; after "" the + operators concatenate, giving "b1".
+    - key: b
+      text: |
+        c
+        c
+        b1
+      why: char + int undergoes numeric promotion to int, so println receives the int 99, not a char.
+    - key: c
+      text: |
+        99
+        c
+        99
+      why: Once the left operand is a String, + is concatenation, so 'b' and 1 are appended separately.
+    - key: d
+      text: |
+        98
+        b
+        a1
+      why: The postfix increment on its own line has already changed c to 'b' before the println statements run.
+  explanation: |
+    `char` is an unsigned 16-bit numeric type. `++` works on it directly (with an implicit cast), but in
+    `c + 1` binary numeric promotion turns the `char` into an `int`, so the result prints as a number. Cast back
+    with `(char)` to see a character. With a `String` on the left, `+` concatenates each operand in turn.
+  rule: "char participates in numeric promotion: char + int is int (JLS 5.6); ++ on a char includes an implicit narrowing back to char (JLS 15.14.2)."
+  misconception: Arithmetic on a char yields another char.
+  hint: What is the type of `c + 1`?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        99
+        c
+        b1
+
+- id: D1-PRM-016
+  objective: D1.1
+  lesson: values-primitives-operators
+  type: single
+  format: trace
+  difficulty: expert
+  estSeconds: 180
+  tags: [compound-assignment, evaluation-order, array-assignment, overflow]
+  prompt: What does the program print?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int z = 1;
+            z += z++ + ++z;
+            int[] a = {10, 20, 30};
+            int i = 0;
+            a[i] = i = 2;
+            byte b = 100;
+            b += b;
+            System.out.println(z + " " + a[0] + a[2] + " " + i + " " + b);
+        }
+    }
+  options:
+    - key: a
+      text: "`5 230 2 -56`"
+      correct: true
+      why: "z's value 1 is saved before the right side runs: 1 + (1 + 3) = 5. The array index is evaluated before the right side, so a[0] = 2. b += b is (byte) 200 = -56. a[0] and a[2] concatenate as \"2\" and \"30\"."
+    - key: b
+      text: "`7 230 2 -56`"
+      why: In a compound assignment the left operand's value is fetched before the right operand is evaluated, so the increments inside the right side do not change the 1 being added to.
+    - key: c
+      text: "`5 1030 2 -56`"
+      why: The index expression i is evaluated (0) before i = 2 runs, so a[0] — not a[2] — is assigned.
+    - key: d
+      text: "`5 230 2 200`"
+      why: Compound assignment includes a cast back to byte; 200 does not fit and wraps to -56. It also compiles for the same reason.
+  explanation: |
+    For `z += expr`, Java first saves the current value of `z` (1), then evaluates `expr` left to right
+    (`z++` gives 1 and sets z to 2, `++z` sets z to 3 and gives 3), and finally stores `(int) (1 + 4)`. For an
+    array assignment, the array reference and the **index are evaluated first**, then the right-hand side, so
+    `a[i] = i = 2` writes into `a[0]`. `b += b` is `b = (byte) (b + b)`: 200 wraps to -56.
+  rule: "JLS 15.26.2: in E1 op= E2 the value of E1 is saved before E2 is evaluated, and the result is cast to E1's type; JLS 15.26.1: array reference and index are evaluated before the right-hand operand."
+  misconception: The right-hand side of an assignment is evaluated first, so its side effects are visible to the left side.
+  hint: Evaluate everything to the left of the operator before touching the right-hand side.
+  java:
+    expect: { compiles: true, stdout: "5 230 2 -56" }

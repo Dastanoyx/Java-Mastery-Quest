@@ -1,0 +1,1346 @@
+# D4.1 — exceptions: hierarchy, try/catch/finally, multi-catch, rethrow, custom exceptions, try-with-resources
+
+- id: D4-EXC-001
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 60
+  tags: [hierarchy, checked, unchecked]
+  prompt: Which of these types are **checked** exceptions? Choose three.
+  options:
+    - key: a
+      text: "`java.io.FileNotFoundException`"
+      correct: true
+      why: It extends IOException, which extends Exception without passing through RuntimeException.
+    - key: b
+      text: "`java.lang.NumberFormatException`"
+      why: It extends IllegalArgumentException, which is a RuntimeException — unchecked.
+    - key: c
+      text: "`java.lang.Exception`"
+      correct: true
+      why: Exception itself is checked; only the RuntimeException branch below it is unchecked.
+    - key: d
+      text: "`java.lang.StackOverflowError`"
+      why: Errors (and their subclasses) are unchecked; the compiler never forces you to handle them.
+    - key: e
+      text: "`java.lang.Throwable`"
+      correct: true
+      why: Throwable is checked — `throw new Throwable()` must be caught or declared.
+    - key: f
+      text: "`java.lang.IllegalStateException`"
+      why: A RuntimeException subclass, hence unchecked.
+  explanation: |
+    The unchecked exception classes are `RuntimeException`, `Error` and their subclasses. **Every other**
+    throwable — including `Throwable` and `Exception` themselves — is checked and subject to the
+    catch-or-declare rule.
+  rule: "JLS 11.1.1: unchecked exception classes are RuntimeException, Error and their subclasses; all other exception classes are checked."
+  misconception: Only "I/O-style" exceptions are checked; Exception and Throwable are too general to be checked.
+  hint: Find the two branches of the hierarchy that are unchecked; everything else is checked.
+
+- id: D4-EXC-002
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [catch-order, unreachable-catch]
+  prompt: What is the result of compiling this code?
+  code: |
+    import java.io.*;
+    public class Main {
+        static void load() throws IOException { }
+        public static void main(String[] args) {
+            try {
+                load();
+            } catch (IOException e) {
+                System.out.println("io");
+            } catch (FileNotFoundException e) {
+                System.out.println("missing");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails at line 9 because `FileNotFoundException` has already been caught
+      correct: true
+      why: FileNotFoundException is a subclass of IOException; the earlier handler catches everything the later one could, so the later one is unreachable.
+    - key: b
+      text: Compilation fails at line 6 because `load()` may throw `FileNotFoundException`
+      why: load() declares IOException and the catch for IOException handles it (and all subclasses).
+    - key: c
+      text: It compiles and prints nothing
+      why: Catch clauses are checked for reachability; a subclass after its superclass is an error, not a warning.
+    - key: d
+      text: Compilation fails at line 7 because `IOException` must be caught last
+      why: The superclass must come last — that is exactly what this code violates, but the error is reported on the unreachable (subclass) clause.
+  explanation: |
+    Catch clauses are tried top to bottom. Because `IOException` is a superclass of `FileNotFoundException`,
+    the second clause can never be selected. javac reports *exception java.io.FileNotFoundException has
+    already been caught* at the second catch. Swapping the two clauses fixes it.
+  rule: "JLS 11.2.3: it is a compile-time error if a catch clause can catch an exception class E1 and a preceding catch clause of the same try can catch E1 or a superclass of E1."
+  misconception: The JVM picks the most specific matching catch clause, so order doesn't matter.
+  hint: Is FileNotFoundException a subclass of IOException?
+  java:
+    expect: { compiles: false, errorContains: "has already been caught", errorLine: 9 }
+
+- id: D4-EXC-003
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [unreachable-catch, checked, catch-or-declare]
+  prompt: |
+    Which catch clauses can replace `// INSERT` so that the code compiles? Choose four.
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            try {
+                System.out.println("hello");
+            }
+            // INSERT
+        }
+    }
+  options:
+    - key: a
+      text: "`catch (Exception e) { }`"
+      correct: true
+      why: Exception is always allowed — it also covers unchecked RuntimeExceptions that any code may throw.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  catch (Exception e) { }
+              }
+          }
+        expect: { compiles: true, stdout: "hello" }
+    - key: b
+      text: "`catch (java.io.IOException e) { }`"
+      why: IOException is checked and nothing in the try block can throw it, so the handler is unreachable.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  catch (java.io.IOException e) { }
+              }
+          }
+        expect: { compiles: false, errorContains: "is never thrown in body of corresponding try statement" }
+    - key: c
+      text: "`catch (Error e) { }`"
+      correct: true
+      why: Error is unchecked; handlers for unchecked types are never considered unreachable.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  catch (Error e) { }
+              }
+          }
+        expect: { compiles: true, stdout: "hello" }
+    - key: d
+      text: "`catch (java.io.FileNotFoundException | IllegalStateException e) { }`"
+      why: The checked alternative FileNotFoundException can never be thrown by the try body; one unreachable alternative is enough to fail.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  catch (java.io.FileNotFoundException | IllegalStateException e) { }
+              }
+          }
+        expect: { compiles: false, errorContains: "is never thrown" }
+    - key: e
+      text: "`catch (Throwable t) { }`"
+      correct: true
+      why: Like Exception, Throwable is exempt from the "never thrown" check.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  catch (Throwable t) { }
+              }
+          }
+        expect: { compiles: true, stdout: "hello" }
+    - key: f
+      text: "`finally { }`"
+      correct: true
+      why: A try needs a catch or a finally; a finally alone is fine.
+      java:
+        source: |
+          public class Main {
+              public static void main(String[] args) {
+                  try { System.out.println("hello"); }
+                  finally { }
+              }
+          }
+        expect: { compiles: true, stdout: "hello" }
+  explanation: |
+    A catch clause for a **checked** exception class is a compile error if the try block cannot throw that
+    exception (or a subclass of it). `Exception`, `Throwable` and all unchecked types are exempt, because
+    unchecked exceptions can come from anywhere. A multi-catch fails if *any* checked alternative is
+    unreachable.
+  rule: "JLS 11.2.3: a catch clause for checked exception class E1 is an error if the try block cannot throw E1 or a subclass/superclass of it, unless E1 is Exception or a superclass of Exception."
+  misconception: Catching an exception that cannot happen is harmless dead code.
+  hint: Which handlers could ever be needed for code that only prints?
+
+- id: D4-EXC-004
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: trace
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [finally, return, control-flow]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static String s = "";
+        static void m(int i) {
+            try {
+                s += "t";
+                if (i == 0) throw new IllegalArgumentException();
+                s += "n";
+            } catch (IllegalArgumentException e) {
+                s += "c";
+                return;
+            } finally {
+                s += "f";
+            }
+            s += "e";
+        }
+        public static void main(String[] args) {
+            m(0);
+            s += "|";
+            m(1);
+            System.out.println(s);
+        }
+    }
+  options:
+    - key: a
+      text: "`tcf|tnfe`"
+      correct: true
+      why: "m(0): t, exception → c, return is delayed until finally adds f; the e line is skipped. m(1): t, n, finally f, then e."
+    - key: b
+      text: "`tc|tnfe`"
+      why: A return inside catch does not skip finally; finally always runs before the method returns.
+    - key: c
+      text: "`tcfe|tnfe`"
+      why: The return in catch still takes effect after finally, so the statement after the try is not reached for m(0).
+    - key: d
+      text: "`tncf|tnfe`"
+      why: The throw abandons the rest of the try block, so n is never appended for m(0).
+  explanation: |
+    For `m(0)` the exception jumps from the `throw` to the catch (`c`). The `return` starts completing the
+    method, but the finally block runs first (`f`); then the method returns, skipping `s += "e"`. For `m(1)`
+    no exception occurs: `t`, `n`, then finally `f`, then the statement after the try `e`.
+  rule: "JLS 14.20.2: if a catch block completes abruptly (e.g. return), the finally block is executed and then the try statement completes abruptly for the same reason."
+  misconception: return exits the method immediately, skipping finally.
+  hint: Mark each path through the try statement and remember finally sits on every one of them.
+  java:
+    expect: { compiles: true, stdout: "tcf|tnfe" }
+
+- id: D4-EXC-005
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [finally, return, return-value]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static int count = 0;
+        static int next() {
+            try {
+                count++;
+                return count;
+            } finally {
+                count += 10;
+            }
+        }
+        public static void main(String[] args) {
+            int r = next();
+            System.out.println(r + " " + count);
+        }
+    }
+  options:
+    - key: a
+      text: "`1 11`"
+      correct: true
+      why: "`return count;` evaluates count (1) and saves the value; finally then changes the field to 11, which does not affect the saved return value."
+    - key: b
+      text: "`11 11`"
+      why: The return expression is evaluated before finally runs; later changes to the variable cannot reach the saved int value.
+    - key: c
+      text: "`1 1`"
+      why: The finally block does run and does update the static field — only the already-evaluated return value is unaffected.
+    - key: d
+      text: "`11 1`"
+      why: "Neither part of this matches: the returned value is the pre-finally 1, and the field keeps the change."
+  explanation: |
+    `return expr;` evaluates `expr` first and remembers the result. Then the finally block runs; it can change
+    variables (here the static field becomes 11) but cannot change an already-computed primitive return value.
+    Only a `return` in finally could replace it.
+  rule: "JLS 14.17 / 14.20.2: the return expression is evaluated before the finally block runs; a finally that completes normally keeps the original return value."
+  misconception: finally runs "before" the return, so modifications in finally are returned.
+  hint: When exactly is the expression after `return` evaluated?
+  java:
+    expect: { compiles: true, stdout: "1 11" }
+
+- id: D4-EXC-006
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [multi-catch, hierarchy]
+  prompt: What is the result of compiling and running this program with input `"x"`?
+  code: |
+    public class Main {
+        static int parse(String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException | IllegalArgumentException e) {
+                return -1;
+            }
+        }
+        public static void main(String[] args) {
+            System.out.println(parse("x"));
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails because the multi-catch alternatives are related by subclassing
+      correct: true
+      why: NumberFormatException extends IllegalArgumentException, and multi-catch alternatives may not be subtypes of each other.
+    - key: b
+      text: "`-1`"
+      why: It would print -1 if it compiled, but the redundant alternative makes the multi-catch illegal.
+    - key: c
+      text: A `NumberFormatException` is thrown
+      why: The code never runs; and even if it did, the handler covers NumberFormatException.
+    - key: d
+      text: Compilation fails because `IllegalArgumentException` is never thrown in the try block
+      why: IllegalArgumentException is unchecked, so the "never thrown" rule does not apply to it.
+  explanation: |
+    In `catch (A | B e)` no alternative may be a subclass of another — it would be redundant. Since
+    `NumberFormatException` is an `IllegalArgumentException`, javac reports *Alternatives in a multi-catch
+    statement cannot be related by subclassing*. Catch just `IllegalArgumentException`.
+  rule: "JLS 14.20: it is a compile-time error if a union type in a multi-catch contains two alternatives Di and Dj where Di is a subclass of Dj."
+  misconception: NumberFormatException is unrelated to IllegalArgumentException.
+  hint: What is the superclass of NumberFormatException?
+  java:
+    expect: { compiles: false, errorContains: "cannot be related by subclassing", errorLine: 5 }
+
+- id: D4-EXC-007
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 150
+  tags: [propagation, stack-unwinding, finally]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static void c() {
+            System.out.print("c ");
+            throw new UnsupportedOperationException("nope");
+        }
+        static void b() {
+            try {
+                c();
+                System.out.print("b-after ");
+            } catch (IllegalArgumentException e) {
+                System.out.print("b-catch ");
+            } finally {
+                System.out.print("b-finally ");
+            }
+            System.out.print("b-end ");
+        }
+        static void a() {
+            try {
+                b();
+            } catch (RuntimeException e) {
+                System.out.print("a-catch:" + e.getMessage() + " ");
+            }
+            System.out.print("a-end");
+        }
+        public static void main(String[] args) {
+            a();
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`c b-finally a-catch:nope a-end`"
+      correct: true
+      why: b's catch does not match UnsupportedOperationException, so the exception leaves b after its finally; a's RuntimeException handler catches it and execution continues in a.
+    - key: b
+      text: "`c b-catch b-finally b-end a-end`"
+      why: UnsupportedOperationException is not an IllegalArgumentException; both extend RuntimeException independently.
+    - key: c
+      text: "`c b-finally b-end a-catch:nope a-end`"
+      why: Because the exception is not handled in b, b completes abruptly; code after its try statement (b-end) is skipped.
+    - key: d
+      text: "`c a-catch:nope b-finally a-end`"
+      why: Finally blocks run while the stack unwinds, i.e. before the handler in the caller runs.
+  explanation: |
+    `c()` throws. In `b()` the only catch is for `IllegalArgumentException` — not a supertype of
+    `UnsupportedOperationException` — so it is skipped, `b-finally` runs, and `b()` completes abruptly
+    (no `b-end`). In `a()` the `RuntimeException` handler matches, prints the message, and normal execution
+    resumes with `a-end`.
+  rule: "JLS 11.3: an exception propagates outward through enclosing try statements and method invocations until a catch clause whose type is a supertype of the exception's class is found; finally blocks run as frames are exited."
+  misconception: Any catch block in the path handles the exception if both types are RuntimeExceptions.
+  hint: Is UnsupportedOperationException a subclass of IllegalArgumentException?
+  java:
+    expect: { compiles: true, stdout: "c b-finally a-catch:nope a-end" }
+
+- id: D4-EXC-008
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [finally, lost-exception, suppressed]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static String run() {
+            try {
+                throw new IllegalStateException("A");
+            } finally {
+                throw new IllegalArgumentException("B");
+            }
+        }
+        public static void main(String[] args) {
+            try {
+                run();
+            } catch (IllegalStateException e) {
+                System.out.println("ISE " + e.getMessage());
+            } catch (RuntimeException e) {
+                System.out.println("RE " + e.getMessage() + " " + e.getSuppressed().length);
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`RE B 0`"
+      correct: true
+      why: The exception thrown by finally replaces the pending IllegalStateException entirely; nothing is recorded as suppressed.
+    - key: b
+      text: "`ISE A`"
+      why: The pending exception A is discarded when finally completes abruptly with B.
+    - key: c
+      text: "`RE B 1`"
+      why: Only try-with-resources adds suppressed exceptions automatically; a plain finally simply loses the original.
+    - key: d
+      text: Compilation fails because `run()` cannot complete normally and has no return statement
+      why: A method whose body can only complete abruptly (by throwing) needs no return statement.
+  explanation: |
+    When a finally block completes abruptly (here by throwing `B`), the whole try statement completes abruptly
+    for that reason and the original exception `A` is **lost**. It is not attached as a suppressed exception —
+    that happens only in try-with-resources. `B` is an `IllegalArgumentException`, so the second handler runs.
+  rule: "JLS 14.20.2: if the finally block completes abruptly for reason S, the try statement completes abruptly for reason S and the original exception is discarded."
+  misconception: The first exception always wins, or Java attaches it as suppressed.
+  hint: What happens to a pending exception if finally throws a new one?
+  java:
+    expect: { compiles: true, stdout: "RE B 0" }
+
+- id: D4-EXC-009
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [overriding, throws-clause]
+  prompt: |
+    Which declarations of `read()` can replace `// INSERT` in `TextSource` so that the code compiles?
+    Choose three.
+  code: |
+    import java.io.*;
+    class Source {
+        String read() throws IOException { return ""; }
+    }
+    class TextSource extends Source {
+        // INSERT
+    }
+  options:
+    - key: a
+      text: "`String read() { return \"t\"; }`"
+      correct: true
+      why: An override may declare fewer checked exceptions — here none.
+      java:
+        source: |
+          import java.io.*;
+          class Source { String read() throws IOException { return ""; } }
+          class TextSource extends Source { String read() { return "t"; } }
+          public class Main { public static void main(String[] a) { System.out.println(new TextSource().read()); } }
+        expect: { compiles: true, stdout: "t" }
+    - key: b
+      text: "`String read() throws FileNotFoundException { return \"t\"; }`"
+      correct: true
+      why: FileNotFoundException is a subclass of IOException — a narrower checked exception is allowed.
+      java:
+        source: |
+          import java.io.*;
+          class Source { String read() throws IOException { return ""; } }
+          class TextSource extends Source { String read() throws FileNotFoundException { return "t"; } }
+          public class Main { public static void main(String[] a) throws Exception { System.out.println(new TextSource().read()); } }
+        expect: { compiles: true, stdout: "t" }
+    - key: c
+      text: "`String read() throws Exception { return \"t\"; }`"
+      why: Exception is broader than IOException; callers using a Source reference would not be prepared for it.
+      java:
+        source: |
+          import java.io.*;
+          class Source { String read() throws IOException { return ""; } }
+          class TextSource extends Source { String read() throws Exception { return "t"; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "overridden method does not throw java.lang.Exception" }
+    - key: d
+      text: "`String read() throws IOException, IllegalStateException { return \"t\"; }`"
+      correct: true
+      why: Unchecked exceptions in a throws clause are never restricted by overriding rules.
+      java:
+        source: |
+          import java.io.*;
+          class Source { String read() throws IOException { return ""; } }
+          class TextSource extends Source { String read() throws IOException, IllegalStateException { return "t"; } }
+          public class Main { public static void main(String[] a) throws Exception { System.out.println(new TextSource().read()); } }
+        expect: { compiles: true, stdout: "t" }
+    - key: e
+      text: "`String read() throws IOException, java.sql.SQLException { return \"t\"; }`"
+      why: SQLException is a checked exception the overridden method does not declare — a new checked exception is not allowed.
+      java:
+        source: |
+          import java.io.*;
+          class Source { String read() throws IOException { return ""; } }
+          class TextSource extends Source { String read() throws IOException, java.sql.SQLException { return "t"; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "overridden method does not throw java.sql.SQLException" }
+  explanation: |
+    Code that calls `read()` through a `Source` reference is only prepared for `IOException`. An overriding
+    method may therefore declare any subset of those checked exceptions (or subclasses of them), plus any
+    unchecked exceptions — but nothing broader and no new checked types.
+  rule: "JLS 8.4.8.3: an overriding method's throws clause may not declare checked exceptions that are not subtypes of those declared by the overridden method."
+  misconception: An override can throw anything as long as the method signature matches.
+  hint: Imagine the caller holds a `Source` reference — which checked exceptions is it ready for?
+
+- id: D4-EXC-010
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 60
+  tags: [runtime-exceptions, NumberFormatException]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            String input = "12 ";
+            int n = Integer.parseInt(input);
+            System.out.println(n + 1);
+        }
+    }
+  options:
+    - key: a
+      text: A `NumberFormatException` is thrown
+      correct: true
+      why: parseInt does not trim; the trailing space is not a digit, so the input is rejected.
+    - key: b
+      text: "`13`"
+      why: parseInt does not ignore surrounding whitespace — you would need input.strip() first.
+    - key: c
+      text: An `IllegalArgumentException` (and not a subclass) is thrown
+      why: The exact type is NumberFormatException, which is a subclass of IllegalArgumentException.
+    - key: d
+      text: Compilation fails because `parseInt` throws a checked exception
+      why: NumberFormatException is unchecked, so no handler or throws clause is needed.
+  explanation: |
+    `Integer.parseInt` accepts an optional sign followed by digits only. Any other character — including
+    whitespace — triggers `NumberFormatException: For input string: "12 "`. It is an unchecked exception
+    (a subclass of `IllegalArgumentException`), so the code compiles.
+  rule: "Integer.parseInt(String) throws NumberFormatException if the string does not contain a parsable integer (no trimming is performed)."
+  misconception: parseInt trims whitespace like many other parsers.
+  hint: Does parseInt strip whitespace?
+  java:
+    expect: { compiles: true, exception: java.lang.NumberFormatException }
+
+- id: D4-EXC-011
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [try-catch, ArithmeticException, finally]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        public static void main(String[] args) {
+            int a = 10, b = 0;
+            try {
+                System.out.print("A ");
+                System.out.print(a / b);
+                System.out.print("B ");
+            } catch (ArithmeticException e) {
+                System.out.print("C ");
+            } finally {
+                System.out.print("F ");
+            }
+            System.out.println("end");
+        }
+    }
+  options:
+    - key: a
+      text: "`A C F end`"
+      correct: true
+      why: Integer division by zero throws ArithmeticException; the rest of the try is skipped, the catch runs, then finally, then normal flow resumes.
+    - key: b
+      text: "`A Infinity B F end`"
+      why: Only floating-point division by zero yields Infinity; int division throws.
+    - key: c
+      text: "`A B C F end`"
+      why: Once the exception is thrown, the remaining statements in the try block are skipped.
+    - key: d
+      text: "`A C end`"
+      why: finally runs whether or not an exception occurred.
+  explanation: |
+    `a / b` with `int` operands and `b == 0` throws `ArithmeticException: / by zero`. Control jumps to the
+    matching catch, then finally runs, and because the exception was handled, execution continues after the
+    try statement.
+  rule: "JLS 15.17.2: integer division by zero throws ArithmeticException; floating-point division by zero yields Infinity or NaN."
+  hint: Are a and b integers or floating-point values?
+  java:
+    expect: { compiles: true, stdout: "A C F end" }
+
+- id: D4-EXC-012
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: does-it-compile
+  difficulty: advanced
+  estSeconds: 120
+  tags: [precise-rethrow, catch-or-declare]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    import java.io.*;
+    public class Main {
+        static void open(String name) throws FileNotFoundException {
+            throw new FileNotFoundException(name);
+        }
+        static void tryOpen(String name) throws FileNotFoundException {
+            try {
+                open(name);
+            } catch (Exception e) {
+                System.out.print("logged ");
+                throw e;
+            }
+        }
+        public static void main(String[] args) {
+            try {
+                tryOpen("a.txt");
+            } catch (FileNotFoundException e) {
+                System.out.println("missing " + e.getMessage());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: It prints `logged missing a.txt`
+      correct: true
+      why: Because e is effectively final, `throw e;` is analysed as throwing only what the try block can throw (FileNotFoundException, plus unchecked exceptions), which tryOpen declares.
+    - key: b
+      text: Compilation fails because `throw e;` throws `Exception`, which `tryOpen` does not declare
+      why: That was the rule before Java 7. With precise rethrow, an effectively final catch parameter only rethrows the checked types the try block can throw.
+    - key: c
+      text: Compilation fails because `catch (Exception e)` is too broad for a method that declares `FileNotFoundException`
+      why: A catch clause may be broader than what is thrown; Exception is always a legal catch type.
+    - key: d
+      text: It prints `logged` and then the program ends with an uncaught `FileNotFoundException`
+      why: main catches FileNotFoundException, so the rethrown exception is handled there.
+  explanation: |
+    Since Java 7 the compiler performs **precise rethrow** analysis: if a catch parameter is final or
+    effectively final, `throw e;` can only throw the checked exceptions that the try block can throw and
+    that the catch can catch — here just `FileNotFoundException`. If the catch body assigned to `e`, the
+    precise analysis would be lost and the error *unreported exception java.lang.Exception* would appear.
+  rule: "JLS 11.2.2: a throw statement whose expression is a final or effectively final catch parameter can throw only the checked exceptions the try block can throw that are assignable to the parameter type."
+  misconception: "`throw e;` always throws the declared type of e."
+  hint: Is `e` ever reassigned? Then what can it actually contain?
+  java:
+    expect: { compiles: true, stdout: "logged missing a.txt" }
+
+- id: D4-EXC-013
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [catch-or-declare, interfaces, lambda, reference-type]
+  prompt: What is the result of compiling this code?
+  code: |
+    interface Loader {
+        void load() throws Exception;
+    }
+    class FileLoader implements Loader {
+        public void load() { System.out.println("file"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            FileLoader f = new FileLoader();
+            f.load();
+            Loader l = () -> System.out.println("lambda");
+            l.load();
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails at line 12 only
+      correct: true
+      why: The call through a Loader reference uses Loader.load(), which declares Exception; main neither catches nor declares it.
+    - key: b
+      text: Compilation fails at lines 10 and 12
+      why: Line 10 calls FileLoader.load() through a FileLoader reference, and that override declares no exceptions.
+    - key: c
+      text: Compilation fails at line 5 because the override drops the throws clause
+      why: Dropping checked exceptions in an override is always allowed.
+    - key: d
+      text: It compiles and prints `file` then `lambda`
+      why: The lambda body throws nothing, but the compiler only looks at the declared type of the method being called.
+  explanation: |
+    Catch-or-declare is decided by the **compile-time type** of the expression the method is invoked on.
+    `f.load()` resolves to `FileLoader.load()` (no throws clause). `l.load()` resolves to `Loader.load()`,
+    which declares `throws Exception` — so line 12 needs a handler, regardless of what the lambda does.
+  rule: "JLS 11.2.1: a method invocation can throw the exception classes listed in the throws clause of the invoked method as determined at compile time."
+  misconception: The runtime object (or lambda body) decides which checked exceptions must be handled.
+  hint: Which method declaration does the compiler pick for each call?
+  java:
+    expect: { compiles: false, errorContains: "unreported exception java.lang.Exception", errorLine: 12 }
+
+- id: D4-EXC-014
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [Error, StackOverflowError, finally]
+  prompt: What is the result of running this program?
+  code: |
+    public class Main {
+        static int depth(int n) { return depth(n + 1); }
+        public static void main(String[] args) {
+            try {
+                depth(0);
+            } catch (Exception e) {
+                System.out.println("caught");
+            } finally {
+                System.out.println("finally");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`finally` is printed, then the program ends with a `StackOverflowError`"
+      correct: true
+      why: StackOverflowError is an Error, not an Exception, so the catch does not match; finally still runs while the error propagates.
+    - key: b
+      text: "`caught` and `finally` are printed"
+      why: catch (Exception e) cannot catch Errors — Error and Exception are sibling branches under Throwable.
+    - key: c
+      text: The program runs forever
+      why: Each call consumes stack space, so the thread's stack eventually overflows.
+    - key: d
+      text: Compilation fails because `depth` can never return normally
+      why: Unbounded recursion is not detected by the compiler; the method is legal.
+  explanation: |
+    Infinite recursion exhausts the thread stack and the JVM throws `StackOverflowError`, a subclass of
+    `VirtualMachineError` → `Error`. A `catch (Exception e)` does not match it. The finally block still runs
+    during unwinding, and then the error terminates `main`.
+  rule: "Error and Exception are separate subclasses of Throwable; catch (Exception e) handles only Exception and its subclasses."
+  misconception: catch (Exception e) catches everything that can go wrong.
+  hint: Where does StackOverflowError sit in the Throwable hierarchy?
+  java:
+    expect: { compiles: true, exception: java.lang.StackOverflowError }
+
+- id: D4-EXC-015
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [unnamed-variables, java22, multi-catch, NumberFormatException]
+  prompt: What is the output when compiled and run with Java 25?
+  code: |
+    public class Main {
+        static int parse(String s) {
+            try {
+                return Integer.parseInt(s);
+            } catch (NumberFormatException _) {
+                return -1;
+            } catch (NullPointerException | IllegalStateException _) {
+                return -2;
+            }
+        }
+        public static void main(String[] args) {
+            System.out.println(parse("7") + " " + parse("seven") + " " + parse(null));
+        }
+    }
+  options:
+    - key: a
+      text: "`7 -1 -1`"
+      correct: true
+      why: Unnamed catch parameters are legal (JEP 456), and Integer.parseInt(null) throws NumberFormatException, not NullPointerException.
+    - key: b
+      text: "`7 -1 -2`"
+      why: parseInt documents NumberFormatException for a null argument — it never dereferences the null.
+    - key: c
+      text: Compilation fails because two catch clauses both use `_`
+      why: "`_` declares no variable, so it can be used any number of times in the same scope."
+    - key: d
+      text: Compilation fails because `_` cannot be used in a multi-catch
+      why: Unnamed variables are allowed in multi-catch parameters too.
+  explanation: |
+    Java 22 finalized unnamed variables (JEP 456): a catch parameter that is not used can be written `_`, any
+    number of times. The subtle part is the third call: `Integer.parseInt(null)` throws
+    `NumberFormatException` (message *Cannot parse null string*), so the first handler returns -1.
+  rule: "JEP 456: an unnamed catch parameter `_` may be declared in any catch clause; Integer.parseInt(String) throws NumberFormatException for a null argument."
+  misconception: Passing null to a library method always produces a NullPointerException.
+  hint: Read the parseInt Javadoc for a null argument.
+  java:
+    expect: { compiles: true, stdout: "7 -1 -1" }
+
+- id: D4-EXC-016
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [custom-exceptions, catch-or-declare, cause-chaining]
+  prompt: |
+    Which statements can replace `// INSERT` so that the code compiles? Choose two.
+  code: |
+    class InsufficientFundsException extends Exception {
+        InsufficientFundsException(String msg) { super(msg); }
+    }
+    public class Main {
+        static void withdraw(int amount) {
+            // INSERT
+        }
+        public static void main(String[] args) { }
+    }
+  options:
+    - key: a
+      text: "`throw new InsufficientFundsException(\"low\");`"
+      why: The exception extends Exception (checked), and withdraw neither catches nor declares it.
+      java:
+        source: |
+          class InsufficientFundsException extends Exception { InsufficientFundsException(String msg) { super(msg); } }
+          public class Main {
+              static void withdraw(int amount) { throw new InsufficientFundsException("low"); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "unreported exception InsufficientFundsException" }
+    - key: b
+      text: "`throw new IllegalStateException(new InsufficientFundsException(\"low\"));`"
+      correct: true
+      why: Creating a checked exception object is fine; only throwing it is checked. Wrapping it as the cause of an unchecked exception compiles.
+      java:
+        source: |
+          class InsufficientFundsException extends Exception { InsufficientFundsException(String msg) { super(msg); } }
+          public class Main {
+              static void withdraw(int amount) { throw new IllegalStateException(new InsufficientFundsException("low")); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: c
+      text: "`throw new InsufficientFundsException();`"
+      why: The class declares a constructor, so it has no default no-arg constructor — and it would also be unreported.
+      java:
+        source: |
+          class InsufficientFundsException extends Exception { InsufficientFundsException(String msg) { super(msg); } }
+          public class Main {
+              static void withdraw(int amount) { throw new InsufficientFundsException(); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot be applied to given types" }
+    - key: d
+      text: "`try { throw new InsufficientFundsException(\"low\"); } catch (Exception e) { throw new RuntimeException(e); }`"
+      correct: true
+      why: The checked exception is caught and translated into an unchecked one that keeps it as the cause.
+      java:
+        source: |
+          class InsufficientFundsException extends Exception { InsufficientFundsException(String msg) { super(msg); } }
+          public class Main {
+              static void withdraw(int amount) { try { throw new InsufficientFundsException("low"); } catch (Exception e) { throw new RuntimeException(e); } }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: true }
+    - key: e
+      text: "`throw new InsufficientFundsException(\"low\", null);`"
+      why: Constructors are not inherited; the custom class only declares a (String) constructor, so Exception(String, Throwable) is not available.
+      java:
+        source: |
+          class InsufficientFundsException extends Exception { InsufficientFundsException(String msg) { super(msg); } }
+          public class Main {
+              static void withdraw(int amount) { throw new InsufficientFundsException("low", null); }
+              public static void main(String[] args) { }
+          }
+        expect: { compiles: false, errorContains: "cannot be applied to given types" }
+  explanation: |
+    A custom exception extending `Exception` is checked: *throwing* it requires catch-or-declare, but merely
+    constructing one does not. Constructors are not inherited, so only the constructors the custom class
+    declares exist. Wrapping a checked exception as the **cause** of an unchecked one is the standard
+    translation idiom.
+  rule: "Exceptions extending Exception (but not RuntimeException) are checked (JLS 11.1.1); constructors are not inherited (JLS 8.8)."
+  misconception: A custom exception automatically has all of Exception's constructors.
+  hint: Two separate rules are in play — catch-or-declare and constructor availability.
+
+- id: D4-EXC-017
+  objective: D4.1
+  lesson: exc-fundamentals
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 120
+  tags: [custom-exceptions, cause, getMessage, toString]
+  prompt: What is the output?
+  code: |
+    class WrapperException extends RuntimeException {
+        WrapperException(Throwable cause) { super(cause); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            try {
+                throw new WrapperException(new java.io.IOException("disk full"));
+            } catch (RuntimeException e) {
+                System.out.println(e.getMessage());
+                System.out.println(e.getCause().getMessage());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        java.io.IOException: disk full
+        disk full
+      correct: true
+      why: "The (Throwable cause) constructor sets the detail message to cause.toString(), which is the class name plus \": \" plus the cause's message."
+    - key: b
+      text: |
+        null
+        disk full
+      why: Only the no-arg constructor leaves the message null; RuntimeException(Throwable) derives the message from the cause.
+    - key: c
+      text: |
+        disk full
+        disk full
+      why: The derived message is cause.toString(), which includes the fully qualified class name, not just getMessage().
+    - key: d
+      text: Compilation fails because a checked `IOException` is created inside `main` without a throws clause
+      why: Constructing a checked exception object is not throwing it; only the unchecked WrapperException is thrown.
+  explanation: |
+    `RuntimeException(Throwable cause)` (like `Exception(Throwable)`) sets the detail message to
+    `cause == null ? null : cause.toString()`. `IOException.toString()` is `java.io.IOException: disk full`.
+    `getCause()` returns the wrapped `IOException`, whose own message is `disk full`.
+  rule: "Throwable(Throwable cause) constructs a new throwable with the specified cause and a detail message of (cause == null ? null : cause.toString())."
+  misconception: getMessage() on a wrapper returns the cause's message, or null when no message was passed.
+  hint: Look up what the cause-only constructor uses as the detail message.
+  java:
+    expect: { compiles: true, stdout: "java.io.IOException: disk full\ndisk full" }
+
+# ───────────── try-with-resources ─────────────
+
+- id: D4-TWR-001
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: multi
+  format: select-valid
+  difficulty: foundation
+  estSeconds: 120
+  tags: [try-with-resources, AutoCloseable, effectively-final]
+  prompt: |
+    Given the class `Res` and the local variable `existing`, which lines can replace `// INSERT` so that
+    the code compiles? Choose three.
+  code: |
+    class Res implements AutoCloseable {
+        @Override public void close() { System.out.println("closed"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Res existing = new Res();
+            // INSERT
+        }
+    }
+  options:
+    - key: a
+      text: "`try (Res r = new Res()) { }`"
+      correct: true
+      why: A resource declaration of an AutoCloseable type; no catch or finally is required in try-with-resources.
+      java:
+        source: |
+          class Res implements AutoCloseable { @Override public void close() { System.out.println("closed"); } }
+          public class Main { public static void main(String[] args) { Res existing = new Res(); try (Res r = new Res()) { } } }
+        expect: { compiles: true, stdout: "closed" }
+    - key: b
+      text: "`try (new Res()) { }`"
+      why: An arbitrary expression is not allowed; the resource must be a declaration or a reference to a final/effectively final variable.
+      java:
+        source: |
+          class Res implements AutoCloseable { @Override public void close() { System.out.println("closed"); } }
+          public class Main { public static void main(String[] args) { Res existing = new Res(); try (new Res()) { } } }
+        expect: { compiles: false, errorContains: "must either be a variable declaration or an expression denoting a reference" }
+    - key: c
+      text: "`try (existing) { }`"
+      correct: true
+      why: Since Java 9 an effectively final variable can be used as a resource; it is closed at the end of the block.
+      java:
+        source: |
+          class Res implements AutoCloseable { @Override public void close() { System.out.println("closed"); } }
+          public class Main { public static void main(String[] args) { Res existing = new Res(); try (existing) { } } }
+        expect: { compiles: true, stdout: "closed" }
+    - key: d
+      text: "`try (String s = \"x\") { }`"
+      why: String does not implement AutoCloseable, so it cannot be a resource.
+      java:
+        source: |
+          class Res implements AutoCloseable { @Override public void close() { System.out.println("closed"); } }
+          public class Main { public static void main(String[] args) { Res existing = new Res(); try (String s = "x") { } } }
+        expect: { compiles: false, errorContains: "try-with-resources not applicable to variable type" }
+    - key: e
+      text: "`try (Res r = null) { }`"
+      correct: true
+      why: A null resource is legal; the generated code checks for null and simply does not call close().
+      java:
+        source: |
+          class Res implements AutoCloseable { @Override public void close() { System.out.println("closed"); } }
+          public class Main { public static void main(String[] args) { Res existing = new Res(); try (Res r = null) { } } }
+        expect: { compiles: true, stdout: "" }
+  explanation: |
+    A try-with-resources header contains declarations of `AutoCloseable` types or (Java 9+) references to
+    final/effectively final variables. Arbitrary expressions such as `new Res()` are rejected, and types that
+    are not `AutoCloseable` are rejected. A `null` resource compiles and is skipped at close time.
+  rule: "JLS 14.20.3: each resource is a local variable declaration or an expression name/field access denoting a final or effectively final variable, whose type must be a subtype of AutoCloseable."
+  misconception: Any expression that produces an AutoCloseable can be put in the header.
+  hint: The header accepts declarations and variable names — what about a bare `new` expression?
+
+- id: D4-TWR-002
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [try-with-resources, closing-order, finally]
+  prompt: What is the output?
+  code: |
+    class R implements AutoCloseable {
+        final int id;
+        R(int id) { this.id = id; System.out.print("o" + id + " "); }
+        @Override public void close() { System.out.print("c" + id + " "); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            try {
+                try (R r1 = new R(1); R r2 = new R(2)) {
+                    System.out.print("body ");
+                    throw new IllegalArgumentException();
+                } finally {
+                    System.out.print("f ");
+                }
+            } catch (RuntimeException e) {
+                System.out.print("catch");
+            }
+            System.out.println();
+        }
+    }
+  options:
+    - key: a
+      text: "`o1 o2 body c2 c1 f catch`"
+      correct: true
+      why: Resources open left to right, close right to left as soon as the body ends, then the statement's finally runs, then the outer catch.
+    - key: b
+      text: "`o1 o2 body c1 c2 f catch`"
+      why: Resources are closed in reverse order of declaration.
+    - key: c
+      text: "`o1 o2 body f c2 c1 catch`"
+      why: The resources are closed before the finally block of the same try-with-resources statement.
+    - key: d
+      text: "`o1 o2 body catch c2 c1 f`"
+      why: The inner statement (including its closing and finally) completes before the exception reaches the outer catch.
+  explanation: |
+    Resources are initialized in declaration order (`o1 o2`). When the body throws, the generated code closes
+    them in reverse order (`c2 c1`), then the `finally` of the same statement runs (`f`). The exception then
+    propagates to the enclosing try, whose catch prints `catch`.
+  rule: "JLS 14.20.3.2: in an extended try-with-resources, resources are closed before any catch or finally clause runs; resources are closed in the reverse order of initialization."
+  misconception: finally runs before the resources are closed.
+  hint: Picture the closing code as an inner finally that the compiler generates.
+  java:
+    expect: { compiles: true, stdout: "o1 o2 body c2 c1 f catch" }
+
+- id: D4-TWR-003
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [try-with-resources, suppressed, close-exception]
+  prompt: What is the output?
+  code: |
+    class Res implements AutoCloseable {
+        private final String n;
+        Res(String n) { this.n = n; }
+        @Override public void close() { throw new IllegalStateException("close " + n); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            try (Res a = new Res("A"); Res b = new Res("B")) {
+                System.out.println("ok");
+            } catch (IllegalStateException e) {
+                System.out.println(e.getMessage() + " / " + e.getSuppressed()[0].getMessage());
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        ok
+        close B / close A
+      correct: true
+      why: The body succeeds, so the first close failure (B, closed first) becomes the primary exception and A's close failure is suppressed into it.
+    - key: b
+      text: |
+        ok
+        close A / close B
+      why: B is declared last, so it is closed first; its exception is the primary one.
+    - key: c
+      text: |
+        ok
+        close A
+      why: Close exceptions do not replace each other; the later one is attached to the first as suppressed — and the code reads getSuppressed()[0].
+    - key: d
+      text: |
+        ok
+        close B
+      why: The message line also concatenates the suppressed exception; A's failure is not lost.
+  explanation: |
+    With no exception from the body, closing proceeds `b` then `a`. `b.close()` throws first — that becomes
+    the primary exception. The compiler-generated code still closes `a`; its exception is added to the
+    primary one with `addSuppressed`. So the message is `close B` and `getSuppressed()[0]` is `close A`.
+  rule: "JLS 14.20.3.1: if closing a resource throws while another exception is already pending (from the body or an earlier close), the new exception is added as suppressed to the pending one."
+  misconception: Suppression only happens when the try body itself throws.
+  hint: Which resource is closed first, and what is pending when the second one fails?
+  java:
+    expect: { compiles: true, stdout: "ok\nclose B / close A" }
+
+- id: D4-TWR-004
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [try-with-resources, Closeable, catch-or-declare]
+  prompt: What is the result of compiling this code?
+  code: |
+    import java.io.*;
+    class Res implements Closeable {
+        @Override public void close() { System.out.println("c"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            try (Res r = new Res()) {
+                System.out.println("one");
+            }
+            Closeable c = new Res();
+            try (c) {
+                System.out.println("two");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails at line 11 because the implicit `close()` may throw `IOException`
+      correct: true
+      why: The second resource's declared type is Closeable, whose close() declares IOException; main neither catches nor declares it.
+    - key: b
+      text: Compilation fails at lines 7 and 11
+      why: The first resource has type Res, whose close() override declares no exception, so line 7 needs no handler.
+    - key: c
+      text: Compilation fails at line 3 because `close()` must declare `throws IOException`
+      why: An override may drop checked exceptions from its throws clause.
+    - key: d
+      text: It compiles and prints `one c two c`
+      why: The program would print that, but catch-or-declare is checked against the declared type Closeable.
+  explanation: |
+    The implicit `close()` call is checked like any call, using the **declared type** of the resource.
+    `Res.close()` throws nothing, so the first statement is fine. For `c`, declared as `Closeable`,
+    `Closeable.close() throws IOException` applies, so javac reports *unreported exception
+    java.io.IOException … exception thrown from implicit call to close()*.
+  rule: "JLS 14.20.3: the implicit close() invocation can throw the exceptions declared by the close() method of the resource's declared type, and these are subject to catch-or-declare."
+  misconception: Only the runtime class's close() matters.
+  hint: Compare the declared types of r and c.
+  java:
+    expect: { compiles: false, errorContains: "unreported exception java.io.IOException", errorLine: 11 }
+
+- id: D4-TWR-005
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: single
+  format: does-it-compile
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [try-with-resources, effectively-final, java9]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    class Res implements AutoCloseable {
+        @Override public void close() { System.out.println("closed"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Res r = new Res();
+            try (r) {
+                System.out.println("body");
+            }
+            r = null;
+        }
+    }
+  options:
+    - key: a
+      text: Compilation fails at line 7 because `r` is not effectively final
+      correct: true
+      why: The assignment on line 10 makes r not effectively final, and a variable used as a resource must be final or effectively final — wherever the reassignment occurs.
+    - key: b
+      text: It prints `body` then `closed`
+      why: That would be the output without line 10; a later reassignment still disqualifies the variable.
+    - key: c
+      text: Compilation fails at line 10 because a closed resource cannot be reassigned
+      why: The error is reported where r is used as a resource, not at the assignment.
+    - key: d
+      text: It prints `body`, then a `NullPointerException` is thrown
+      why: The program does not compile, and even if it did, assigning null after the block causes no exception.
+  explanation: |
+    Java 9 allows `try (r)`, but only if `r` is final or effectively final. "Effectively final" is a property
+    of the variable over its **whole** scope, so the assignment on line 10 disqualifies it, and javac reports
+    *variable r used as a try-with-resources resource neither final nor effectively final* on line 7.
+  rule: "JLS 14.20.3: a resource that is an expression must denote a final or effectively final variable (JLS 4.12.4: effectively final means never assigned after initialization)."
+  misconception: Only reassignments before or inside the try block matter.
+  hint: Is r effectively final, considering every line of the method?
+  java:
+    expect: { compiles: false, errorContains: "neither final nor effectively final", errorLine: 7 }
+
+- id: D4-TWR-006
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [try-with-resources, suppressed, catch-order]
+  prompt: What is the output?
+  code: |
+    class Res implements AutoCloseable {
+        @Override public void close() { throw new IllegalStateException("close"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            try (Res r = new Res()) {
+                throw new IllegalArgumentException("body");
+            } catch (IllegalStateException e) {
+                System.out.println("ISE " + e.getMessage());
+            } catch (IllegalArgumentException e) {
+                System.out.println("IAE " + e.getSuppressed().length + " " + e.getSuppressed()[0].getMessage());
+            } finally {
+                System.out.println("finally");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        IAE 1 close
+        finally
+      correct: true
+      why: The body's IllegalArgumentException is the primary exception; the close() failure is suppressed into it, so the IAE handler runs.
+    - key: b
+      text: |
+        ISE close
+        finally
+      why: An exception from close() never replaces an exception already thrown by the body in try-with-resources.
+    - key: c
+      text: |
+        ISE close
+        IAE 1 close
+        finally
+      why: Only one catch clause of a try statement ever runs for a single propagating exception.
+    - key: d
+      text: |
+        IAE 0
+        finally
+      why: The close failure is not lost — it is recorded as suppressed. (And getSuppressed()[0] would throw if the array were empty.)
+  explanation: |
+    The body throws `IllegalArgumentException("body")`. While closing `r`, `close()` throws
+    `IllegalStateException("close")`; because an exception is already pending, it is added to it with
+    `addSuppressed`. The catch clauses then see only the primary IAE, which has one suppressed exception.
+  rule: "JLS 14.20.3.1: an exception thrown by close() while an exception from the try block is propagating is suppressed (Throwable.addSuppressed)."
+  misconception: The last exception thrown wins, as with finally.
+  hint: Which exception is pending when close() fails?
+  java:
+    expect: { compiles: true, stdout: "IAE 1 close\nfinally" }
+
+- id: D4-TWR-007
+  objective: D4.1
+  lesson: exc-try-with-resources
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [try-with-resources, suppressed, rules]
+  prompt: Which statements about try-with-resources are true? Choose three.
+  options:
+    - key: a
+      text: Resources are closed before the statement's own `catch` block runs.
+      correct: true
+      why: The generated closing code is wrapped inside the try; catch and finally are outside it.
+    - key: b
+      text: Resources are closed in the reverse order of their declaration.
+      correct: true
+      why: Later resources may depend on earlier ones (e.g. a writer wrapping a stream), so they are closed first.
+    - key: c
+      text: Declaring a resource initialized to `null` causes a `NullPointerException` when the block ends.
+      why: The generated code checks for null and skips close() for null resources.
+    - key: d
+      text: "`getSuppressed()` returns `null` when no exception was suppressed."
+      why: It returns an empty array — never null.
+    - key: e
+      text: A try-with-resources statement needs at least one `catch` or a `finally`.
+      why: Unlike a plain try, try-with-resources may stand alone.
+    - key: f
+      text: A resource variable declared in the header is implicitly final.
+      correct: true
+      why: Assigning to it inside the block fails with "auto-closeable resource r may not be assigned".
+  explanation: |
+    try-with-resources closes non-null resources in reverse declaration order **before** any catch/finally of
+    the same statement, records close failures as suppressed when an exception is pending, and its header
+    variables are implicitly final and scoped to the try block. It needs no catch or finally.
+  rule: "JLS 14.20.3: resources are implicitly final, closed in reverse order before catch/finally, null resources are not closed; Throwable.getSuppressed() returns an empty array if none."
+  misconception: try-with-resources behaves like a plain try for catch/finally requirements and null handling.
+  hint: Mentally expand the statement into the code the compiler generates.

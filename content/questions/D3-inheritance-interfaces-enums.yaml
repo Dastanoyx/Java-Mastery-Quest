@@ -1,0 +1,1589 @@
+# D3.5 — inheritance, overriding, abstract classes, polymorphism, casting, Object methods,
+#        sealed types, pattern matching (instanceof, switch, record patterns)
+# D3.6 — interfaces (default/static/private methods, functional interfaces)
+# D3.7 — enums
+
+# ---------------------------------------------------------------- D3.5 inheritance & polymorphism
+
+- id: D3-INH-001
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [overriding, covariant-return, checked-exceptions, access, overloading]
+  prompt: |
+    Each line below is placed, one at a time, as the only member of `Child`, with the body `{ return x; }`.
+    Which ones make the code compile? Choose three.
+  code: |
+    import java.io.*;
+    class Parent {
+        protected Number calc(int x) throws IOException { return x; }
+    }
+    class Child extends Parent {
+        // INSERT method header here
+    }
+  options:
+    - key: a
+      text: "`public Integer calc(int x)`"
+      correct: true
+      why: A wider access modifier and a subtype return type (covariant return) are both allowed, and declaring no exceptions is always fine.
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { public Integer calc(int x) { return x; } }
+          public class Main { public static void main(String[] a) { System.out.println(new Child().calc(1)); } }
+        expect: { compiles: true, stdout: "1" }
+    - key: b
+      text: "`Number calc(int x)`"
+      why: Package access is narrower than protected. An override may not reduce visibility (attempting to assign weaker access privileges).
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { Number calc(int x) { return x; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "weaker access privileges" }
+    - key: c
+      text: "`protected Number calc(int x) throws FileNotFoundException`"
+      correct: true
+      why: FileNotFoundException is a subclass of IOException. Narrowing the checked exceptions is allowed.
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { protected Number calc(int x) throws FileNotFoundException { return x; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: true }
+    - key: d
+      text: "`protected Number calc(int x) throws Exception`"
+      why: Exception is broader than IOException. An override may not throw new or broader checked exceptions.
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { protected Number calc(int x) throws Exception { return x; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "overridden method does not throw java.lang.Exception" }
+    - key: e
+      text: "`protected Object calc(int x)`"
+      why: Object is a supertype of Number, not a subtype. A covariant return must be the same type or narrower.
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { protected Object calc(int x) { return x; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "return type java.lang.Object is not compatible" }
+    - key: f
+      text: "`protected Number calc(long x) throws Exception`"
+      correct: true
+      why: The parameter type differs, so this is a new overload, not an override. None of the overriding rules apply, so the broader exception is legal.
+      java:
+        source: |
+          import java.io.*;
+          class Parent { protected Number calc(int x) throws IOException { return x; } }
+          class Child extends Parent { protected Number calc(long x) throws Exception { return x; } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: true }
+  explanation: |
+    For an **override** (same name, same parameter types) the compiler checks: return type same or a subtype
+    (a, not e), access same or wider (a, not b), and checked exceptions not new or broader (c, not d).
+    Option f changes the parameter type to `long`. That makes it an **overload**, so the overriding checks do
+    not apply. Only `@Override` would turn it into an error.
+  rule: "JLS 8.4.8.3: an overriding method may not reduce access, must be return-type-substitutable, and may not throw broader checked exceptions."
+  misconception: "\"Any method with the same name in a subclass must follow the overriding rules.\""
+  hint: First decide which options are overrides at all. Then apply the return, access and exception rules to those.
+
+- id: D3-INH-002
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: single
+  format: polymorphism
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [hiding, fields, static-methods, dynamic-dispatch]
+  prompt: What is the output?
+  code: |
+    class P { int v = 1; int get() { return v; } static String id() { return "P"; } }
+    class Q extends P { int v = 2; @Override int get() { return v; } static String id() { return "Q"; } }
+    public class Main {
+        public static void main(String[] args) {
+            P p = new Q();
+            System.out.println(p.v + " " + p.get() + " " + p.id() + " " + ((Q) p).v);
+        }
+    }
+  options:
+    - key: a
+      text: "`1 2 P 2`"
+      correct: true
+      why: Fields and static methods use the reference type P; get() is an overridden instance method, so Q's version runs and reads Q's field. The cast changes the reference type to Q.
+    - key: b
+      text: "`2 2 Q 2`"
+      why: This treats fields and static methods as polymorphic. They are hidden, not overridden, and are chosen by the declared type.
+    - key: c
+      text: "`1 1 P 2`"
+      why: get() is overridden, so dynamic dispatch runs Q.get(), and inside Q the simple name v means Q's field.
+    - key: d
+      text: "`1 2 Q 2`"
+      why: Calling a static method through a reference uses the reference's declared type (P), not the object's class.
+  explanation: |
+    `p` has reference type `P` and runtime type `Q`. `p.v` reads `P`'s field (fields are hidden, not overridden).
+    `p.get()` dispatches to `Q.get()`, which reads `Q`'s `v`, so it returns `2`. `p.id()` is a static call
+    resolved at compile time against `P`. `((Q) p).v` has reference type `Q`, so it reads `Q`'s field.
+  rule: Only instance methods are dynamically dispatched. Field access and static method calls are resolved using the compile-time type (JLS 8.3, 8.4.8.2).
+  misconception: "\"The object is a Q, so everything comes from Q.\""
+  hint: For each of the four expressions, ask whether it is an instance-method call.
+  java:
+    expect: { compiles: true, stdout: "1 2 P 2" }
+
+- id: D3-INH-003
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: multi
+  format: select-valid
+  difficulty: foundation
+  estSeconds: 90
+  tags: [abstract-classes, abstract-methods, modifiers]
+  prompt: Which of these declarations compile? Choose two.
+  options:
+    - key: a
+      text: "`abstract class A { abstract void m(); }`"
+      correct: true
+      why: An abstract class may declare abstract methods, which end in a semicolon instead of a body.
+      java:
+        source: |
+          abstract class A { abstract void m(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: true }
+    - key: b
+      text: "`abstract class A { abstract void m() {} }`"
+      why: An abstract method cannot have a body, not even an empty one.
+      java:
+        source: |
+          abstract class A { abstract void m() {} }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "abstract methods cannot have a body" }
+    - key: c
+      text: "`class A { abstract void m(); }`"
+      why: A class that declares an abstract method must itself be abstract.
+      java:
+        source: |
+          class A { abstract void m(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "is not abstract and does not override abstract method" }
+    - key: d
+      text: "`abstract class A { private abstract void m(); }`"
+      why: A private method cannot be seen by subclasses, so nobody could implement it. abstract and private is an illegal combination.
+      java:
+        source: |
+          abstract class A { private abstract void m(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "illegal combination of modifiers: abstract and private" }
+    - key: e
+      text: "`abstract class A { A() { } static void m() { } }`"
+      correct: true
+      why: An abstract class does not need abstract methods. It may have constructors (run through super(...) from subclasses) and static methods.
+      java:
+        source: |
+          abstract class A { A() { } static void m() { } }
+          public class Main { public static void main(String[] a) { A.m(); } }
+        expect: { compiles: true }
+    - key: f
+      text: "`abstract class A { static abstract void m(); }`"
+      why: Static methods are not overridden, so a static abstract method could never be implemented. abstract and static is an illegal combination.
+      java:
+        source: |
+          abstract class A { static abstract void m(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "illegal combination of modifiers: abstract and static" }
+  explanation: |
+    Abstract methods have no body and live only in abstract classes (or interfaces). They exist to be
+    overridden, so they cannot be `private`, `static` or `final`. An abstract class can still contain
+    constructors, fields, static and concrete methods, and it does not need any abstract method at all.
+  rule: "JLS 8.4.3.1: it is a compile-time error for an abstract method to also be private, static or final, or to have a body; JLS 8.1.1.1: only abstract classes may declare abstract methods."
+  hint: An abstract method exists only to be overridden. Which modifiers prevent overriding?
+
+- id: D3-INH-004
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [casting, interfaces, classcastexception]
+  prompt: What is the result?
+  code: |
+    class Fruit { }
+    class Apple extends Fruit { }
+    interface Juicy { }
+    public class Main {
+        public static void main(String[] args) {
+            Object o = new Apple();
+            Fruit f = (Fruit) o;
+            Juicy j = (Juicy) f;
+            System.out.println("done");
+        }
+    }
+  options:
+    - key: a
+      text: It prints `done`
+      why: The object is an Apple, and Apple does not implement Juicy, so the second cast cannot succeed.
+    - key: b
+      text: Compilation fails at line 8 because `Fruit` does not implement `Juicy`
+      why: Fruit is not final, so some subclass of Fruit could implement Juicy. The compiler must allow the cast.
+    - key: c
+      text: A `ClassCastException` is thrown at line 8
+      correct: true
+      why: The cast compiles, but at runtime the JVM sees that the Apple object does not implement Juicy.
+    - key: d
+      text: A `ClassCastException` is thrown at line 7
+      why: The object is an Apple, which is a Fruit, so the first cast succeeds.
+  explanation: |
+    A cast is checked twice. **At compile time**, `(Juicy) f` is legal because `Fruit` is not `final`: a
+    subclass of `Fruit` might implement `Juicy`. **At runtime**, the JVM checks the actual object, an `Apple`,
+    which does not implement `Juicy`, so it throws `ClassCastException`. If `Fruit` were declared `final`,
+    the compiler could prove the cast impossible and line 8 would not compile.
+  rule: A cast to an interface compiles unless the source type is a final class that does not implement it (JLS 5.5); the runtime check throws ClassCastException.
+  misconception: "\"If the compiler accepts a cast, it is safe.\""
+  hint: Could any subclass of Fruit implement Juicy? Is this particular object such a subclass?
+  java:
+    expect: { compiles: true, exception: java.lang.ClassCastException }
+
+- id: D3-INH-005
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [equals, hashcode, overloading, collections]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    class Isbn {
+        private final String code;
+        Isbn(String code) { this.code = code; }
+        public boolean equals(Isbn other) { return other != null && code.equals(other.code); }
+        @Override public int hashCode() { return code.hashCode(); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Set<Isbn> set = new HashSet<>();
+            set.add(new Isbn("978"));
+            set.add(new Isbn("978"));
+            Isbn a = new Isbn("1");
+            Object b = new Isbn("1");
+            System.out.println(set.size() + " " + a.equals(b) + " " + a.equals((Isbn) b));
+        }
+    }
+  options:
+    - key: a
+      text: "`2 false true`"
+      correct: true
+      why: equals(Isbn) is an overload. HashSet calls equals(Object), which is still Object's identity check, so both objects are kept. The overload is chosen only when the argument's static type is Isbn.
+    - key: b
+      text: "`1 true true`"
+      why: This assumes equals(Isbn) overrides equals(Object). The parameter type differs, so it only overloads it.
+    - key: c
+      text: "`1 false true`"
+      why: Matching hash codes are not enough. HashSet then calls equals(Object), which compares identity, so the second Isbn is added.
+    - key: d
+      text: "`2 true true`"
+      why: With an argument whose static type is Object, overload resolution picks the inherited equals(Object), which compares identity.
+  explanation: |
+    `equals(Isbn)` does **not** override `Object.equals(Object)` because the parameter type differs. The class now
+    has two `equals` overloads. `HashSet` calls `equals(Object)`: the two `"978"` objects have the same hash but
+    are not identical, so the size is `2`. `a.equals(b)` with `b` declared `Object` picks `equals(Object)`, which
+    returns `false`. `a.equals((Isbn) b)` picks the overload and returns `true`. `@Override` on `equals(Isbn)`
+    would have turned this bug into a compile error.
+  rule: Object.equals must be overridden with the exact signature `public boolean equals(Object)`; overload selection uses the argument's compile-time type (JLS 15.12.2).
+  misconception: "\"equals(MyType) is a more specific, better equals.\""
+  hint: Which method does HashSet call, and does Isbn override it?
+  java:
+    expect: { compiles: true, stdout: "2 false true" }
+
+- id: D3-INH-006
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: single
+  format: trace
+  difficulty: advanced
+  estSeconds: 120
+  tags: [super, dynamic-dispatch, overriding]
+  prompt: What is the output?
+  code: |
+    class Base {
+        String name() { return "base"; }
+        String greet() { return "Hello " + name(); }
+    }
+    class Mid extends Base {
+        @Override String name() { return "mid"; }
+        @Override String greet() { return super.greet().toUpperCase(); }
+    }
+    class Leaf extends Mid {
+        @Override String name() { return "leaf"; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Base b = new Leaf();
+            System.out.println(b.greet());
+            Mid m = new Mid();
+            System.out.println(((Base) m).greet());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        HELLO LEAF
+        HELLO MID
+      correct: true
+      why: Leaf inherits Mid.greet(), which calls Base.greet() via super. Inside it, name() is dispatched on the runtime object (Leaf, then Mid). Casting to Base does not change the object.
+    - key: b
+      text: |
+        HELLO BASE
+        Hello base
+      why: super.greet() only selects Base's greet body. The name() call inside it is still dispatched on the runtime object. A cast never changes which override runs.
+    - key: c
+      text: |
+        Hello leaf
+        Hello mid
+      why: Leaf does not override greet(), so it inherits Mid.greet(), which upper-cases the result.
+    - key: d
+      text: |
+        HELLO LEAF
+        Hello mid
+      why: Casting m to Base changes only the reference type. The object is still a Mid, so Mid.greet() runs.
+  explanation: |
+    `b.greet()` finds the most specific override for a `Leaf`: `Mid.greet()`. It calls `super.greet()`, a
+    non-virtual call to `Base.greet()`. Inside, `name()` is a normal virtual call on the `Leaf` object, so it
+    returns `leaf`, and `Mid.greet()` upper-cases the result. The second line is the same pattern for a `Mid`
+    object. The cast to `Base` affects only what compiles, not what runs.
+  rule: "super.m() invokes the superclass implementation without dynamic dispatch, but calls made inside that implementation dispatch normally (JLS 15.12.4.4)."
+  hint: super fixes only one call. Which object is this inside Base.greet()?
+  java:
+    expect: { compiles: true, stdout: "HELLO LEAF\nHELLO MID" }
+
+- id: D3-INH-007
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 120
+  tags: [static-methods, hiding, private-methods, overriding]
+  prompt: Which line causes a compilation error?
+  code: |
+    class Printer {
+        static void info() { }
+        void print() { }
+        private void reset() { }
+    }
+    class Laser extends Printer {
+        static void info() { }
+        void reset() { }
+        static void print() { }
+    }
+    public class Main { public static void main(String[] args) { } }
+  options:
+    - key: a
+      text: Line 7, because a static method cannot be redeclared in a subclass
+      why: A static method may be redeclared as static in a subclass. That is hiding, which is legal.
+    - key: b
+      text: Line 8, because `reset()` would weaken or change a private method
+      why: Private methods are not inherited, so Laser.reset() is simply a new method with no relationship to Printer.reset().
+    - key: c
+      text: Line 9, because a static method cannot hide an instance method
+      correct: true
+      why: print() is an instance method in Printer. Redeclaring it as static in Laser is an error (overriding method is static).
+    - key: d
+      text: The code compiles without errors
+      why: Line 9 fails. A subclass cannot declare a static method with the signature of an inherited instance method.
+  explanation: |
+    Line 7 **hides** a static method with another static method, which is legal. Line 8 declares a new method,
+    because private methods are not inherited. Line 9 is illegal: javac reports *print() in Laser cannot override
+    print() in Printer; overriding method is static*. The reverse, an instance method replacing an inherited
+    static method, is also illegal (*overridden method is static*).
+  rule: "JLS 8.4.8.1–8.4.8.2: a static method cannot hide an instance method, and an instance method cannot override a static method."
+  hint: Check each pair of methods with the same signature. Is one static and the other not?
+  java:
+    expect: { compiles: false, errorContains: "overriding method is static", errorLine: 9 }
+
+- id: D3-INH-008
+  objective: D3.5
+  lesson: oop-inheritance-polymorphism
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 90
+  tags: [polymorphism, reference-type, object-type]
+  prompt: |
+    Given `Animal a = new Dog();`, where `Dog extends Animal` and both classes declare an instance method
+    `sound()` and a field `name`, which statements are true? Choose three.
+  options:
+    - key: a
+      text: "`a` can only be used to call methods that `Animal` declares or inherits."
+      correct: true
+      why: The compiler only knows the reference type. Dog-only methods need a cast first.
+    - key: b
+      text: "`a.sound()` runs `Dog`'s version of `sound()`."
+      correct: true
+      why: Instance methods are dispatched on the runtime class of the object, which is Dog.
+    - key: c
+      text: "`a.name` reads the field declared in `Dog`."
+      why: Fields are not polymorphic. With reference type Animal, a.name reads Animal's field. Dog's field only hides it.
+    - key: d
+      text: "`Dog d = a;` compiles because the object is a `Dog`."
+      why: The compiler only sees the reference type Animal. Assigning it to Dog is a downcast and requires an explicit cast.
+    - key: e
+      text: "`a instanceof Dog` evaluates to `true`."
+      correct: true
+      why: instanceof tests the runtime class of the object, which is Dog.
+  explanation: |
+    The reference type (`Animal`) decides what compiles: which members you may access, and whether an assignment
+    needs a cast. The runtime type (`Dog`) decides which override of an instance method runs and what
+    `instanceof` reports. Fields are bound to the reference type.
+  rule: Member access is checked against the compile-time type; instance-method invocation is dispatched on the runtime class (JLS 15.12.4).
+  misconception: "\"The variable becomes a Dog once a Dog is assigned to it.\""
+
+# ---------------------------------------------------------------- D3.5 sealed types & patterns
+
+- id: D3-PAT-001
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [sealed, permits, non-sealed, records]
+  prompt: What is the result of compiling this code?
+  code: |
+    sealed interface Payment permits Card, Cash {}
+    record Card(String number) implements Payment {}
+    class Cash implements Payment {}
+    public class Main { public static void main(String[] args) { } }
+  options:
+    - key: a
+      text: It compiles
+      why: A permitted subtype must state how the hierarchy continues. Cash has no final, sealed or non-sealed modifier.
+    - key: b
+      text: Compilation fails at line 2 because a record cannot implement a sealed interface
+      why: Records are implicitly final, so they are valid permitted subtypes without any extra modifier.
+    - key: c
+      text: Compilation fails at line 3 because `Cash` must be declared `final`, `sealed` or `non-sealed`
+      correct: true
+      why: Every permitted subclass must declare one of these three modifiers (records and enums are implicitly final).
+    - key: d
+      text: Compilation fails at line 1 because `permits` cannot be used when all types are in the same file
+      why: permits may be omitted when the subtypes are in the same file, but writing it is still allowed.
+  explanation: |
+    Each direct subtype of a sealed class or interface must say whether the hierarchy stops (`final`), stays
+    controlled (`sealed ... permits ...`) or opens up again (`non-sealed`). A record is implicitly `final`, so
+    `Card` is fine. `Cash` has none of the three modifiers, so javac reports *sealed, non-sealed or final modifiers
+    expected*.
+  rule: "JLS 8.1.1.2 / 9.1.1.4: every permitted direct subclass must be final, sealed or non-sealed (records and enums are implicitly final)."
+  hint: What must every permitted subclass declare about its own subclasses?
+  java:
+    expect: { compiles: false, errorContains: "sealed, non-sealed or final modifiers expected", errorLine: 3 }
+
+- id: D3-PAT-002
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [pattern-matching, instanceof, flow-scoping]
+  prompt: |
+    Each snippet is placed, one at a time, in a method where `Object o` is a parameter. Which snippets
+    compile? Choose three.
+  options:
+    - key: a
+      text: "`if (o instanceof String s && s.length() > 2) System.out.println(s);`"
+      correct: true
+      why: With &&, the right operand is only evaluated when the match succeeded, so s is definitely bound there and in the if-body.
+      java:
+        source: |
+          public class Main {
+              static void f(Object o) { if (o instanceof String s && s.length() > 2) System.out.println(s); }
+              public static void main(String[] a) { f("abc"); }
+          }
+        expect: { compiles: true, stdout: "abc" }
+    - key: b
+      text: "`if (o instanceof String s || s.length() > 2) System.out.println(\"x\");`"
+      why: The right operand of || runs only when the match failed, so s is not in scope there (cannot find symbol).
+      java:
+        source: |
+          public class Main {
+              static void f(Object o) { if (o instanceof String s || s.length() > 2) System.out.println("x"); }
+              public static void main(String[] a) { }
+          }
+        expect: { compiles: false, errorContains: "cannot find symbol" }
+    - key: c
+      text: "`if (!(o instanceof String s)) return; System.out.println(s.length());`"
+      correct: true
+      why: If the if-statement completes normally the match must have succeeded, so s stays in scope for the following statements.
+      java:
+        source: |
+          public class Main {
+              static void f(Object o) { if (!(o instanceof String s)) return; System.out.println(s.length()); }
+              public static void main(String[] a) { f("abcd"); }
+          }
+        expect: { compiles: true, stdout: "4" }
+    - key: d
+      text: "`String s = \"\"; if (o instanceof String s) System.out.println(s);`"
+      why: A pattern variable cannot have the same name as a local variable that is already in scope (variable s is already defined).
+      java:
+        source: |
+          public class Main {
+              static void f(Object o) { String s = ""; if (o instanceof String s) System.out.println(s); }
+              public static void main(String[] a) { }
+          }
+        expect: { compiles: false, errorContains: "already defined" }
+    - key: e
+      text: "`if (o instanceof String s) { s = s.trim(); System.out.println(s); }`"
+      correct: true
+      why: Pattern variables are not implicitly final. They can be reassigned unless they are declared final.
+      java:
+        source: |
+          public class Main {
+              static void f(Object o) { if (o instanceof String s) { s = s.trim(); System.out.println(s); } }
+              public static void main(String[] a) { f(" hi "); }
+          }
+        expect: { compiles: true, stdout: "hi" }
+  explanation: |
+    A pattern variable is in scope exactly where the compiler can prove the match succeeded (*flow scoping*):
+    the right side of `&&`, the `then` branch, and, after `if (!(x instanceof T t)) return;`, the rest of the
+    block. It is not in scope on the right of `||`. A pattern variable cannot shadow a local variable that is
+    already in scope, but it can be reassigned.
+  rule: "JLS 6.3.1: pattern variables are introduced where the pattern is definitely matched (when true / when false rules)."
+  misconception: "\"A pattern variable is in scope everywhere after the instanceof.\""
+  hint: For each use of s, ask whether the code could reach that point after a failed match.
+
+- id: D3-PAT-003
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [sealed, switch-patterns, guards, record-patterns, exhaustiveness]
+  prompt: What is the output?
+  code: |
+    sealed interface Vehicle permits Car, Truck {}
+    record Car(int seats) implements Vehicle {}
+    sealed interface Truck extends Vehicle permits Van, Lorry {}
+    record Van() implements Truck {}
+    record Lorry(int axles) implements Truck {}
+    public class Main {
+        static String classify(Vehicle v) {
+            return switch (v) {
+                case Car c when c.seats() > 5 -> "minibus";
+                case Car c -> "car";
+                case Van v2 -> "van";
+                case Lorry(int axles) when axles > 2 -> "heavy";
+                case Lorry l -> "lorry";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(classify(new Car(7)) + " " + classify(new Lorry(2)) + " " + classify(new Lorry(4)));
+        }
+    }
+  options:
+    - key: a
+      text: "`minibus lorry heavy`"
+      correct: true
+      why: Cases are tested top to bottom and guards must be true. Car(7) satisfies the first guard; Lorry(2) fails the guard and falls to case Lorry l; Lorry(4) passes it.
+    - key: b
+      text: "`car lorry heavy`"
+      why: The guarded case Car c when c.seats() > 5 comes first and 7 > 5, so it is selected.
+    - key: c
+      text: "`minibus heavy heavy`"
+      why: The guard axles > 2 is false for 2 axles, so that case does not match and the next case is tried.
+    - key: d
+      text: Compilation fails because the switch has no `default`
+      why: Vehicle is sealed, and Car, Van and Lorry (through the sealed Truck) cover every permitted subtype, so the switch is exhaustive without default.
+  explanation: |
+    The sealed hierarchy is Vehicle → {Car, Truck}, Truck → {Van, Lorry}. The unguarded cases `Car c`, `Van v2`
+    and `Lorry l` together cover every possibility, so the switch expression is exhaustive without `default`.
+    Each value is matched against the cases in order. A guarded case (`when ...`) matches only if its pattern
+    matches **and** its guard is true.
+  rule: A switch over a sealed type is exhaustive when unguarded patterns cover every permitted subtype; guarded cases do not count toward exhaustiveness (JLS 14.11.1.1).
+  hint: Evaluate the three calls one at a time, top to bottom through the cases.
+  java:
+    expect: { compiles: true, stdout: "minibus lorry heavy" }
+
+- id: D3-PAT-004
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: compile-error
+  difficulty: expert
+  estSeconds: 120
+  tags: [exhaustiveness, guards, sealed, switch-patterns]
+  prompt: What is the result?
+  code: |
+    sealed interface Shape permits Circle, Square {}
+    record Circle(double r) implements Shape {}
+    record Square(double side) implements Shape {}
+    public class Main {
+        static String size(Shape s) {
+            return switch (s) {
+                case Circle c when c.r() > 10 -> "big circle";
+                case Circle c when c.r() <= 10 -> "small circle";
+                case Square q -> "square";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(size(new Circle(3)));
+        }
+    }
+  options:
+    - key: a
+      text: It prints `small circle`
+      why: The program never runs. The compiler does not analyse guard expressions, so it cannot see that the two guards cover every radius.
+    - key: b
+      text: Compilation fails because the switch expression does not cover all possible input values
+      correct: true
+      why: Guarded cases are ignored for exhaustiveness. Without an unguarded Circle case or a default, Circle is not covered.
+    - key: c
+      text: Compilation fails because the second `Circle` case is dominated by the first
+      why: A guarded case does not dominate later cases, so two guarded Circle cases are allowed.
+    - key: d
+      text: A `MatchException` is thrown at runtime
+      why: The code does not compile, so there is no runtime.
+  explanation: |
+    The compiler treats a guard as an arbitrary boolean expression. It does not reason that `r > 10` and `r <= 10`
+    are complementary. For exhaustiveness only **unguarded** patterns count, so `Circle` is uncovered and javac
+    reports *the switch expression does not cover all possible input values*. Fix: make the last `Circle` case
+    unguarded (`case Circle c -> "small circle";`).
+  rule: Only unguarded case patterns contribute to exhaustiveness of a pattern switch (JLS 14.11.1.1).
+  misconception: "\"The compiler can tell that my guards cover every value.\""
+  hint: Does the compiler evaluate when-clauses when checking exhaustiveness?
+  java:
+    expect: { compiles: false, errorContains: "does not cover all possible input values", errorLine: 6 }
+
+- id: D3-PAT-005
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 90
+  tags: [switch-patterns, "null", nullpointerexception]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        static String describe(Object o) {
+            return switch (o) {
+                case String s when s.isBlank() -> "blank";
+                case String s -> "text";
+                default -> "other";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.print(describe("  ") + " ");
+            System.out.print(describe(null));
+        }
+    }
+  options:
+    - key: a
+      text: "`blank other`"
+      why: default does not match null. Only an explicit case null (or case null, default) does.
+    - key: b
+      text: "`blank ` followed by a `NullPointerException`"
+      correct: true
+      why: Without a case null label, a switch whose selector is null throws NullPointerException before any case is tested.
+    - key: c
+      text: "`blank text`"
+      why: A type pattern case never matches null at the top level of a switch.
+    - key: d
+      text: Compilation fails because `null` cannot be passed to a pattern switch
+      why: Passing null compiles fine; the problem appears only at runtime.
+  explanation: |
+    A switch, including a pattern switch, throws `NullPointerException` when its selector is `null`, **unless**
+    it has a `case null` label. Neither `case String s` nor `default` matches `null`. Adding
+    `case null -> "null"` or `case null, default -> "other"` would make the second call return normally.
+  rule: "A switch throws NullPointerException for a null selector unless it has a case null label (JLS 14.11.3, 15.28.2)."
+  misconception: "\"default catches everything, including null.\""
+  hint: Is there a case null label?
+  java:
+    expect: { compiles: true, stdout: "blank", exception: java.lang.NullPointerException }
+
+- id: D3-PAT-006
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [record-patterns, nested-patterns, unnamed-patterns, guards, java22]
+  prompt: What is the output?
+  code: |
+    record Point(int x, int y) {}
+    record Segment(Point a, Point b) {}
+    public class Main {
+        static String kind(Object o) {
+            return switch (o) {
+                case Segment(Point(var x1, _), Point(var x2, _)) when x1 == x2 -> "vertical";
+                case Segment(Point a, Point(_, var y)) when y == a.y() -> "horizontal";
+                case Segment _ -> "diagonal";
+                default -> "not a segment";
+            };
+        }
+        public static void main(String[] args) {
+            System.out.println(kind(new Segment(new Point(0, 0), new Point(0, 5))) + " "
+                + kind(new Segment(new Point(1, 2), new Point(4, 2))) + " "
+                + kind(new Segment(new Point(0, 0), new Point(1, 1))) + " "
+                + kind("x"));
+        }
+    }
+  options:
+    - key: a
+      text: "`vertical horizontal diagonal not a segment`"
+      correct: true
+      why: Equal x values match the first case; equal y values match the second; the third segment falls to Segment _; a String reaches default.
+    - key: b
+      text: "`vertical diagonal diagonal not a segment`"
+      why: In the second case, y is the second point's y (2) and a.y() is the first point's y (2), so the guard is true.
+    - key: c
+      text: Compilation fails because `_` cannot be used in a record pattern
+      why: Since Java 22 (JEP 456) the unnamed pattern _ can replace any nested pattern whose value is not needed.
+    - key: d
+      text: Compilation fails because `case Segment _` dominates the earlier cases
+      why: Domination concerns earlier cases hiding later ones. Segment _ comes last among the Segment cases, after guarded ones, so it is legal.
+  explanation: |
+    Record patterns deconstruct a record by calling its accessors and match nested patterns against the
+    components. `var` infers the component type, and `_` (JEP 456, final in Java 22) matches anything without
+    binding a variable. Patterns can be mixed: `Point a` binds the whole first point while `Point(_, var y)`
+    deconstructs the second one. Cases are tried in order and the guards decide among the Segment cases.
+  rule: "JLS 14.30.1: a record pattern matches when the value is an instance of the record and every component matches its nested pattern; _ is the unnamed pattern (JEP 456)."
+  hint: Write out the component values for each Segment before reading the guards.
+  java:
+    expect: { compiles: true, stdout: "vertical horizontal diagonal not a segment" }
+
+- id: D3-PAT-007
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [dominance, switch-patterns]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    public class Main {
+        static String f(Object o) {
+            return switch (o) {
+                case Number n -> "number";
+                case Integer i when i > 100 -> "big int";
+                default -> "other";
+            };
+        }
+        public static void main(String[] args) { System.out.println(f(500)); }
+    }
+  options:
+    - key: a
+      text: It prints `number`
+      why: The code does not compile, so nothing is printed.
+    - key: b
+      text: It prints `big int`
+      why: Cases are tried in order, so even if it compiled, Number would match first. In fact it does not compile.
+    - key: c
+      text: Compilation fails at line 5 because the case label is dominated by a preceding case label
+      correct: true
+      why: Every Integer is a Number, so the unguarded case Number n matches everything case Integer i could match. A dominated case is unreachable and rejected.
+    - key: d
+      text: Compilation fails because a guarded case must be the last case
+      why: Guarded cases may appear anywhere, as long as no earlier case dominates them.
+  explanation: |
+    A case label is **dominated** if an earlier unguarded pattern already matches every value it could match.
+    `Number n` covers every `Integer`, so `case Integer i when ...` can never be selected and javac reports
+    *this case label is dominated by a preceding case label*. Put the more specific cases first.
+  rule: "JLS 14.11.1: it is a compile-time error if a case label is dominated by a preceding case label."
+  hint: Can any value reach the Integer case?
+  java:
+    expect: { compiles: false, errorContains: "dominated by a preceding case label", errorLine: 5 }
+
+- id: D3-PAT-008
+  objective: D3.5
+  lesson: oop-sealed-patterns
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [sealed, permits, non-sealed, records]
+  prompt: |
+    The sealed class below is in one file together with `final class Car extends Vehicle {}`. Which
+    declarations of `Truck` (one at a time, same file) make the file compile? Choose two.
+  code: |
+    sealed class Vehicle permits Car, Truck {}
+    final class Car extends Vehicle {}
+    // Truck declaration here
+  options:
+    - key: a
+      text: "`non-sealed class Truck extends Vehicle {}`"
+      correct: true
+      why: non-sealed opens the hierarchy again below Truck, which is one of the three allowed choices.
+      java:
+        source: |
+          sealed class Vehicle permits Car, Truck {}
+          final class Car extends Vehicle {}
+          non-sealed class Truck extends Vehicle {}
+          class Pickup extends Truck {}
+          public class Main { public static void main(String[] a) { System.out.println(new Pickup() instanceof Vehicle); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: b
+      text: "`sealed class Truck extends Vehicle {}`"
+      why: A sealed class needs at least one permitted subclass. With no permits clause and no subclass in the file, javac reports that a sealed class must have subclasses.
+      java:
+        source: |
+          sealed class Vehicle permits Car, Truck {}
+          final class Car extends Vehicle {}
+          sealed class Truck extends Vehicle {}
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "sealed class must have subclasses" }
+    - key: c
+      text: "`record Truck() extends Vehicle {}`"
+      why: A record cannot extend a class. Its superclass is always java.lang.Record; records can only implement (sealed) interfaces.
+      java:
+        source: |
+          sealed class Vehicle permits Car, Truck {}
+          final class Car extends Vehicle {}
+          record Truck() extends Vehicle {}
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "'{' expected" }
+    - key: d
+      text: "`sealed class Truck extends Vehicle permits Pickup {}` plus `final class Pickup extends Truck {}`"
+      correct: true
+      why: A permitted subclass may itself be sealed, continuing the controlled hierarchy one level down.
+      java:
+        source: |
+          sealed class Vehicle permits Car, Truck {}
+          final class Car extends Vehicle {}
+          sealed class Truck extends Vehicle permits Pickup {}
+          final class Pickup extends Truck {}
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: true }
+    - key: e
+      text: "`class Truck {}`"
+      why: Every class listed in permits must directly extend the sealed class (invalid permits clause).
+      java:
+        source: |
+          sealed class Vehicle permits Car, Truck {}
+          final class Car extends Vehicle {}
+          class Truck {}
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "invalid permits clause" }
+  explanation: |
+    A permitted subclass must directly extend the sealed class and choose `final`, `sealed` (with its own
+    permitted subclasses) or `non-sealed`. Records cannot extend classes at all, so they can only join a sealed
+    *interface* hierarchy.
+  rule: "JLS 8.1.1.2, 8.1.6: permitted subclasses must directly extend the sealed class and be final, sealed or non-sealed; a sealed class must have at least one permitted subclass."
+  hint: A record's superclass is fixed. Which one is it?
+
+# ---------------------------------------------------------------- D3.6 interfaces
+
+- id: D3-IFC-001
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 60
+  tags: [default-methods, diamond]
+  prompt: What is the result?
+  code: |
+    interface Walker { default String move() { return "walk"; } }
+    interface Swimmer { default String move() { return "swim"; } }
+    class Duck implements Walker, Swimmer { }
+    public class Main {
+        public static void main(String[] args) { System.out.println(new Duck().move()); }
+    }
+  options:
+    - key: a
+      text: It prints `walk`
+      why: The order of the interfaces in the implements clause has no effect on which default is chosen.
+    - key: b
+      text: It prints `swim`
+      why: Java never chooses between unrelated defaults automatically. The class must resolve the conflict itself.
+    - key: c
+      text: Compilation fails at line 3 because `Duck` inherits unrelated defaults for `move()`
+      correct: true
+      why: Two unrelated interfaces supply a default with the same signature. Duck must override move(), possibly calling Walker.super.move() or Swimmer.super.move().
+    - key: d
+      text: Compilation fails at line 2 because two interfaces cannot declare the same default method
+      why: Each interface is fine on its own. The conflict appears only in a class that implements both.
+  explanation: |
+    When a class inherits two default methods with the same signature from interfaces that are not related by
+    inheritance, and no superclass provides the method, the class must override it. Otherwise javac reports
+    *types Walker and Swimmer are incompatible; class Duck inherits unrelated defaults for move()*.
+  rule: "JLS 8.4.8.4: a class that inherits multiple override-equivalent default methods with none more specific must override them."
+  hint: Is either interface more specific than the other?
+  java:
+    expect: { compiles: false, errorContains: "inherits unrelated defaults", errorLine: 3 }
+
+- id: D3-IFC-002
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [default-methods, class-wins, interface-super]
+  prompt: What is the output?
+  code: |
+    interface Engine { default String start() { return "engine"; } }
+    interface Electric { default String start() { return "silent"; } }
+    class Machine { public String start() { return "machine"; } }
+    class Hybrid extends Machine implements Engine, Electric { }
+    class Prototype implements Engine, Electric {
+        @Override public String start() { return Electric.super.start() + "/" + Engine.super.start(); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(new Hybrid().start() + " " + new Prototype().start());
+        }
+    }
+  options:
+    - key: a
+      text: "`machine silent/engine`"
+      correct: true
+      why: For Hybrid, the method inherited from the superclass wins over both defaults ("class wins"), so there is no conflict. Prototype resolves its conflict explicitly with X.super.start().
+    - key: b
+      text: "`engine silent/engine`"
+      why: A concrete method inherited from a superclass always takes priority over interface default methods.
+    - key: c
+      text: Compilation fails because `Hybrid` inherits unrelated defaults for `start()`
+      why: The conflict would exist without Machine, but Machine.start() is inherited from the superclass and overrides both defaults.
+    - key: d
+      text: Compilation fails because `Electric.super.start()` is only allowed in an interface
+      why: InterfaceName.super.method() is precisely how a class calls a specific default method of a directly implemented interface.
+  explanation: |
+    Rule 1, **class wins**: a method inherited from a superclass (here `Machine.start()`, which is public)
+    takes precedence over any interface default, so `Hybrid` compiles and prints `machine`. Rule 2: when there is
+    no class method, a conflict between unrelated defaults must be resolved by overriding. Inside the override,
+    `Electric.super.start()` and `Engine.super.start()` call the specific defaults.
+  rule: "JLS 8.4.8: superclass methods take precedence over interface defaults; JLS 15.12.1: TypeName.super.m() invokes a default of a direct superinterface."
+  hint: Which class has a superclass that already provides start()?
+  java:
+    expect: { compiles: true, stdout: "machine silent/engine" }
+
+- id: D3-IFC-003
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [static-interface-methods, inheritance]
+  prompt: Which line fails to compile?
+  code: |
+    interface MathOps {
+        static int square(int x) { return x * x; }
+        default int cube(int x) { return x * square(x); }
+    }
+    public class Main implements MathOps {
+        public static void main(String[] args) {
+            Main m = new Main();
+            System.out.println(m.cube(2));
+            System.out.println(MathOps.square(3));
+            System.out.println(square(4));
+        }
+    }
+  options:
+    - key: a
+      text: Line 3, because a default method cannot call a static method
+      why: Code inside the interface can call its own static methods by simple name.
+    - key: b
+      text: Line 8, because `cube` must be called as `MathOps.cube(2)`
+      why: cube is a default (instance) method and is inherited by Main, so m.cube(2) is correct.
+    - key: c
+      text: Line 10, because static interface methods are not inherited by implementing classes
+      correct: true
+      why: Inside Main, square is not a member. It must be called as MathOps.square(4).
+    - key: d
+      text: No line, the program prints 8, 9 and 16
+      why: Line 10 does not compile, because static interface methods are only reachable through the interface name.
+  explanation: |
+    Unlike static methods of a superclass, **static interface methods are not inherited** by implementing
+    classes or sub-interfaces. Outside the interface they must be called with the interface name:
+    `MathOps.square(4)`. Inside the interface (line 3) the simple name works. Line 10 fails with *cannot find
+    symbol: method square(int)*.
+  rule: "JLS 8.4.8: a class does not inherit static methods from its superinterfaces."
+  hint: Does Main inherit every member of MathOps?
+  java:
+    expect: { compiles: false, errorContains: "cannot find symbol", errorLine: 10 }
+
+- id: D3-IFC-004
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [private-interface-methods, static-interface-methods, default-methods, lambdas]
+  prompt: What is the output?
+  code: |
+    interface Greeter {
+        String name();
+        default String greet() { return decorate("Hello, " + name()); }
+        private String decorate(String s) { return "[" + s + "]"; }
+        static Greeter of(String n) { return () -> n; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Greeter g = Greeter.of("Ana");
+            System.out.println(g.greet());
+            Greeter h = new Greeter() {
+                public String name() { return "Bo"; }
+                public String greet() { return "Hi " + name(); }
+            };
+            System.out.println(h.greet());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        [Hello, Ana]
+        Hi Bo
+      correct: true
+      why: The lambda implements name(); greet() is the default that calls the private helper. The anonymous class overrides greet(), so the default is not used for h.
+    - key: b
+      text: |
+        [Hello, Ana]
+        [Hi Bo]
+      why: The anonymous class overrides greet() completely, so decorate() is never called for h.
+    - key: c
+      text: |
+        Hello, Ana
+        Hi Bo
+      why: The default greet() wraps its text with the private decorate() method, adding the brackets.
+    - key: d
+      text: Compilation fails because a private method cannot be called from a default method
+      why: Private interface methods (Java 9+) exist precisely to share code between default and other private methods.
+  explanation: |
+    `Greeter` has exactly one abstract method, so a lambda can implement it. The default method `greet()` calls the
+    private instance method `decorate()`, which is legal because both are instance methods of the interface. The
+    anonymous class overrides `greet()`, so its own version runs.
+  rule: Interfaces may declare private instance and private static methods (Java 9) callable from default, static (static ones only) and other private methods (JLS 9.4).
+  hint: Which greet() runs for each object?
+  java:
+    expect: { compiles: true, stdout: "[Hello, Ana]\nHi Bo" }
+
+- id: D3-IFC-005
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 75
+  tags: [interface-methods, access, implicit-modifiers]
+  prompt: What is the result?
+  code: |
+    interface Shape { double area(); }
+    class Square implements Shape {
+        private final double side;
+        Square(double side) { this.side = side; }
+        double area() { return side * side; }
+    }
+    public class Main {
+        public static void main(String[] args) { System.out.println(new Square(2).area()); }
+    }
+  options:
+    - key: a
+      text: It prints `4.0`
+      why: area() in the interface is implicitly public. An implementation with package access weakens it, so the code does not compile.
+    - key: b
+      text: Compilation fails at line 5 because the implementation weakens the access of `area()`
+      correct: true
+      why: Interface methods without a modifier are implicitly public abstract, and an implementing method must also be public.
+    - key: c
+      text: Compilation fails at line 1 because `area()` must be declared `public abstract`
+      why: public and abstract are implicit for interface methods without a body. Writing them is optional.
+    - key: d
+      text: Compilation fails at line 2 because `Square` must be declared `abstract`
+      why: Square does try to implement area(). The error is about the access level of that implementation.
+  explanation: |
+    An interface method without a body and without modifiers is implicitly `public abstract`. Overriding
+    rules forbid weaker access, so `Square.area()` must be declared `public`. javac reports *area() in Square
+    cannot implement area() in Shape; attempting to assign weaker access privileges; was public*.
+  rule: Interface abstract methods are implicitly public (JLS 9.4); an implementation may not reduce access (JLS 8.4.8.3).
+  misconception: "\"No modifier in the interface means package access.\""
+  hint: What is the implicit access modifier of an interface method?
+  java:
+    expect: { compiles: false, errorContains: "weaker access privileges", errorLine: 5 }
+
+- id: D3-IFC-006
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [functional-interfaces, object-methods, interface-inheritance]
+  prompt: Which interfaces compile with the `@FunctionalInterface` annotation? Choose three.
+  options:
+    - key: a
+      text: "`@FunctionalInterface interface A { void run(); default void stop() { } }`"
+      correct: true
+      why: Exactly one abstract method. Default methods do not count.
+      java:
+        source: |
+          @FunctionalInterface interface A { void run(); default void stop() { } }
+          public class Main { public static void main(String[] a) { A x = () -> System.out.println("run"); x.run(); } }
+        expect: { compiles: true, stdout: "run" }
+    - key: b
+      text: "`@FunctionalInterface interface B { boolean equals(Object o); }`"
+      why: equals(Object) matches a public method of Object, so it does not count. B has no abstract method left.
+      java:
+        source: |
+          @FunctionalInterface interface B { boolean equals(Object o); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "no abstract method found" }
+    - key: c
+      text: "`@FunctionalInterface interface C { int compare(String a, String b); boolean equals(Object o); }`"
+      correct: true
+      why: equals(Object) is a public Object method and is ignored, leaving compare as the single abstract method (like java.util.Comparator).
+      java:
+        source: |
+          @FunctionalInterface interface C { int compare(String a, String b); boolean equals(Object o); }
+          public class Main { public static void main(String[] a) { C c = (x, y) -> x.length() - y.length(); System.out.println(c.compare("aa", "b")); } }
+        expect: { compiles: true, stdout: "1" }
+    - key: d
+      text: "`@FunctionalInterface interface D extends Runnable { void stop(); }`"
+      why: D inherits run() from Runnable and adds stop(), which makes two abstract methods.
+      java:
+        source: |
+          @FunctionalInterface interface D extends Runnable { void stop(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "multiple non-overriding abstract methods" }
+    - key: e
+      text: "`@FunctionalInterface interface E extends Runnable { static void log() { } }`"
+      correct: true
+      why: E inherits exactly one abstract method, run(); static methods do not count.
+      java:
+        source: |
+          @FunctionalInterface interface E extends Runnable { static void log() { } }
+          public class Main { public static void main(String[] a) { E e = () -> System.out.println("e"); e.run(); } }
+        expect: { compiles: true, stdout: "e" }
+  explanation: |
+    A functional interface has **exactly one abstract method**, counting inherited ones. Default, static and
+    private methods do not count, and neither do abstract declarations that match a public method of
+    `java.lang.Object` (`equals(Object)`, `hashCode()`, `toString()`), because every implementation already has
+    them. `@FunctionalInterface` makes the compiler check this.
+  rule: "JLS 9.8: a functional interface has exactly one abstract method other than those matching public methods of Object."
+  misconception: "\"Any extra abstract method, even equals(Object), breaks a functional interface.\""
+  hint: Count abstract methods, including inherited ones, and skip public Object methods.
+
+- id: D3-IFC-007
+  objective: D3.6
+  lesson: oop-interfaces
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [default-methods, interface-inheritance, most-specific]
+  prompt: What is the output?
+  code: |
+    interface Base { default String id() { return "Base"; } }
+    interface Child extends Base { default String id() { return "Child"; } }
+    interface Other extends Base { }
+    class X implements Base, Child { }
+    class Y implements Child, Other { }
+    public class Main {
+        public static void main(String[] args) { System.out.println(new X().id() + " " + new Y().id()); }
+    }
+  options:
+    - key: a
+      text: "`Child Child`"
+      correct: true
+      why: Child.id() overrides Base.id(), so it is the most specific default. Other only inherits Base.id(), which Child already overrides.
+    - key: b
+      text: "`Base Child`"
+      why: Listing Base explicitly in X does not matter. The more specific sub-interface default Child.id() wins.
+    - key: c
+      text: Compilation fails because `X` inherits two defaults for `id()`
+      why: The two defaults are related by inheritance (Child extends Base), so there is no conflict. The more specific one wins.
+    - key: d
+      text: Compilation fails because `Y` inherits two defaults for `id()`
+      why: Other does not declare its own id(); it only passes Base.id() on, and Child.id() overrides that one.
+  explanation: |
+    When the inherited defaults come from interfaces related by inheritance, the **most specific** one wins:
+    `Child.id()` overrides `Base.id()`. It does not matter that `X` also names `Base` directly, or that `Y`
+    reaches `Base` a second time through `Other`. A conflict exists only between unrelated defaults.
+  rule: "JLS 9.4.1: a default method overridden in a subinterface is not inherited alongside the overriding one; the most specific default is selected."
+  hint: Draw the interface hierarchy. Does one of the defaults override the other?
+  java:
+    expect: { compiles: true, stdout: "Child Child" }
+
+- id: D3-IFC-008
+  objective: D3.6
+  lesson: oop-interfaces
+  type: multi
+  format: concept
+  difficulty: foundation
+  estSeconds: 90
+  tags: [interface-members, implicit-modifiers, abstract-classes]
+  prompt: Which statements about interfaces are true? Choose three.
+  options:
+    - key: a
+      text: A field declared in an interface is implicitly `public static final`, so it must be initialized.
+      correct: true
+      why: Interface fields are constants. int MAX; without an initializer does not compile.
+    - key: b
+      text: An interface method declared with no modifiers and no body is implicitly `public abstract`.
+      correct: true
+      why: That is the default for interface methods without a body.
+    - key: c
+      text: A private (non-static) interface method can be called from a static interface method.
+      why: A static method has no instance to call an instance method on. Only private static methods can be called from static interface methods.
+    - key: d
+      text: An interface may declare `protected` methods for use by implementing classes.
+      why: Interface members can only be public or private. protected is not allowed here.
+    - key: e
+      text: Unlike an interface, an abstract class can have constructors and instance fields.
+      correct: true
+      why: Interfaces cannot hold per-object state or define constructors. Abstract classes can.
+  explanation: |
+    Interface fields are `public static final` constants. Methods are `public` unless declared `private`. Bodiless
+    methods are `abstract`. `default`, `static` and `private` methods have bodies. A static interface method can
+    only call other static members (including private static ones). Abstract classes are the right choice when
+    subclasses must share state or constructor logic.
+  rule: "JLS 9.3, 9.4: interface fields are implicitly public static final; methods are implicitly public unless private, and abstract unless default, static or private."
+
+# ---------------------------------------------------------------- D3.7 enums
+
+- id: D3-ENM-001
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 60
+  tags: [enums, ordinal, valueOf, compareTo, values]
+  prompt: What is the output?
+  code: |
+    enum Coin { PENNY, NICKEL, DIME, QUARTER }
+    public class Main {
+        public static void main(String[] args) {
+            Coin c = Coin.valueOf("DIME");
+            System.out.println(c.ordinal() + " " + (c == Coin.DIME) + " " + c.compareTo(Coin.PENNY) + " " + Coin.values()[1]);
+        }
+    }
+  options:
+    - key: a
+      text: "`2 true 2 NICKEL`"
+      correct: true
+      why: Ordinals start at 0, so DIME is 2. Each constant is a singleton, so == is true. compareTo returns the ordinal difference (2 - 0), and values()[1] is NICKEL.
+    - key: b
+      text: "`3 true 2 NICKEL`"
+      why: ordinal() is zero-based, so the third constant has ordinal 2.
+    - key: c
+      text: "`2 false 2 NICKEL`"
+      why: Enum constants are singletons. valueOf returns the existing constant, so == compares the same reference.
+    - key: d
+      text: "`2 true 1 NICKEL`"
+      why: Enum compareTo returns the difference of the ordinals (2 - 0 = 2), not just the sign.
+  explanation: |
+    `valueOf("DIME")` returns the one `DIME` instance. `ordinal()` is zero-based, so it is `2`. Enum constants
+    are singletons, so `==` is the idiomatic comparison. `Enum.compareTo` compares ordinals and, in the JDK,
+    returns their difference. `values()` returns a new array of the constants in declaration order.
+  rule: "java.lang.Enum: ordinal() is zero-based; compareTo orders by ordinal; valueOf(String) returns the constant with that exact name."
+  hint: Count the ordinals from zero.
+  java:
+    expect: { compiles: true, stdout: "2 true 2 NICKEL" }
+
+- id: D3-ENM-002
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [enums, switch, fall-through, qualified-enum-constants, java21]
+  prompt: What is the output?
+  code: |
+    enum Phase { INIT, RUN, STOP }
+    public class Main {
+        public static void main(String[] args) {
+            Phase p = Phase.RUN;
+            switch (p) {
+                case INIT: System.out.print("i");
+                case RUN: System.out.print("r");
+                case Phase.STOP: System.out.print("s");
+                    break;
+                default: System.out.print("d");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: "`rs`"
+      correct: true
+      why: Execution enters at case RUN and falls through to the next case, because there is no break, until the break after STOP.
+    - key: b
+      text: "`r`"
+      why: Colon-style case labels fall through. Without a break after RUN, the STOP statements run too.
+    - key: c
+      text: "`rsd`"
+      why: The break after STOP leaves the switch before default is reached.
+    - key: d
+      text: Compilation fails because `Phase.STOP` must be written as an unqualified constant
+      why: Since Java 21, qualified enum constant names are allowed as case labels, and they can be mixed with unqualified ones.
+  explanation: |
+    In an old-style (`:`) switch, control jumps to the matching label and then **falls through** to the following
+    statements until a `break`. Since Java 21, case labels may use qualified names such as `Phase.STOP`;
+    unqualified names (`RUN`) remain the classic form.
+  rule: Colon-form switch statements fall through until break (JLS 14.11.3); qualified enum constants are permitted as case constants since Java 21 (JEP 441).
+  misconception: "\"case labels in an enum switch must never be qualified.\""
+  hint: Where is the first break?
+  java:
+    expect: { compiles: true, stdout: "rs" }
+
+- id: D3-ENM-003
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: compile-error
+  difficulty: advanced
+  estSeconds: 90
+  tags: [enums, constructors, static-fields]
+  prompt: What is the result?
+  code: |
+    enum Status {
+        ACTIVE, INACTIVE;
+        private static int created = 0;
+        Status() { created++; }
+    }
+    public class Main {
+        public static void main(String[] args) { System.out.println(Status.ACTIVE); }
+    }
+  options:
+    - key: a
+      text: It prints `ACTIVE`
+      why: The program does not compile. An enum constructor may not access a non-constant static field.
+    - key: b
+      text: Compilation fails at line 4 with an illegal reference to a static field from an initializer
+      correct: true
+      why: The constants are created first, before the static field initializers run, so the compiler forbids touching created from the constructor.
+    - key: c
+      text: Compilation fails at line 3 because enums cannot declare static fields
+      why: Enums can declare static fields. Only access to them from constructors and instance initializers is restricted.
+    - key: d
+      text: It compiles, but `created` ends up as 0 because the field initializer runs after the constructors
+      why: That is exactly the problem the compiler prevents. It refuses to compile instead of letting the update be lost.
+  explanation: |
+    The enum constants are the first static fields of the enum class, so they are created **before** any other
+    static field is initialized. A constructor reading or writing `created` would see it uninitialized, and
+    `= 0` would later overwrite the count. javac therefore rejects it: *illegal reference to static field from
+    initializer*. Constant variables (`static final int MAX = 3;`) are allowed, because they are inlined.
+  rule: "JLS 8.9.2: it is a compile-time error to refer to a static field of an enum type from its constructors, instance initializers or instance variable initializers, unless the field is a constant variable."
+  hint: Which static fields are initialized first in an enum?
+  java:
+    expect: { compiles: false, errorContains: "illegal reference to static field from initializer", errorLine: 4 }
+
+- id: D3-ENM-004
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: trace
+  difficulty: expert
+  estSeconds: 150
+  tags: [enums, class-initialization, constructors, static-initializer]
+  prompt: What is the output?
+  code: |
+    enum Signal {
+        GO, HALT;
+        static { System.out.print("[static] "); }
+        Signal() { System.out.print(name() + " "); }
+        static void ping() { System.out.print("ping "); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            System.out.print("main ");
+            Signal[] none = new Signal[0];
+            Signal.ping();
+            Signal.ping();
+            System.out.println(Signal.HALT.ordinal());
+        }
+    }
+  options:
+    - key: a
+      text: "`main GO HALT [static] ping ping 1`"
+      correct: true
+      why: Creating an array does not initialize the enum. The first static method call does. The constants are created first (in declaration order), then the static block runs, once.
+    - key: b
+      text: "`main [static] GO HALT ping ping 1`"
+      why: The enum constants are static fields declared before the static block, and static initializers run in textual order, so the constructors print first.
+    - key: c
+      text: "`GO HALT [static] main ping ping 1`"
+      why: Enum constants are not created when the program starts. The enum class is initialized at its first active use.
+    - key: d
+      text: "`main GO HALT [static] ping GO HALT ping 1`"
+      why: Class initialization happens once. The constants are created only once.
+  explanation: |
+    An enum is initialized like any class: lazily, on first active use (calling a static method, reading a
+    non-constant static field...), and only once. `new Signal[0]` does not count as an active use. During
+    initialization the constants (implicit `public static final` fields declared first) are constructed in order,
+    then the remaining static initializers run in textual order.
+  rule: "JLS 12.4.1: a class is initialized on first invocation of a static method or access to a non-constant static field; array creation does not trigger it. Enum constants are initialized first, in declaration order (JLS 8.9.3)."
+  misconception: "\"Static blocks always run before anything else in a class.\""
+  hint: Which statement is the first active use of Signal?
+  java:
+    expect: { compiles: true, stdout: "main GO HALT [static] ping ping 1" }
+
+- id: D3-ENM-005
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [enums, toString, valueOf, illegalargumentexception]
+  prompt: What is the output?
+  code: |
+    enum Size {
+        SMALL, LARGE;
+        @Override public String toString() { return name().toLowerCase(); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Size s = Size.LARGE;
+            System.out.println(s);
+            System.out.println(Size.valueOf(s.toString()));
+        }
+    }
+  options:
+    - key: a
+      text: "`large` followed by an `IllegalArgumentException`"
+      correct: true
+      why: toString is overridden to return large, but valueOf matches the exact declared name LARGE, so valueOf("large") throws.
+    - key: b
+      text: |
+        large
+        large
+      why: valueOf uses name(), which is case-sensitive and cannot be overridden. Overriding toString() does not change it.
+    - key: c
+      text: |
+        LARGE
+        LARGE
+      why: println calls toString(), which is overridden here to return lower case.
+    - key: d
+      text: Compilation fails because enums cannot override `toString()`
+      why: toString() is not final in Enum, so enums may override it. name(), equals(), hashCode() and compareTo() are final.
+  explanation: |
+    `toString()` may be overridden, but `name()` is final and always returns the declared identifier.
+    `valueOf(String)` looks up the **exact name**, case-sensitively, and throws
+    `IllegalArgumentException: No enum constant Size.large`. A `null` argument throws `NullPointerException`.
+  rule: "java.lang.Enum.valueOf: returns the constant with the specified name exactly as declared; throws IllegalArgumentException if none matches."
+  hint: Which method does valueOf compare against, toString() or name()?
+  java:
+    expect: { compiles: true, stdout: "large", exception: java.lang.IllegalArgumentException }
+
+- id: D3-ENM-006
+  objective: D3.7
+  lesson: oop-enums
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [enummap, enumset, collections]
+  prompt: What is the output?
+  code: |
+    import java.util.*;
+    enum Day { MON, TUE, WED, THU, FRI, SAT, SUN }
+    public class Main {
+        public static void main(String[] args) {
+            Map<Day, Integer> hours = new EnumMap<>(Day.class);
+            hours.put(Day.FRI, 6);
+            hours.put(Day.MON, 8);
+            hours.put(Day.WED, 7);
+            Set<Day> off = EnumSet.of(Day.SUN, Day.SAT);
+            System.out.println(hours + " " + off + " " + EnumSet.range(Day.TUE, Day.THU).size());
+        }
+    }
+  options:
+    - key: a
+      text: "`{MON=8, WED=7, FRI=6} [SAT, SUN] 3`"
+      correct: true
+      why: EnumMap and EnumSet always iterate in ordinal (declaration) order, and range() includes both endpoints.
+    - key: b
+      text: "`{FRI=6, MON=8, WED=7} [SUN, SAT] 3`"
+      why: Insertion order is not kept. Enum collections order their keys and elements by ordinal.
+    - key: c
+      text: "`{MON=8, WED=7, FRI=6} [SAT, SUN] 2`"
+      why: EnumSet.range(from, to) is inclusive at both ends, so TUE, WED and THU make 3 elements.
+    - key: d
+      text: "`{FRI=6, MON=8, WED=7} [SAT, SUN] 3`"
+      why: EnumMap is not sorted alphabetically. It uses the ordinal order of the keys.
+  explanation: |
+    `EnumMap` and `EnumSet` are compact, array or bit-vector based collections for enum keys and elements. Their
+    iteration order is always the **natural (ordinal) order** of the constants, regardless of insertion order.
+    `EnumSet.range(from, to)` includes both endpoints.
+  rule: "java.util.EnumMap / EnumSet: iteration follows the natural order of the enum constants; EnumSet.range is inclusive."
+  hint: How do enum-specific collections order their contents?
+  java:
+    expect: { compiles: true, stdout: "{MON=8, WED=7, FRI=6} [SAT, SUN] 3" }
+
+- id: D3-ENM-007
+  objective: D3.7
+  lesson: oop-enums
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [enums, constructors, constant-specific-body, interfaces]
+  prompt: Which enum declarations compile? Choose two.
+  options:
+    - key: a
+      text: "`enum E { A, B; public E() { } }`"
+      why: Enum constructors are implicitly private. public or protected is not allowed.
+      java:
+        source: |
+          enum E { A, B; public E() { } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "modifier public not allowed here" }
+    - key: b
+      text: "`enum E { A(1), B; private final int v; E() { this(0); } E(int v) { this.v = v; } }`"
+      correct: true
+      why: Enums may overload constructors and delegate with this(...). B uses the no-arg constructor.
+      java:
+        source: |
+          enum E { A(1), B; private final int v; E() { this(0); } E(int v) { this.v = v; } }
+          public class Main { public static void main(String[] a) { System.out.println(E.B); } }
+        expect: { compiles: true, stdout: "B" }
+    - key: c
+      text: "`enum E { A { int f() { return 1; } }, B; abstract int f(); }`"
+      why: When an enum declares an abstract method, every constant needs a class body implementing it. B has none.
+      java:
+        source: |
+          enum E { A { int f() { return 1; } }, B; abstract int f(); }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "is abstract; cannot be instantiated" }
+    - key: d
+      text: "`enum E implements Runnable { A { public void run() { } }, B { public void run() { } } }`"
+      correct: true
+      why: An enum may implement interfaces, and each constant can supply the implementation in its own body.
+      java:
+        source: |
+          enum E implements Runnable { A { public void run() { } }, B { public void run() { } } }
+          public class Main { public static void main(String[] a) { E.A.run(); System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+    - key: e
+      text: "`enum E { A, B; E() { super(); } }`"
+      why: An enum constructor cannot call super(...). The superclass constructor of java.lang.Enum is invoked by the compiler.
+      java:
+        source: |
+          enum E { A, B; E() { super(); } }
+          public class Main { public static void main(String[] a) { } }
+        expect: { compiles: false, errorContains: "call to super not allowed in enum constructor" }
+  explanation: |
+    Enum constructors are implicitly `private` (an explicit `private` is allowed, `public` and `protected` are
+    not). They can be overloaded and chained with `this(...)` but never call `super(...)`. An abstract method in
+    an enum forces every constant to provide a body. Enums can implement interfaces, either in the enum body or
+    per constant.
+  rule: "JLS 8.9.2: enum constructors are implicitly private, may not invoke super(...); JLS 8.9.1: a constant without a class body cannot be created if the enum has abstract methods."
+  hint: Who calls an enum's constructor, and how many times?

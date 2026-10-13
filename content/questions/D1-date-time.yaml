@@ -1,0 +1,878 @@
+# D1.3 — java.time: dates, times, Period/Duration, instants, zones, DST and formatting
+# Remediation lesson: values-date-time (content/lessons/D1/03-date-time.md)
+# All zone-sensitive programs pin explicit ZoneIds; no program depends on now() or the default zone.
+
+- id: D1-DT-001
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [LocalDate, immutability, plusMonths, month-end]
+  prompt: What is the output?
+  code: |
+    import java.time.LocalDate;
+    public class Main {
+        public static void main(String[] args) {
+            LocalDate due = LocalDate.of(2025, 8, 31);
+            due.plusWeeks(1);
+            LocalDate next = due.plusMonths(1);
+            LocalDate back = next.minusMonths(1);
+            System.out.println(due + " " + next + " " + back);
+        }
+    }
+  options:
+    - key: a
+      text: "`2025-08-31 2025-09-30 2025-08-30`"
+      correct: true
+      why: The result of plusWeeks is discarded; August 31 plus one month clamps to September 30; going back one month from September 30 gives August 30 — the clamping is not undone.
+    - key: b
+      text: "`2025-09-07 2025-10-07 2025-09-07`"
+      why: LocalDate is immutable; due.plusWeeks(1) returns a new object that is never assigned, so due stays 2025-08-31.
+    - key: c
+      text: "`2025-08-31 2025-10-01 2025-09-01`"
+      why: Adding months never overflows into the following month; an invalid day is clamped to the last valid day of the target month.
+    - key: d
+      text: "`2025-08-31 2025-09-30 2025-08-31`"
+      why: minusMonths starts from September 30 and knows nothing about the original day 31, so the result is August 30.
+  explanation: |
+    All java.time objects are immutable: `plusWeeks` returns a new `LocalDate`, and ignoring the return value
+    changes nothing. `plusMonths`/`minusMonths` keep the day-of-month if possible and otherwise **clamp** to the
+    last valid day of the resulting month. Because the original day is lost, `plusMonths(1).minusMonths(1)` does
+    not always return the starting date.
+  rule: "LocalDate.plusMonths/minusMonths adjust the day-of-month to the last valid day if necessary; LocalDate is immutable."
+  misconception: plusX/minusX change the object they are called on, and month arithmetic is reversible.
+  hint: Which statements assign their result?
+  java:
+    expect: { compiles: true, stdout: "2025-08-31 2025-09-30 2025-08-30" }
+
+- id: D1-DT-002
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 60
+  tags: [LocalDateTime, Instant, OffsetDateTime, ZonedDateTime, type-choice]
+  prompt: Which statement about the java.time types is correct?
+  options:
+    - key: a
+      text: A `LocalDateTime` does not identify a single point on the global timeline.
+      correct: true
+      why: It holds only a wall-clock date and time without an offset or zone; "2024-03-10T10:15" happens at a different instant in every time zone.
+    - key: b
+      text: An `Instant` stores year, month and day fields that you can read with `getYear()` and `getMonth()`.
+      why: An Instant is just seconds and nanoseconds since 1970-01-01T00:00Z; it has no calendar fields until you attach a zone (for example with atZone).
+    - key: c
+      text: An `OffsetDateTime` automatically switches between +01:00 and +02:00 when daylight-saving time starts or ends.
+      why: An OffsetDateTime has a fixed ZoneOffset; only a ZonedDateTime with a region ZoneId applies DST rules.
+    - key: d
+      text: A `ZonedDateTime` cannot be converted to an `Instant` because zones have daylight-saving gaps.
+      why: A ZonedDateTime always resolves to a specific offset, so toInstant() is always possible.
+  explanation: |
+    The "local" types (`LocalDate`, `LocalTime`, `LocalDateTime`) describe wall-clock values with no location.
+    `Instant`, `OffsetDateTime` and `ZonedDateTime` are points on the timeline. An `OffsetDateTime` carries a
+    fixed offset; a `ZonedDateTime` carries a region `ZoneId` and its DST rules, and resolves gaps and overlaps
+    to a concrete offset, so it can always be converted to an `Instant`.
+  rule: "LocalDateTime has no offset or zone; Instant is an epoch-seconds value without calendar fields; OffsetDateTime has a fixed offset; ZonedDateTime applies the zone's rules."
+  misconception: Every date-time type in java.time represents an absolute moment.
+  hint: Which type has neither an offset nor a zone?
+
+- id: D1-DT-003
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [Period.between, ChronoUnit, month-end, negative-period]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    import java.time.temporal.ChronoUnit;
+    public class Main {
+        public static void main(String[] args) {
+            LocalDate start = LocalDate.of(2024, 1, 30);
+            LocalDate end = LocalDate.of(2024, 3, 29);
+            System.out.println(Period.between(start, end) + " " + Period.between(end, start));
+            System.out.println(ChronoUnit.MONTHS.between(start, end) + " " + ChronoUnit.WEEKS.between(start, end)
+                + " " + ChronoUnit.DAYS.between(end, start));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        P1M29D P-1M-30D
+        1 8 -59
+      correct: true
+      why: "Only one complete month fits (Jan 30 → Feb 29, clamped); Feb 29 → Mar 29 is 29 days. Backwards, Mar 29 − 1 month = Feb 29 and Feb 29 → Jan 30 is 30 days. ChronoUnit counts complete units: 1 month, 59 days = 8 complete weeks, and -59 days when reversed."
+    - key: b
+      text: |
+        P1M30D P-1M-30D
+        1 8 -59
+      why: Period.between adds the whole months to the start date first (Jan 30 + 1 month = Feb 29, because 2024 is a leap year) and counts the remaining days from there — 29.
+    - key: c
+      text: |
+        P1M29D P-1M-29D
+        2 8 59
+      why: ChronoUnit.MONTHS.between counts only complete months (Mar 29 is before Mar 30), and between() returns a negative amount when the end is before the start.
+    - key: d
+      text: |
+        P1M29D P-1M-30D
+        1 9 -59
+      why: ChronoUnit.WEEKS.between truncates — 59 days is 8 complete weeks plus 3 days.
+  explanation: |
+    `Period.between(a, b)` counts complete months first, adds them to `a` (clamping the day), then counts the
+    remaining days. Running it backwards starts from `end`, so the day count can differ: the negative period is
+    not simply the positive one with a minus sign. `ChronoUnit.X.between(a, b)` returns the number of
+    **complete** units, truncated, and is negative if `b` is before `a`. The end date is always exclusive.
+  rule: "Period.between(start, endExclusive) computes whole months then remaining days from start; ChronoUnit.between returns the number of complete units (negative if end is before start)."
+  misconception: Period.between(a, b) is always the exact negation of Period.between(b, a), and between() rounds partial units.
+  hint: Add the whole months to the start date first, then count the leftover days.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        P1M29D P-1M-30D
+        1 8 -59
+
+- id: D1-DT-004
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Period, Duration, toString, normalized]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(Period.of(0, 26, 45).normalized());
+            System.out.println(Period.ofWeeks(3).plusDays(1));
+            System.out.println(Duration.ofMinutes(1500));
+            System.out.println(Duration.ofSeconds(59, 1_500_000_000L));
+            System.out.println(Duration.ofHours(2).minusMinutes(150));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        P2Y2M45D
+        P22D
+        PT25H
+        PT1M0.5S
+        PT-30M
+      correct: true
+      why: normalized() moves only months into years (26 months = 2Y2M) and never touches days; weeks are stored as days; Duration prints hours as the largest unit; 59 s + 1.5 s = 60.5 s; 2 h − 150 min = −30 min.
+    - key: b
+      text: |
+        P2Y3M15D
+        P22D
+        P1DT1H
+        PT1M0.5S
+        PT-30M
+      why: Period.normalized() never converts days to months (a month has no fixed length), and Duration.toString never uses a day unit.
+    - key: c
+      text: |
+        P2Y2M45D
+        P3W1D
+        PT25H
+        PT60.5S
+        PT-30M
+      why: Period has no weeks field — ofWeeks(3) is stored as 21 days — and Duration.toString splits seconds into minutes when there are 60 or more.
+    - key: d
+      text: |
+        P2Y2M45D
+        P22D
+        PT25H
+        PT1M0.5S
+        PT0S
+      why: A Duration can be negative; subtracting more than it holds gives PT-30M rather than stopping at zero.
+  explanation: |
+    `Period` stores years, months and days independently. `normalized()` only folds months into years
+    (12 months = 1 year) and leaves days alone; `ofWeeks` is just `ofDays(7 × n)`. `Duration` is seconds plus
+    nanoseconds; its `toString` uses `H`, `M` and `S` only (never days), shows fractional seconds, and puts the
+    sign on each component of a negative value.
+  rule: "Period.normalized() normalises only years and months; Period.ofWeeks stores days; Duration.toString uses the format PTnHnMn.nS without days."
+  misconception: normalized() converts days to months, and Duration prints days for amounts above 24 hours.
+  hint: What fields does each class actually store?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        P2Y2M45D
+        P22D
+        PT25H
+        PT1M0.5S
+        PT-30M
+
+- id: D1-DT-005
+  objective: D1.3
+  lesson: values-date-time
+  type: multi
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 150
+  tags: [Period, Duration, UnsupportedTemporalTypeException, Instant, LocalTime]
+  prompt: Which statements throw an `UnsupportedTemporalTypeException`? Choose three.
+  options:
+    - key: a
+      text: "`LocalDate.of(2024, 1, 1).plus(Duration.ofHours(24));`"
+      correct: true
+      why: "A Duration is added in seconds (and nanos), and LocalDate does not support time-based units — Unsupported unit: Seconds."
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.of(2024, 1, 1).plus(Duration.ofHours(24))); } }
+        expect: { compiles: true, exception: java.time.temporal.UnsupportedTemporalTypeException }
+    - key: b
+      text: "`LocalTime.NOON.plus(Period.ofDays(1));`"
+      correct: true
+      why: "A Period is added in days/months/years, and LocalTime has no date — Unsupported unit: Days."
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalTime.NOON.plus(Period.ofDays(1))); } }
+        expect: { compiles: true, exception: java.time.temporal.UnsupportedTemporalTypeException }
+    - key: c
+      text: "`Instant.EPOCH.plus(Period.ofDays(1));`"
+      why: Instant supports ChronoUnit.DAYS as exactly 86 400 seconds, so this yields 1970-01-02T00:00:00Z.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(Instant.EPOCH.plus(Period.ofDays(1))); } }
+        expect: { compiles: true, stdout: "1970-01-02T00:00:00Z" }
+    - key: d
+      text: "`Instant.EPOCH.plus(Period.ofMonths(1));`"
+      correct: true
+      why: Months have no fixed length and an Instant has no calendar, so Instant does not support ChronoUnit.MONTHS.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(Instant.EPOCH.plus(Period.ofMonths(1))); } }
+        expect: { compiles: true, exception: java.time.temporal.UnsupportedTemporalTypeException }
+    - key: e
+      text: "`LocalDateTime.of(2024, 1, 1, 0, 0).plus(Duration.ofDays(1));`"
+      why: LocalDateTime has a time part, so adding seconds works; the result is 2024-01-02T00:00.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDateTime.of(2024, 1, 1, 0, 0).plus(Duration.ofDays(1))); } }
+        expect: { compiles: true, stdout: "2024-01-02T00:00" }
+    - key: f
+      text: "`LocalDate.of(2024, 1, 1).plus(Period.ofWeeks(1));`"
+      why: A week-based Period is stored as 7 days, which a LocalDate supports.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.of(2024, 1, 1).plus(Period.ofWeeks(1))); } }
+        expect: { compiles: true, stdout: "2024-01-08" }
+  explanation: |
+    `plus(TemporalAmount)` compiles for any combination, because both `Period` and `Duration` implement
+    `TemporalAmount`. The check happens at runtime: a `Duration` adds `SECONDS`/`NANOS`, which date-only types
+    reject; a `Period` adds `YEARS`/`MONTHS`/`DAYS`, which time-only types reject. `Instant` is a special case:
+    it accepts `DAYS` (as exactly 24 hours) but not `MONTHS` or `YEARS`.
+  rule: "Period adds date-based units and Duration adds time-based units; a temporal that does not support a unit throws UnsupportedTemporalTypeException. Instant supports units up to DAYS."
+  misconception: The compiler stops you from mixing Period/Duration with the wrong temporal type.
+  hint: Which units does each amount add, and which units does each temporal support?
+
+- id: D1-DT-006
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Instant, OffsetDateTime, withZoneSameInstant, withZoneSameLocal, epoch]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    public class Main {
+        public static void main(String[] args) {
+            OffsetDateTime odt = OffsetDateTime.of(2024, 1, 15, 8, 0, 0, 0, ZoneOffset.ofHours(1));
+            Instant i = odt.toInstant();
+            ZonedDateTime tokyo = i.atZone(ZoneId.of("Asia/Tokyo"));
+            ZonedDateTime sameLocal = tokyo.withZoneSameLocal(ZoneId.of("Africa/Tunis"));
+            ZonedDateTime sameInstant = tokyo.withZoneSameInstant(ZoneId.of("Africa/Tunis"));
+            System.out.println(i);
+            System.out.println(tokyo.toLocalTime() + " " + sameLocal.toLocalTime() + " " + sameInstant.toLocalTime());
+            System.out.println(Instant.ofEpochSecond(86_400 + 90));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        2024-01-15T07:00:00Z
+        16:00 16:00 08:00
+        1970-01-02T00:01:30Z
+      correct: true
+      why: "08:00 at +01:00 is 07:00 UTC; Tokyo (+09:00) shows 16:00; withZoneSameLocal keeps the wall clock 16:00; withZoneSameInstant converts to Tunis (+01:00), 08:00; 86 490 s after the epoch is one day and 90 s."
+    - key: b
+      text: |
+        2024-01-15T09:00:00Z
+        18:00 18:00 10:00
+        1970-01-02T00:01:30Z
+      why: To convert a local time at +01:00 to UTC you subtract the offset (08:00 − 1 h = 07:00), you do not add it.
+    - key: c
+      text: |
+        2024-01-15T07:00:00Z
+        16:00 08:00 16:00
+        1970-01-02T00:01:30Z
+      why: withZoneSameLocal keeps the local date-time (and changes the instant), whereas withZoneSameInstant keeps the instant (and changes the local time).
+    - key: d
+      text: |
+        2024-01-15T08:00+01:00
+        16:00 16:00 08:00
+        1970-01-02T00:01:30Z
+      why: Instant.toString always prints in UTC with a Z suffix; the original offset is not kept.
+  explanation: |
+    An `Instant` is a UTC point on the timeline; converting from an offset date-time subtracts the offset.
+    `atZone` attaches a zone to an instant to get local fields. `withZoneSameInstant` keeps the moment and
+    recomputes the wall clock; `withZoneSameLocal` keeps the wall clock and therefore describes a different
+    moment. `Instant.ofEpochSecond(n)` counts from `1970-01-01T00:00:00Z`.
+  rule: "Instant.toString uses ISO-8601 in UTC; ZonedDateTime.withZoneSameInstant preserves the instant, withZoneSameLocal preserves the local date-time where possible."
+  misconception: withZoneSameLocal and withZoneSameInstant both convert the time to the new zone.
+  hint: Convert everything to UTC first, then apply each zone's offset.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        2024-01-15T07:00:00Z
+        16:00 16:00 08:00
+        1970-01-02T00:01:30Z
+
+- id: D1-DT-007
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [ZonedDateTime, DST, fall-back, plusDays, plusHours, Duration]
+  prompt: "Daylight-saving time ends in `America/New_York` on 2024-11-03 at 02:00 (clocks fall back to 01:00). What is the output?"
+  code: |
+    import java.time.*;
+    import java.time.temporal.ChronoUnit;
+    public class Main {
+        public static void main(String[] args) {
+            ZoneId ny = ZoneId.of("America/New_York");
+            ZonedDateTime evening = ZonedDateTime.of(2024, 11, 2, 20, 0, 0, 0, ny);
+            ZonedDateTime a = evening.plusDays(1);
+            ZonedDateTime b = evening.plusHours(24);
+            System.out.println(a.toLocalDateTime() + " " + b.toLocalDateTime());
+            System.out.println(Duration.between(evening, a) + " " + ChronoUnit.HOURS.between(evening, b));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        2024-11-03T20:00 2024-11-03T19:00
+        PT25H 24
+      correct: true
+      why: plusDays works on the local timeline (same wall clock, 20:00) and the day is 25 hours long; plusHours adds exactly 24 elapsed hours, which shows as 19:00 after the clocks fell back.
+    - key: b
+      text: |
+        2024-11-03T20:00 2024-11-03T20:00
+        PT24H 24
+      why: plusHours operates on the instant timeline; because one wall-clock hour repeats, 24 real hours later the clock only shows 19:00.
+    - key: c
+      text: |
+        2024-11-03T20:00 2024-11-03T21:00
+        PT25H 24
+      why: In autumn the clocks go back, so after 24 elapsed hours the wall clock is one hour behind, not ahead.
+    - key: d
+      text: |
+        2024-11-03T20:00 2024-11-03T19:00
+        PT24H 24
+      why: Duration.between measures the exact elapsed time between the two instants, which is 25 hours across the fall-back transition.
+  explanation: |
+    For a `ZonedDateTime`, date-based arithmetic (`plusDays`, `plusMonths`, `plus(Period)`) is done on the
+    **local** date-time and then re-resolved in the zone, so the wall-clock time is preserved and the elapsed
+    time can be 23 or 25 hours. Time-based arithmetic (`plusHours`, `plus(Duration)`) is done on the
+    **instant**, so exactly that much time passes. On 2024-11-03 in New York the hour 01:00–01:59 occurs twice,
+    so that day lasts 25 hours.
+  rule: "ZonedDateTime.plusDays operates on the local time-line; plusHours operates on the instant time-line (ZonedDateTime javadoc)."
+  misconception: plusDays(1) and plusHours(24) always give the same ZonedDateTime.
+  hint: Which method keeps the wall-clock time, and which keeps the elapsed time exact?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        2024-11-03T20:00 2024-11-03T19:00
+        PT25H 24
+
+- id: D1-DT-008
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [ZonedDateTime, DST, gap, overlap, withLaterOffsetAtOverlap, Europe/Paris]
+  prompt: "In `Europe/Paris` (2024), clocks jumped from 02:00 to 03:00 on March 31 and fell back from 03:00 to 02:00 on October 27. What is the output?"
+  code: |
+    import java.time.*;
+    public class Main {
+        public static void main(String[] args) {
+            ZoneId paris = ZoneId.of("Europe/Paris");
+            ZonedDateTime gap = LocalDateTime.of(2024, 3, 31, 2, 15).atZone(paris);
+            ZonedDateTime overlap = LocalDateTime.of(2024, 10, 27, 2, 15).atZone(paris);
+            System.out.println(gap);
+            System.out.println(overlap.getOffset() + " " + overlap.withLaterOffsetAtOverlap().getOffset());
+            System.out.println(gap.minusHours(1).toLocalTime() + " " + overlap.plusHours(1).toLocalTime());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        2024-03-31T03:15+02:00[Europe/Paris]
+        +02:00 +01:00
+        01:15 02:15
+      correct: true
+      why: "02:15 does not exist on March 31, so it is shifted forward by the 1-hour gap to 03:15 (+02:00). In the overlap the earlier offset (+02:00, summer) is chosen, and the later one is +01:00. One real hour before 03:15+02:00 is 01:15+01:00; one hour after 02:15+02:00 is 02:15+01:00."
+    - key: b
+      text: |
+        2024-03-31T01:15+01:00[Europe/Paris]
+        +02:00 +01:00
+        00:15 02:15
+      why: A local time in a gap is moved later by the length of the gap, never earlier.
+    - key: c
+      text: |
+        2024-03-31T03:15+02:00[Europe/Paris]
+        +01:00 +02:00
+        01:15 03:15
+      why: In an overlap ZonedDateTime keeps the earlier offset by default, which is the summer offset +02:00; one hour later the same wall-clock time recurs with +01:00.
+    - key: d
+      text: |
+        2024-03-31T02:15+01:00[Europe/Paris]
+        +02:00 +01:00
+        01:15 02:15
+      why: ZonedDateTime never stores a local time that is invalid in its zone; 02:15 in the gap is adjusted.
+  explanation: |
+    When a `LocalDateTime` is attached to a zone, java.time resolves it against the zone rules. In a **gap** the
+    local time does not exist and is moved forward by the length of the gap (02:15 → 03:15, now at +02:00). In
+    an **overlap** the local time exists twice; the earlier offset is kept by default, and
+    `withLaterOffsetAtOverlap()` picks the later one. `plusHours`/`minusHours` move along the instant timeline,
+    so near a transition the wall clock may repeat or skip.
+  rule: "ZonedDateTime.of/atZone: in a gap the local date-time is shifted later by the gap length; in an overlap the earlier offset is retained unless withLaterOffsetAtOverlap() is used."
+  misconception: Creating a ZonedDateTime keeps the given local time unchanged, or DST gaps cause an exception.
+  hint: Ask first whether each local time exists zero, one or two times on that day.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        2024-03-31T03:15+02:00[Europe/Paris]
+        +02:00 +01:00
+        01:15 02:15
+
+- id: D1-DT-009
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [DateTimeFormatter, pattern, week-based-year, day-of-year, hh, uu]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    import java.time.format.DateTimeFormatter;
+    import java.util.Locale;
+    public class Main {
+        public static void main(String[] args) {
+            LocalDateTime t = LocalDateTime.of(2025, 12, 29, 0, 7, 9);
+            System.out.println(t.format(DateTimeFormatter.ofPattern("dd/MM/YYYY HH:mm", Locale.US)));
+            System.out.println(t.format(DateTimeFormatter.ofPattern("hh:mm a, D 'of' yyyy", Locale.US)));
+            System.out.println(t.format(DateTimeFormatter.ofPattern("d MMM uu, EEE", Locale.US)));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        29/12/2026 00:07
+        12:07 AM, 363 of 2025
+        29 Dec 25, Mon
+      correct: true
+      why: "YYYY is the week-based year, and Dec 29, 2025 lies in week 1 of 2026; hh is the 1–12 clock hour, so midnight prints 12; D is the day of year (363); uu is the two-digit year, MMM the short month and EEE the short weekday."
+    - key: b
+      text: |
+        29/12/2025 00:07
+        12:07 AM, 363 of 2025
+        29 Dec 25, Mon
+      why: YYYY means week-based year, not calendar year; at the very end of December it can already be the next year.
+    - key: c
+      text: |
+        29/12/2026 00:07
+        00:07 AM, 29 of 2025
+        29 Dec 25, Mon
+      why: hh is the clock-hour-of-am-pm (1–12), so hour 0 prints as 12; and D (upper case) is the day of the year, not the day of the month.
+    - key: d
+      text: |
+        29/12/2026 00:07
+        12:07 AM, 363 of 2025
+        29 12 2025, Monday
+      why: MMM is the abbreviated month text, uu a two-digit year, and EEE the abbreviated day-of-week text.
+  explanation: |
+    Pattern letters are case-sensitive and several pairs look alike: `y`/`u` are the year (year-of-era /
+    proleptic year) while `Y` is the **week-based year**; `M` is month while `m` is minute; `H` is 0–23 while `h`
+    is 1–12 and is normally paired with `a`; `d` is day of month while `D` is day of year. The count of letters
+    selects the form: `uu` gives two digits, `MMM`/`EEE` short text, `MMMM`/`EEEE` full text.
+  rule: "DateTimeFormatter pattern letters: y/u year, Y week-based-year, M month, m minute, H hour-of-day (0-23), h clock-hour-of-am-pm (1-12), a am-pm, d day-of-month, D day-of-year, E day-of-week."
+  misconception: Upper- and lower-case pattern letters are interchangeable variants of the same field.
+  hint: Check the case of every letter against the field table.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        29/12/2026 00:07
+        12:07 AM, 363 of 2025
+        29 Dec 25, Mon
+
+- id: D1-DT-010
+  objective: D1.3
+  lesson: values-date-time
+  type: multi
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [DateTimeParseException, DateTimeException, parse, of]
+  prompt: Which statements throw a `DateTimeParseException`? Choose two.
+  options:
+    - key: a
+      text: "`LocalDate.parse(\"2024-02-30\");`"
+      correct: true
+      why: The text has the right layout, but the ISO formatter resolves strictly and February 30 does not exist; parse wraps the problem in a DateTimeParseException.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.parse("2024-02-30")); } }
+        expect: { compiles: true, exception: java.time.format.DateTimeParseException }
+    - key: b
+      text: "`LocalTime.of(24, 0);`"
+      why: This is a factory call, not parsing; the invalid hour throws a plain DateTimeException (Invalid value for HourOfDay).
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalTime.of(24, 0)); } }
+        expect: { compiles: true, exception: java.time.DateTimeException }
+    - key: c
+      text: "`LocalDate.parse(\"2024-2-3\");`"
+      correct: true
+      why: ISO_LOCAL_DATE requires a two-digit month and day, so parsing fails at index 5.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.parse("2024-2-3")); } }
+        expect: { compiles: true, exception: java.time.format.DateTimeParseException }
+    - key: d
+      text: "`LocalDate.of(2024, Month.FEBRUARY, 29);`"
+      why: 2024 is a leap year, so February 29 is valid.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.of(2024, Month.FEBRUARY, 29)); } }
+        expect: { compiles: true, stdout: "2024-02-29" }
+    - key: e
+      text: "`LocalDateTime.parse(\"2024-03-10T02:30\");`"
+      why: A LocalDateTime has no zone, so a time that falls into a DST gap somewhere is still a perfectly valid local value.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDateTime.parse("2024-03-10T02:30")); } }
+        expect: { compiles: true, stdout: "2024-03-10T02:30" }
+    - key: f
+      text: "`LocalDate.of(2024, 4, 31);`"
+      why: April has 30 days, but of() is not parsing — it throws DateTimeException (Invalid date 'APRIL 31'), not its parse subclass.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { System.out.println(LocalDate.of(2024, 4, 31)); } }
+        expect: { compiles: true, exception: java.time.DateTimeException }
+  explanation: |
+    `DateTimeParseException` extends `DateTimeException` and is thrown only by **parsing**: when the text does
+    not match the formatter's layout, or when it matches but the resulting fields are invalid. The `of(...)`
+    factories validate their arguments and throw a plain `DateTimeException`. Local types know nothing about
+    zones, so DST gaps never make a `LocalDateTime` invalid.
+  rule: "parse(...) failures throw java.time.format.DateTimeParseException (a subclass of DateTimeException); of(...) with invalid field values throws DateTimeException."
+  misconception: Every invalid date or time value causes a DateTimeParseException.
+  hint: Which statements actually parse text?
+
+- id: D1-DT-011
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [Period, static-method, chaining, plus-period]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    public class Main {
+        public static void main(String[] args) {
+            Period p = Period.ofYears(1).ofMonths(2).ofDays(3);
+            Period q = Period.ofYears(1).withMonths(2).plusDays(3);
+            LocalDate d = LocalDate.of(2024, 1, 31);
+            System.out.println(p + " " + q + " " + d.plus(q));
+        }
+    }
+  options:
+    - key: a
+      text: "`P3D P1Y2M3D 2025-04-03`"
+      correct: true
+      why: "ofMonths and ofDays are static factories, so only the last call counts (P3D); withMonths/plusDays are instance methods that build on q. Adding P1Y2M3D: 14 months → 2025-03-31, then 3 days → 2025-04-03."
+    - key: b
+      text: "`P1Y2M3D P1Y2M3D 2025-04-03`"
+      why: Calling a static method through an instance ignores the instance entirely; each of* call creates a fresh Period with just that one field.
+    - key: c
+      text: "`P3D P1Y2M3D 2025-03-31`"
+      why: Period.addTo adds the days after the months, so the 3 days are added to 2025-03-31.
+    - key: d
+      text: Compilation fails because a static method cannot be called on an instance
+      why: Java allows calling a static method through an expression of the class type (with only a warning in some tools); the expression's value is ignored.
+  explanation: |
+    `Period.ofYears`, `ofMonths`, `ofDays` and `ofWeeks` are **static** factory methods. Calling them on the
+    result of a previous call compiles, but the receiver is ignored, so the chain returns only the last
+    Period. To combine fields, use `Period.of(y, m, d)` or the instance methods `withX`/`plusX`. When a Period
+    is added to a date, years and months are applied together first (with month-end clamping), then days.
+  rule: "Period.ofX are static factories; a static method invoked via an instance expression ignores the instance's value (JLS 15.12.4.1). Period.addTo adds total months, then days."
+  misconception: "Chained Period.ofX(...) calls accumulate fields like a builder."
+  hint: Which of these methods are static?
+  java:
+    expect: { compiles: true, stdout: "P3D P1Y2M3D 2025-04-03" }
+
+- id: D1-DT-012
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [Instant, until, Duration, java-23, ChronoUnit]
+  prompt: What is the output?
+  code: |
+    import java.time.*;
+    import java.time.temporal.ChronoUnit;
+    public class Main {
+        public static void main(String[] args) {
+            Instant start = Instant.parse("2024-03-10T06:59:30Z");
+            Instant end = start.plusSeconds(3_630);
+            Duration d = start.until(end);
+            System.out.println(d + " " + start.until(end, ChronoUnit.HOURS) + " " + end.until(start).toMinutes());
+        }
+    }
+  options:
+    - key: a
+      text: "`PT1H30S 1 -60`"
+      correct: true
+      why: 3 630 s is 1 h 0 min 30 s and Duration omits zero components; until(…, HOURS) counts complete hours (1); the reverse duration is −3 630 s and toMinutes truncates toward zero to −60.
+    - key: b
+      text: "`PT1H0M30S 1 -60`"
+      why: Duration.toString leaves out zero-valued components, so there is no 0M.
+    - key: c
+      text: "`PT1H30S 1 -61`"
+      why: Duration.toMinutes truncates toward zero (−60.5 → −60); it does not round toward negative infinity.
+    - key: d
+      text: Compilation fails because `Instant` has no `until(Instant)` method
+      why: Since Java 23, Instant.until(Instant) returns the Duration between two instants, equivalent to Duration.between.
+  explanation: |
+    `Instant.until(Instant endExclusive)` was added in **Java 23** and returns a `Duration`, just like
+    `Duration.between(start, end)`. The older `until(Temporal, TemporalUnit)` returns a `long` of complete units.
+    `Duration.toString` prints only non-zero hour/minute/second components; `toMinutes()` truncates toward
+    zero. Because `Instant` is always UTC, DST transitions never affect these results.
+  rule: "Instant.until(Instant) (since Java 23) returns a Duration; until(Temporal, TemporalUnit) returns the number of complete units; Duration.toMinutes truncates."
+  misconception: The only way to get a Duration between instants is Duration.between, and toMinutes rounds.
+  hint: How many complete minutes are in −3 630 seconds?
+  java:
+    expect: { compiles: true, stdout: "PT1H30S 1 -60" }
+
+- id: D1-DT-013
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [ChronoUnit, between, DST, spring-forward, truncation]
+  prompt: "Daylight-saving time starts in `America/New_York` on 2024-03-10 at 02:00 (clocks jump to 03:00). What is the output?"
+  code: |
+    import java.time.*;
+    import java.time.temporal.ChronoUnit;
+    public class Main {
+        public static void main(String[] args) {
+            ZoneId ny = ZoneId.of("America/New_York");
+            ZonedDateTime s = ZonedDateTime.of(2024, 3, 9, 22, 0, 0, 0, ny);
+            ZonedDateTime e = s.plusDays(1);
+            System.out.println(ChronoUnit.HOURS.between(s, e) + " " + ChronoUnit.DAYS.between(s, e));
+            LocalDateTime a = LocalDateTime.of(2024, 5, 1, 10, 45);
+            LocalDateTime b = LocalDateTime.of(2024, 5, 1, 12, 44);
+            System.out.println(ChronoUnit.HOURS.between(a, b) + " " + ChronoUnit.MINUTES.between(b, a)
+                + " " + ChronoUnit.DAYS.between(a.toLocalDate(), b.toLocalDate()));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        23 1
+        1 -119 0
+      correct: true
+      why: Time units between ZonedDateTimes are measured on the instant timeline (23 real hours across spring-forward), date units on the local timeline (1 day); 1 h 59 min truncates to 1 complete hour; reversed order gives −119 minutes; same date → 0 days.
+    - key: b
+      text: |
+        24 1
+        1 -119 0
+      why: The local clock jumps from 02:00 to 03:00 that night, so only 23 hours actually elapse between 22:00 and 22:00 the next day.
+    - key: c
+      text: |
+        23 0
+        1 -119 0
+      why: DAYS is a date-based unit, so it is measured on the local date-time — 22:00 to 22:00 the next day is one complete day.
+    - key: d
+      text: |
+        23 1
+        2 119 0
+      why: between() counts complete units and truncates (1 h 59 min is 1 hour), and it is negative when the second argument is earlier.
+  explanation: |
+    `ChronoUnit.X.between(a, b)` is `a.until(b, X)`: the number of **complete** units, truncated, negative if
+    `b` is before `a`. For a `ZonedDateTime`, time-based units (`HOURS`, `MINUTES`, …) are measured on the
+    instant timeline, so DST changes the count; date-based units (`DAYS`, `MONTHS`, …) are measured on the local
+    date-time, so the wall-clock day still counts as one.
+  rule: "ZonedDateTime.until: date units use the local date-time, time units use the instant time-line; ChronoUnit.between returns complete units (truncated)."
+  misconception: ChronoUnit.HOURS.between always equals 24 × DAYS.between, and between() rounds to the nearest unit.
+  hint: Is each unit date-based or time-based?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        23 1
+        1 -119 0
+
+- id: D1-DT-014
+  objective: D1.3
+  lesson: values-date-time
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 180
+  tags: [DateTimeFormatter, ResolverStyle, uuuu, yyyy, year-of-era, parse]
+  prompt: What is the result of running this program?
+  code: |
+    import java.time.LocalDate;
+    import java.time.format.*;
+    public class Main {
+        public static void main(String[] args) {
+            DateTimeFormatter strictU = DateTimeFormatter.ofPattern("uuuu-MM-dd").withResolverStyle(ResolverStyle.STRICT);
+            DateTimeFormatter smartU = DateTimeFormatter.ofPattern("uuuu-MM-dd");
+            DateTimeFormatter strictY = DateTimeFormatter.ofPattern("yyyy-MM-dd").withResolverStyle(ResolverStyle.STRICT);
+            System.out.println(LocalDate.parse("2024-02-29", strictU));
+            System.out.println(LocalDate.parse("2023-02-29", smartU));
+            System.out.println(LocalDate.parse("2024-02-29", strictY));
+        }
+    }
+  options:
+    - key: a
+      text: It prints `2024-02-29` and `2023-02-28`, then a `DateTimeParseException` is thrown
+      correct: true
+      why: STRICT accepts the valid leap day; the default SMART style clamps day 29 to the last day of February 2023; with STRICT, yyyy (year-of-era) cannot be resolved to a date without an era field, so the third parse fails.
+    - key: b
+      text: It prints `2024-02-29`, then a `DateTimeParseException` is thrown
+      why: ofPattern formatters use ResolverStyle.SMART by default, which adjusts an out-of-range day-of-month to the last valid day instead of failing.
+    - key: c
+      text: It prints `2024-02-29`, `2023-02-28` and `2024-02-29`
+      why: In STRICT mode, the pattern letter y is year-of-era and needs an era (G) to resolve; only u (proleptic year) resolves on its own.
+    - key: d
+      text: It prints `2024-02-29`, `2023-03-01` and `2024-02-29`
+      why: SMART resolution clamps an invalid day to the end of the month; only LENIENT mode would roll over into March.
+  explanation: |
+    Formatters from `ofPattern` use `ResolverStyle.SMART`, which turns an out-of-range day such as 29 February
+    2023 into the last valid day (the predefined `ISO_LOCAL_DATE`, used by `LocalDate.parse(String)`, is STRICT
+    and would reject it). With `ResolverStyle.STRICT`, the letter `y` means **year-of-era** and cannot be
+    resolved without an era, so the date cannot be built and a `DateTimeParseException` is thrown. Use `u`
+    (proleptic year) in patterns that are resolved strictly.
+  rule: "DateTimeFormatter.ofPattern uses ResolverStyle.SMART; in STRICT mode a year-of-era (y) without an era (G) is not resolved into a date, while u (year) is."
+  misconception: yyyy and uuuu are always interchangeable, and pattern-based parsing always rejects invalid dates.
+  hint: What does each resolver style do with day 29 in February 2023, and what does y need in STRICT mode?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        2024-02-29
+        2023-02-28
+      exception: java.time.format.DateTimeParseException
+
+- id: D1-DT-015
+  objective: D1.3
+  lesson: values-date-time
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ZonedDateTime, isEqual, equals, isBefore, withZoneSameInstant]
+  prompt: |
+    Given
+    `ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris"));` and
+    `ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC);`,
+    which expressions evaluate to `true`? Choose three.
+  options:
+    - key: a
+      text: "`paris.equals(utc)`"
+      why: ZonedDateTime.equals compares the local date-time, the offset and the zone, which all differ here.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(paris.equals(utc)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: b
+      text: "`paris.isEqual(utc)`"
+      correct: true
+      why: isEqual compares only the instant, and withZoneSameInstant kept the instant.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(paris.isEqual(utc)); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`paris.toInstant().equals(utc.toInstant())`"
+      correct: true
+      why: Both represent the same moment, 2024-06-01T10:00:00Z, and Instant.equals compares the timeline position.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(paris.toInstant().equals(utc.toInstant())); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: d
+      text: "`paris.isBefore(utc)`"
+      why: isBefore compares instants too; the two values are the same instant, so neither is before the other.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(paris.isBefore(utc)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: e
+      text: "`utc.getHour() == 10`"
+      correct: true
+      why: Paris is on summer time (+02:00) on June 1, so 12:00 local is 10:00 UTC.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(utc.getHour() == 10); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: f
+      text: "`paris.toLocalDateTime().equals(utc.toLocalDateTime())`"
+      why: The wall-clock values differ (12:00 versus 10:00); only the instant is the same.
+      java:
+        source: |
+          import java.time.*;
+          public class Main { public static void main(String[] x) { ZonedDateTime paris = ZonedDateTime.of(2024, 6, 1, 12, 0, 0, 0, ZoneId.of("Europe/Paris")); ZonedDateTime utc = paris.withZoneSameInstant(ZoneOffset.UTC); System.out.println(paris.toLocalDateTime().equals(utc.toLocalDateTime())); } }
+        expect: { compiles: true, stdout: "false" }
+  explanation: |
+    `isBefore`, `isAfter` and `isEqual` on `ZonedDateTime`/`OffsetDateTime` compare **instants only**.
+    `equals` is stricter: it compares the local date-time, offset and zone. Two values for the same moment in
+    different zones are therefore `isEqual` but not `equals`. Paris uses +02:00 in June, so noon local is
+    10:00 UTC.
+  rule: "ChronoZonedDateTime.isEqual/isBefore/isAfter compare the instant; ZonedDateTime.equals compares local date-time, offset and zone."
+  misconception: equals and isEqual mean the same thing for date-time objects.
+  hint: Which comparisons look at the instant only?

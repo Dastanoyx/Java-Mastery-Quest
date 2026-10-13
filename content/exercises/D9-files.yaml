@@ -1,0 +1,221 @@
+# D9 — character stream coding exercises
+
+- id: D9-EX-010
+  objective: D9.1
+  lesson: io-streams
+  title: Repair a ledger reader and report writer
+  difficulty: advanced
+  kind: repair
+  prompt: |
+    `Ledger` reads `name,amount` lines from a character stream and writes totals to another one. The code
+    compiles, but it breaks several rules of the `java.io` API. Repair it, keeping both signatures:
+
+    1. `static Map<String, Integer> totals(Reader in) throws IOException` reads **every** line of `in` and
+       returns the sum of the amounts per name, in the order in which each name **first appears**.
+       - Lines that are blank, or whose first non-whitespace character is `#`, are skipped.
+       - Whitespace around the name and the amount is ignored (`"  carol , 3 "`); amounts may be negative.
+       - Any other line that is not exactly `name,amount` — with a non-blank name and an `int` amount — throws
+         an `IllegalArgumentException` whose message starts with `"line <n>"`, where `n` is the **1-based
+         physical line number** (blank and comment lines count).
+       - The method must **not close `in`**: the caller opened it, so the caller closes it.
+    2. `static void writeReport(Map<String, Integer> totals, Writer out) throws IOException` writes one line
+       `name: total` per entry, in the map's iteration order, each terminated by `"\n"`. When the method
+       returns, everything must have reached `out` (flushed), but `out` must **not** be closed. If writing
+       fails, throw an `IOException`.
+  fileName: Ledger.java
+  starter: |
+    import java.io.*;
+    import java.util.*;
+
+    public class Ledger {
+
+        public static Map<String, Integer> totals(Reader in) throws IOException {
+            Map<String, Integer> result = new HashMap<>();
+            try (BufferedReader br = new BufferedReader(in)) {
+                int lineNo = 0;
+                while (br.readLine() != null) {
+                    String line = br.readLine();
+                    lineNo++;
+                    if (line.isBlank() || line.startsWith("#")) continue;
+                    String[] parts = line.split(",");
+                    result.merge(parts[0].trim(), Integer.parseInt(parts[1].trim()), Integer::sum);
+                }
+            }
+            return result;
+        }
+
+        public static void writeReport(Map<String, Integer> totals, Writer out) throws IOException {
+            PrintWriter pw = new PrintWriter(new BufferedWriter(out));
+            for (Map.Entry<String, Integer> e : totals.entrySet()) {
+                pw.println(e.getKey() + ": " + e.getValue());
+            }
+        }
+    }
+  solution: |
+    import java.io.*;
+    import java.util.*;
+
+    public class Ledger {
+
+        public static Map<String, Integer> totals(Reader in) throws IOException {
+            Map<String, Integer> result = new LinkedHashMap<>();       // keeps first-seen order
+            // Not in try-with-resources: closing the BufferedReader would close the caller's Reader.
+            BufferedReader br = new BufferedReader(in);
+            int lineNo = 0;
+            String line;
+            while ((line = br.readLine()) != null) {                   // one readLine() per iteration
+                lineNo++;                                              // counts blank and comment lines too
+                String text = line.strip();
+                if (text.isEmpty() || text.startsWith("#")) continue;
+                String[] parts = text.split(",", -1);
+                if (parts.length != 2 || parts[0].isBlank())
+                    throw new IllegalArgumentException("line " + lineNo + ": expected name,amount but was '" + line + "'");
+                int amount;
+                try {
+                    amount = Integer.parseInt(parts[1].strip());
+                } catch (NumberFormatException e) {
+                    throw new IllegalArgumentException("line " + lineNo + ": bad amount '" + parts[1].strip() + "'", e);
+                }
+                result.merge(parts[0].strip(), amount, Integer::sum);
+            }
+            return result;
+        }
+
+        public static void writeReport(Map<String, Integer> totals, Writer out) throws IOException {
+            PrintWriter pw = new PrintWriter(out);                     // not closed: `out` belongs to the caller
+            for (Map.Entry<String, Integer> e : totals.entrySet()) {
+                pw.print(e.getKey() + ": " + e.getValue() + "\n");
+            }
+            pw.flush();
+            if (pw.checkError())                                       // PrintWriter swallows IOExceptions
+                throw new IOException("writing the report failed");
+        }
+    }
+  harness: |
+    import java.io.*;
+    import java.util.*;
+
+    public class Main {
+        static void check(String name, boolean ok, Object detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+        static String show(String s) { return "\"" + s.replace("\n", "\\n") + "\""; }
+
+        /** A Writer that remembers whether it was flushed or closed. */
+        static class SpyWriter extends Writer {
+            final StringBuilder flushed = new StringBuilder();
+            final StringBuilder pending = new StringBuilder();
+            boolean closed;
+            @Override public void write(char[] buf, int off, int len) { pending.append(buf, off, len); }
+            @Override public void flush() { flushed.append(pending); pending.setLength(0); }
+            @Override public void close() { flush(); closed = true; }
+        }
+
+        /** A Writer whose device is full. */
+        static class BrokenWriter extends Writer {
+            @Override public void write(char[] buf, int off, int len) throws IOException { throw new IOException("disk full"); }
+            @Override public void flush() { }
+            @Override public void close() { }
+        }
+
+        /** Describes what totals(input) does; "OK" when it throws an IllegalArgumentException whose message starts with "line n". */
+        static String failure(String input, int n) {
+            try { return "returned " + Ledger.totals(new StringReader(input)); }
+            catch (IllegalArgumentException e) {
+                String msg = String.valueOf(e.getMessage());
+                return msg.startsWith("line " + n) ? "OK" : e.getClass().getSimpleName() + ": " + msg;
+            }
+            catch (Exception e) { return e.getClass().getSimpleName() + ": " + e.getMessage(); }
+        }
+
+        public static void main(String[] args) {
+            test("totals sums per name in first-seen order", () -> {
+                var r = Ledger.totals(new StringReader("zoe,10\nbob,5\nzoe,7\namy,1\n"));
+                check("totals sums per name in first-seen order",
+                        r.equals(Map.of("zoe", 17, "bob", 5, "amy", 1)) && List.copyOf(r.keySet()).equals(List.of("zoe", "bob", "amy")),
+                        r + ", expected {zoe=17, bob=5, amy=1}");
+            });
+            test("totals reads every line", () -> {
+                var r = Ledger.totals(new StringReader("a,1\nb,2\nc,3"));       // odd count, no final newline
+                check("totals reads every line", r.equals(Map.of("a", 1, "b", 2, "c", 3)), r);
+            });
+            test("totals skips blanks and comments and trims", () -> {
+                var r = Ledger.totals(new StringReader("# name,amount\n\n  carol , 3 \n   \nbob,-2\n\t# done\n"));
+                check("totals skips blanks and comments and trims",
+                        r.equals(Map.of("carol", 3, "bob", -2)), r + ", expected {carol=3, bob=-2}");
+            });
+            test("totals of empty input", () -> {
+                var r = Ledger.totals(new StringReader(""));
+                check("totals of empty input", r.isEmpty(), r);
+            });
+            test("totals reports the physical line number", () -> {
+                String noComma = failure("a,1\n# comment\n\nbroken\n", 4);
+                String badAmount = failure("a,1\nb,lots\n", 2);
+                String extra = failure("a,1,2\n", 1);
+                String trailingComma = failure("ok,1\nx,1,\n", 2);
+                check("totals reports the physical line number",
+                        noComma.equals("OK") && badAmount.equals("OK") && extra.equals("OK") && trailingComma.equals("OK"),
+                        "\"broken\" (line 4) -> " + noComma + " | \"b,lots\" (line 2) -> " + badAmount
+                        + " | \"a,1,2\" (line 1) -> " + extra + " | \"x,1,\" (line 2) -> " + trailingComma);
+            });
+            test("totals leaves the caller's reader open", () -> {
+                StringReader in = new StringReader("a,1\n");
+                Ledger.totals(in);
+                String state;
+                try { in.ready(); state = "open"; } catch (IOException e) { state = "closed (" + e.getMessage() + ")"; }
+                check("totals leaves the caller's reader open", state.equals("open"), "reader is " + state);
+            });
+            test("writeReport format", () -> {
+                Map<String, Integer> totals = new LinkedHashMap<>();
+                totals.put("zoe", 17);
+                totals.put("bob", 5);
+                StringWriter sw = new StringWriter();
+                Ledger.writeReport(totals, sw);
+                check("writeReport format", sw.toString().equals("zoe: 17\nbob: 5\n"),
+                        show(sw.toString()) + ", expected \"zoe: 17\\nbob: 5\\n\"");
+            });
+            test("writeReport flushes but does not close", () -> {
+                SpyWriter spy = new SpyWriter();
+                Ledger.writeReport(Map.of("amy", 1), spy);
+                check("writeReport flushes but does not close",
+                        spy.flushed.toString().equals("amy: 1\n") && !spy.closed,
+                        "flushed " + show(spy.flushed.toString()) + ", still buffered " + show(spy.pending.toString())
+                        + ", closed=" + spy.closed);
+            });
+            test("writeReport reports write errors", () -> {
+                String r;
+                try { Ledger.writeReport(Map.of("amy", 1), new BrokenWriter()); r = "no exception"; }
+                catch (IOException e) { r = "IOException"; }
+                StringWriter empty = new StringWriter();
+                Ledger.writeReport(Map.of(), empty);
+                check("writeReport reports write errors", r.equals("IOException") && empty.toString().isEmpty(),
+                        "broken writer -> " + r + ", empty map wrote " + show(empty.toString()));
+            });
+        }
+    }
+  explanation: |
+    `BufferedReader.readLine()` returns the next line without its terminator, or `null` at the end of the
+    stream. The starter called it twice per iteration — once in the condition, once in the body — so every
+    other line was lost and the final `null` reached `isBlank()`. The idiom is a single call:
+    `while ((line = br.readLine()) != null)`.
+
+    Decorators delegate `close()`: closing the `BufferedReader` (here through try-with-resources) also closes
+    the caller's `Reader`, which the caller may still need. A method that did not open a stream should not
+    close it; a `BufferedReader` around a `Reader` holds no operating-system resource of its own, so leaving
+    the wrapper unclosed is harmless. On the output side, `BufferedWriter` and `PrintWriter` keep characters in
+    memory until `flush()` or `close()` — without either, nothing reached `out`. `PrintWriter` methods never
+    throw `IOException`; they set an internal error flag that `checkError()` reports (after flushing), so the
+    method converts that flag into the `IOException` its contract promises.
+
+    Smaller details: `NumberFormatException` is a subclass of `IllegalArgumentException`, but its message has
+    no line number, so it is caught and rethrown with context. `split(",")` drops trailing empty strings, so
+    `"x,1,"` would look like a valid two-field line; `split(",", -1)` keeps them and the line is rejected.
+    A `HashMap` has no defined iteration order, which is why `LinkedHashMap` is needed for first-seen order.
+  hints:
+    - "Call `readLine()` exactly once per loop iteration: `while ((line = br.readLine()) != null) { ... }`. It returns `null` at the end of the stream."
+    - "Closing a wrapper closes the stream it wraps, so a `BufferedReader` or `PrintWriter` around the caller's stream must not go into try-with-resources here. Call `flush()` instead of `close()`."
+    - "`PrintWriter` never throws `IOException`: check `checkError()` after writing. Catch `NumberFormatException` from `Integer.parseInt` and rethrow it with the line number."

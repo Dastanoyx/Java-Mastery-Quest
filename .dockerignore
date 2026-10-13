@@ -1,0 +1,40 @@
+# Build context is the repository root (compose.yaml: build.context ".").
+# Keep it small and free of secrets / host-built artefacts.
+
+# VCS and editor noise
+.git
+.gitignore
+**/.DS_Store
+**/*.swp
+.idea
+.vscode
+
+# Secrets and local env files (never bake them into an image)
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Host-built dependencies and build output (rebuilt inside the image for the right libc/arch)
+**/node_modules
+**/.next
+**/out
+**/*.tsbuildinfo
+runner/out
+
+# Test artefacts
+web/test-results
+web/playwright-report
+web/coverage
+**/screenshots
+
+# Operational data
+backups
+*.log
+**/*.log
+
+# Docker files themselves are not needed inside images
+compose.yaml
+docker-compose*.yml

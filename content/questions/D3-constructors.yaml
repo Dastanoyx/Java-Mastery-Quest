@@ -1,0 +1,515 @@
+# D3.2 — classes, records, constructors, initializers (incl. Java 25 flexible constructor bodies)
+
+- id: D3-CTR-001
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: does-it-compile
+  difficulty: foundation
+  estSeconds: 60
+  tags: [default-constructor, constructors]
+  prompt: What is the result of compiling and running this program?
+  code: |
+    class Point {
+        int x, y;
+        Point(int x, int y) { this.x = x; this.y = y; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            Point p = new Point();
+            System.out.println(p.x + p.y);
+        }
+    }
+  options:
+    - key: a
+      text: "`0`"
+      why: This assumes a default no-arg constructor still exists. It does not — the compiler only adds one when a class declares no constructors at all.
+    - key: b
+      text: Compilation fails because `new Point()` matches no constructor
+      correct: true
+      why: Declaring `Point(int, int)` suppresses the default constructor, so there is no `Point()` to call.
+    - key: c
+      text: A `NullPointerException` is thrown
+      why: Nothing is null here; and the code never gets to run because it does not compile.
+    - key: d
+      text: Compilation fails because `x` and `y` are not initialized
+      why: Fields (unlike local variables) always get default values; uninitialized fields are never a compile error.
+  explanation: |
+    The default constructor is generated **only** when a class declares no constructor at all (JLS §8.8.9).
+    `Point` declares `Point(int, int)`, so `new Point()` has no applicable constructor and javac reports
+    *constructor Point in class Point cannot be applied to given types*.
+  rule: The compiler supplies a default no-arg constructor only if the class declares no constructors (JLS 8.8.9).
+  misconception: Every class always has a no-arg constructor.
+  hint: When exactly does the compiler generate a default constructor?
+  java:
+    expect: { compiles: false, errorContains: "constructor Point in class Point cannot be applied", errorLine: 7 }
+
+- id: D3-CTR-002
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [initialization-order, overriding, constant-variable]
+  prompt: What is the output?
+  code: |
+    class Widget {
+        Widget() { render(); }
+        void render() { System.out.println("widget"); }
+    }
+    class Label extends Widget {
+        private String text = "hello";
+        private final int width = Integer.parseInt("12");
+        @Override void render() { System.out.println(text + ":" + width); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            new Label().render();
+        }
+    }
+  options:
+    - key: a
+      text: |
+        null:0
+        hello:12
+      correct: true
+      why: Widget() runs before Label's field initializers, so both fields still hold default values during the first render(). The final field is not a constant variable because Integer.parseInt(...) is not a constant expression.
+    - key: b
+      text: |
+        null:12
+        hello:12
+      why: This would be right if `width` were initialized with a constant expression (e.g. `= 12`), which the compiler inlines. A method call is not a constant expression.
+    - key: c
+      text: |
+        widget
+        hello:12
+      why: Dynamic dispatch applies inside constructors too — the overriding Label.render() runs, not Widget.render().
+    - key: d
+      text: |
+        hello:12
+        hello:12
+      why: Field initializers of Label run only after super() returns, so they cannot be visible during Widget().
+  explanation: |
+    `new Label()` → implicit `super()` → `Widget()` calls `render()`. Dispatch is based on the runtime class,
+    so `Label.render()` runs — but Label's field initializers have not executed yet: `text` is `null` and
+    `width` is `0`. After `Widget()` returns, `text` and `width` are initialized, and the second call prints
+    `hello:12`. Only a `final` field initialized with a **constant expression** would be inlined and appear
+    initialized early.
+  rule: Instance initializers of a class run after its superclass constructor completes; overridden methods dispatch on the runtime class even during construction (JLS 12.5).
+  misconception: final fields are always visible with their declared value.
+  java:
+    expect: { compiles: true, stdout: "null:0\nhello:12" }
+
+- id: D3-CTR-003
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [initialization-order, static-initializer]
+  prompt: What does this program print?
+  code: |
+    public class Main {
+        static int counter = 0;
+        int id = ++counter;
+        { System.out.print("init" + id + " "); }
+        Main() { System.out.print("ctor" + id + " "); }
+        static { System.out.print("static "); }
+
+        public static void main(String[] args) {
+            System.out.print("main ");
+            new Main();
+            new Main();
+        }
+    }
+  options:
+    - key: a
+      text: "`static main init1 ctor1 init2 ctor2`"
+      correct: true
+      why: Main is initialized before main() runs; each new Main() runs the field initializer, the instance block, then the constructor body.
+    - key: b
+      text: "`main static init1 ctor1 init2 ctor2`"
+      why: The class containing main() is initialized before main() is invoked, so its static block runs first.
+    - key: c
+      text: "`static main ctor1 init1 ctor2 init2`"
+      why: Instance initializers run before the remainder of the constructor body, not after.
+    - key: d
+      text: "`static main init1 ctor1 init1 ctor1`"
+      why: counter is static, shared by all instances, so the second object gets id 2.
+  explanation: |
+    Launching `Main` initializes the class first (`counter = 0`, then the static block prints `static`).
+    Then `main` prints `main `. Each `new Main()` runs, in textual order, `id = ++counter` and the instance
+    block, then the constructor body. `counter` is static, so ids are 1 and 2.
+  rule: Static initialization happens once, before first active use (including running main); instance initializers run in textual order before the constructor body (after super()).
+  java:
+    expect: { compiles: true, stdout: "static main init1 ctor1 init2 ctor2" }
+
+- id: D3-CTR-004
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [implicit-super, constructors]
+  prompt: Which statement about this code is true?
+  code: |
+    class Vehicle {
+        Vehicle(String id) { }
+    }
+    class Car extends Vehicle {
+        Car() {
+            System.out.println("car");
+        }
+    }
+    public class Main {
+        public static void main(String[] args) { new Car(); }
+    }
+  options:
+    - key: a
+      text: It prints `car`
+      why: It never runs; the class Car does not compile.
+    - key: b
+      text: Compilation fails at line 5 because the implicit `super()` has no matching constructor in `Vehicle`
+      correct: true
+      why: Car() gets an implicit super(), which needs a no-arg constructor in Vehicle. Vehicle only declares Vehicle(String).
+    - key: c
+      text: Compilation fails at line 1 because `Vehicle` needs a no-arg constructor
+      why: Vehicle itself is fine. The error is reported where the impossible super() call is implied — in Car's constructor.
+    - key: d
+      text: Compilation fails at line 10 because `Car` has no constructor accepting a `String`
+      why: new Car() correctly calls Car(); the problem is inside Car().
+  explanation: |
+    A constructor that does not begin a chain with `this(...)` or `super(...)` gets an implicit `super()`.
+    `Vehicle` declares only `Vehicle(String)` (so it has no default constructor), and javac reports the
+    error on `Car()`. Fix: `Car() { super("car-1"); ... }`.
+  rule: Without an explicit this(...)/super(...), the compiler inserts super(), which must match an accessible no-arg superclass constructor.
+  java:
+    expect: { compiles: false, errorContains: "constructor Vehicle in class Vehicle cannot be applied", errorLine: 5 }
+
+- id: D3-CTR-005
+  objective: D3.2
+  lesson: oop-constructors
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [flexible-constructor-bodies, java25, prologue]
+  prompt: |
+    Given the class below, which statements can be placed at `// INSERT` (one at a time) so that the code
+    compiles with Java 25? Choose two.
+  code: |
+    class Base { Base(int v) { } }
+    class Impl extends Base {
+        private int limit;
+        private int cache = 10;
+        Impl(int v) {
+            // INSERT
+            super(v);
+        }
+        void reset() { }
+        static int check(int x) { return x; }
+    }
+  options:
+    - key: a
+      text: "`this.limit = v;`"
+      correct: true
+      why: Early assignment is allowed for a field of this class that has no initializer.
+      java:
+        source: |
+          class Base { Base(int v) { } }
+          class Impl extends Base {
+              private int limit;
+              private int cache = 10;
+              Impl(int v) { this.limit = v; super(v); }
+              void reset() { }
+              static int check(int x) { return x; }
+          }
+          public class Main { public static void main(String[] a) { new Impl(1); } }
+        expect: { compiles: true }
+    - key: b
+      text: "`this.cache = v;`"
+      why: cache has an initializer, so it cannot be assigned in the prologue (cannot assign initialized field).
+      java:
+        source: |
+          class Base { Base(int v) { } }
+          class Impl extends Base {
+              private int limit;
+              private int cache = 10;
+              Impl(int v) { this.cache = v; super(v); }
+              void reset() { }
+              static int check(int x) { return x; }
+          }
+          public class Main { public static void main(String[] a) { new Impl(1); } }
+        expect: { compiles: false, errorContains: "cannot assign initialized field" }
+    - key: c
+      text: "`reset();`"
+      why: Calling an instance method in the prologue would let code observe a partly constructed object.
+      java:
+        source: |
+          class Base { Base(int v) { } }
+          class Impl extends Base {
+              private int limit;
+              private int cache = 10;
+              Impl(int v) { reset(); super(v); }
+              void reset() { }
+              static int check(int x) { return x; }
+          }
+          public class Main { public static void main(String[] a) { new Impl(1); } }
+        expect: { compiles: false, errorContains: "before supertype constructor has been called" }
+    - key: d
+      text: "`if (check(v) < 0) throw new IllegalArgumentException();`"
+      correct: true
+      why: Static methods, control flow and throwing exceptions are all permitted in the prologue.
+      java:
+        source: |
+          class Base { Base(int v) { } }
+          class Impl extends Base {
+              private int limit;
+              private int cache = 10;
+              Impl(int v) { if (check(v) < 0) throw new IllegalArgumentException(); super(v); }
+              void reset() { }
+              static int check(int x) { return x; }
+          }
+          public class Main { public static void main(String[] a) { new Impl(1); } }
+        expect: { compiles: true }
+    - key: e
+      text: "`System.out.println(limit);`"
+      why: Reading an instance field before super(...) is forbidden, even though limit has no initializer.
+      java:
+        source: |
+          class Base { Base(int v) { } }
+          class Impl extends Base {
+              private int limit;
+              private int cache = 10;
+              Impl(int v) { System.out.println(limit); super(v); }
+              void reset() { }
+              static int check(int x) { return x; }
+          }
+          public class Main { public static void main(String[] a) { new Impl(1); } }
+        expect: { compiles: false, errorContains: "cannot reference limit before supertype constructor" }
+  explanation: |
+    Java 25 (JEP 513) lets statements precede `super(...)`, but they run in an *early construction context*:
+    you may not read instance fields, call instance methods or use `this` except to **assign** a field of the
+    current class that has **no initializer**. Static methods, local variables and `throw` are fine.
+  rule: "JEP 513 prologue: no this-references except assignments to uninitialized fields of the class itself."
+  misconception: Anything that doesn't mention `this` explicitly is allowed before super().
+
+- id: D3-CTR-006
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [initialization-order, this-delegation]
+  prompt: What is the output?
+  code: |
+    public class Main {
+        { System.out.print("A"); }
+        Main() { this(0); System.out.print("B"); }
+        Main(int x) { System.out.print("C"); }
+        { System.out.print("D"); }
+
+        public static void main(String[] args) {
+            new Main();
+        }
+    }
+  options:
+    - key: a
+      text: "`ADCB`"
+      correct: true
+      why: Instance initializers run once, in the constructor that calls super() (here the implicit one in Main(int)), before its body; then control returns to Main() which prints B.
+    - key: b
+      text: "`ADBADC`"
+      why: Instance initializers never run twice for one object, even when constructors delegate with this(...).
+    - key: c
+      text: "`CADB`"
+      why: Initializers run right after the super() call, before the rest of the constructor body that prints C.
+    - key: d
+      text: "`ADCBD`"
+      why: Each initializer block runs exactly once per object, in textual order.
+  explanation: |
+    `Main()` delegates with `this(0)`, so it does **not** run initializers itself. `Main(int)` has an implicit
+    `super()`; after it returns, the instance initializers run in textual order (`A`, `D`), then `Main(int)`'s
+    body prints `C`. Finally the rest of `Main()` prints `B`.
+  rule: Instance initializers run exactly once per object, in the constructor that invokes super (explicitly or implicitly), not in one that delegates via this(...) (JLS 12.5).
+  java:
+    expect: { compiles: true, stdout: "ADCB" }
+
+- id: D3-CTR-007
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [records, compact-constructor]
+  prompt: What does this program print?
+  code: |
+    record Money(long cents, String currency) {
+        Money {
+            if (cents < 0) throw new IllegalArgumentException("negative");
+            currency = currency.toUpperCase();
+        }
+        Money(long cents) { this(cents, "eur"); }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(new Money(250));
+        }
+    }
+  options:
+    - key: a
+      text: "`Money[cents=250, currency=EUR]`"
+      correct: true
+      why: The non-canonical constructor delegates to the compact canonical constructor, which reassigns the currency parameter before the fields are set.
+    - key: b
+      text: "`Money[cents=250, currency=eur]`"
+      why: In a compact constructor the fields are assigned after the body, from the (possibly modified) parameters.
+    - key: c
+      text: Compilation fails because a compact constructor cannot assign to `currency`
+      why: Reassigning the parameter is allowed; it is assigning this.currency that would fail.
+    - key: d
+      text: "`Money@` followed by a hash code"
+      why: Records get an implicit toString() of the form Name[component=value, ...].
+  explanation: |
+    `new Money(250)` calls the non-canonical constructor, which must delegate to the canonical one. The compact
+    canonical constructor validates and reassigns the **parameter** `currency`; afterwards the compiler-generated
+    code assigns `this.cents = cents; this.currency = currency;`. The implicit `toString()` prints
+    `Money[cents=250, currency=EUR]`.
+  rule: A compact canonical constructor's body runs first; the fields are then assigned from the parameters (JLS 8.10.4.2).
+  java:
+    expect: { compiles: true, stdout: "Money[cents=250, currency=EUR]" }
+
+- id: D3-CTR-008
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 120
+  tags: [flexible-constructor-bodies, java25, early-assignment]
+  prompt: What is the output when compiled and run with Java 25?
+  code: |
+    class Sensor {
+        Sensor() { System.out.println("threshold " + threshold()); }
+        int threshold() { return -1; }
+    }
+    class TempSensor extends Sensor {
+        private final int max;
+        TempSensor(int max) {
+            this.max = Math.max(max, 0);
+            super();
+        }
+        @Override int threshold() { return max * 2; }
+    }
+    public class Main {
+        public static void main(String[] args) {
+            new TempSensor(-5);
+            new TempSensor(21);
+        }
+    }
+  options:
+    - key: a
+      text: |
+        threshold 0
+        threshold 42
+      correct: true
+      why: max is assigned in the prologue (Math.max(-5,0) = 0, then 21), so the overridden threshold() already sees it during Sensor().
+    - key: b
+      text: |
+        threshold -1
+        threshold -1
+      why: The call dispatches to TempSensor.threshold(), the runtime class's override.
+    - key: c
+      text: |
+        threshold -10
+        threshold 42
+      why: Math.max(-5, 0) is 0, not -5.
+    - key: d
+      text: Compilation fails because `max` is assigned before `super()`
+      why: Since Java 25, a field without an initializer may be assigned in the constructor prologue.
+  explanation: |
+    With flexible constructor bodies, `this.max = ...` runs **before** `super()`, so when `Sensor()` calls the
+    overridden `threshold()`, `max` is already set. Before Java 25 you would have had to write `super()` first
+    and the override would have seen `max == 0`.
+  rule: Early assignment (JEP 513) initializes fields before the superclass constructor can observe them.
+  java:
+    expect: { compiles: true, stdout: "threshold 0\nthreshold 42" }
+
+- id: D3-CTR-009
+  objective: D3.2
+  lesson: oop-constructors
+  type: single
+  format: compile-error
+  difficulty: intermediate
+  estSeconds: 75
+  tags: [final-fields, this-delegation]
+  prompt: Which describes the result of compiling this class?
+  code: |
+    public class Main {
+        private final int size;
+        Main() {
+            this(8);
+            size = 16;
+        }
+        Main(int size) { this.size = size; }
+        public static void main(String[] args) { System.out.println(new Main().size); }
+    }
+  options:
+    - key: a
+      text: Compiles and prints `16`
+      why: A final field may be assigned only once; this(8) already assigned it.
+    - key: b
+      text: Compiles and prints `8`
+      why: The code does not compile.
+    - key: c
+      text: "Compilation fails: `variable size might already have been assigned`"
+      correct: true
+      why: After this(8), the delegated constructor has definitely assigned the final field; a second assignment is rejected.
+    - key: d
+      text: "Compilation fails: `call to this must be first statement in constructor`"
+      why: this(8) is the first statement; and since Java 25 a prologue would be allowed anyway.
+  explanation: |
+    A constructor that delegates with `this(...)` inherits the definite-assignment state of the constructor it
+    calls: `size` is already assigned, so `size = 16` violates the rule that a blank final field is assigned
+    exactly once (JLS ch. 16).
+  rule: Blank final fields must be definitely assigned exactly once along every constructor path.
+  java:
+    expect: { compiles: false, errorContains: "might already have been assigned", errorLine: 5 }
+
+- id: D3-CTR-010
+  objective: D3.2
+  lesson: oop-constructors
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [records, constructors]
+  prompt: Which statements about record constructors are true? Choose two.
+  options:
+    - key: a
+      text: A non-canonical record constructor must eventually invoke the canonical constructor using `this(...)`.
+      correct: true
+      why: JLS 8.10.4 requires every non-canonical record constructor to start a this(...) chain.
+    - key: b
+      text: In a compact canonical constructor, you can reassign the parameters, and the fields receive the reassigned values.
+      correct: true
+      why: The implicit field assignments happen after the compact constructor body, using the parameter variables.
+    - key: c
+      text: A compact canonical constructor may assign `this.x = x` explicitly to override the automatic assignment.
+      why: The fields are final and assigned automatically at the end; assigning them in the body is a compile error.
+    - key: d
+      text: A record can declare an instance initializer block to set up derived state.
+      why: Records may not declare instance initializers or instance fields (other than the components' implicit fields).
+    - key: e
+      text: A record constructor can call `super(...)` explicitly.
+      why: A record's superclass is always java.lang.Record and an explicit super(...) call is not allowed in record constructors.
+  explanation: |
+    Records keep construction tightly controlled: non-canonical constructors delegate with `this(...)`, compact
+    constructors validate/normalise parameters and let the compiler assign the fields, and records cannot
+    declare instance initializers or call `super(...)`.
+  rule: JLS 8.10.4 — record constructor rules.

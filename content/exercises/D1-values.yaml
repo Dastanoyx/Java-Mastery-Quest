@@ -1,0 +1,419 @@
+# D1 — Java values (strings, text blocks, date-time) coding exercises
+
+- id: D1-EX-001
+  objective: D1.2
+  lesson: values-strings-text
+  title: Text formatter — whitespace, padded table rows and an exact text block
+  difficulty: intermediate
+  kind: complete
+  prompt: |
+    Complete the public class `TextFormat`. All three methods are `public static`.
+
+    1. `String normalize(String s)` returns `s` with leading and trailing whitespace removed — **including
+       Unicode whitespace such as U+2003 (em space)** — and every inner run of whitespace (spaces, tabs, line
+       breaks) replaced by a single space. `normalize(null)` returns `""`.
+       Example: `normalize("  Java \t 25\n is  here ")` → `"Java 25 is here"`.
+    2. `String row(String[] cells, int[] widths)` builds one table row **with a `StringBuilder`**. The row
+       starts with `|`; then, for every cell: a space, the cell text left-aligned and padded with spaces to
+       exactly `widths[i]` characters, a space and `|`. A `null` cell counts as empty text. A cell longer than
+       its width is cut to `width - 1` characters followed by `~`.
+       - `row(new String[] {"id", "name"}, new int[] {4, 6})` → `"| id   | name   |"`
+       - `row(new String[] {"Mississippi"}, new int[] {5})` → `"| Miss~ |"`
+       - no columns at all → `"|"`
+
+       Throw `IllegalArgumentException` if the two arrays have different lengths or a width is less than 1.
+    3. `String card(String name, String status)` is already written: it returns
+       `CARD.formatted(normalize(name), normalize(status))`. Fix the **text block** `CARD` — it must stay a
+       text block — so that `card("Ada", "active")` returns exactly
+
+       ```
+       "**Ada**  \nStatus: _active_\n    $ status --verbose\nThis profile was generated automatically and must not be edited by hand."
+       ```
+
+       Line 1 ends with **two spaces** (a Markdown hard line break), line 3 keeps its four-space indent, the
+       last sentence is **one line** although it is written over two source lines, and the card does **not**
+       end with a line break.
+  fileName: TextFormat.java
+  starter: |
+    public class TextFormat {
+
+        // TODO 3: this text block does not produce the required card yet (see the prompt):
+        //  - line 1 must end with exactly two spaces (a Markdown hard line break),
+        //  - the last two source lines must become ONE output line,
+        //  - the card must not end with a line break.
+        static final String CARD = """
+                **%s**
+                Status: _%s_
+                    $ status --verbose
+                This profile was generated automatically
+                and must not be edited by hand.
+                """;
+
+        public static String normalize(String s) {
+            // TODO 1
+            return s;
+        }
+
+        public static String row(String[] cells, int[] widths) {
+            // TODO 2: build the row with a StringBuilder
+            return "";
+        }
+
+        public static String card(String name, String status) {
+            return CARD.formatted(normalize(name), normalize(status));
+        }
+    }
+  solution: |
+    public class TextFormat {
+
+        // Two trailing spaces after **%s** are kept by the \s escape; the \ at the end of line 4
+        // joins it with line 5; the closing delimiter on the last content line means no final newline.
+        static final String CARD = """
+                **%s** \s
+                Status: _%s_
+                    $ status --verbose
+                This profile was generated automatically \
+                and must not be edited by hand.""";
+
+        public static String normalize(String s) {
+            if (s == null) return "";
+            return s.strip().replaceAll("\\s+", " ");
+        }
+
+        public static String row(String[] cells, int[] widths) {
+            if (cells.length != widths.length)
+                throw new IllegalArgumentException(cells.length + " cells but " + widths.length + " widths");
+            StringBuilder sb = new StringBuilder("|");
+            for (int i = 0; i < cells.length; i++) {
+                int width = widths[i];
+                if (width < 1) throw new IllegalArgumentException("width must be at least 1: " + width);
+                String cell = cells[i] == null ? "" : cells[i];
+                sb.append(' ');
+                if (cell.length() > width) {
+                    sb.append(cell, 0, width - 1).append('~');
+                } else {
+                    sb.append(cell).append(" ".repeat(width - cell.length()));
+                }
+                sb.append(" |");
+            }
+            return sb.toString();
+        }
+
+        public static String card(String name, String status) {
+            return CARD.formatted(normalize(name), normalize(status));
+        }
+    }
+  harness: |
+    public class Main {
+        static void check(String name, boolean ok, String detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        static void eq(String name, String expected, String actual) {
+            check(name, expected.equals(actual), show(actual) + ", expected " + show(expected));
+        }
+        static String show(String s) {
+            if (s == null) return "null";
+            return "\"" + s.replace("\n", "\\n").replace("\t", "\\t").replace("\u2003", "\\u2003") + "\"";
+        }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+        static String thrown(Runnable r) {
+            try { r.run(); return "no exception"; } catch (RuntimeException e) { return e.getClass().getSimpleName(); }
+        }
+
+        public static void main(String[] args) {
+            test("normalize collapses whitespace", () -> {
+                String r = TextFormat.normalize("  Java \t 25\n\n  is   here  ");
+                eq("normalize collapses whitespace", "Java 25 is here", r);
+            });
+            test("normalize strips Unicode whitespace", () -> {
+                String r = TextFormat.normalize("\u2003 exam  ready \u2003");
+                eq("normalize strips Unicode whitespace", "exam ready", r);
+            });
+            test("normalize null and blank", () -> {
+                String a = TextFormat.normalize(null), b = TextFormat.normalize(" \t\n ");
+                check("normalize null and blank", "".equals(a) && "".equals(b), show(a) + " / " + show(b));
+            });
+            test("row pads every cell", () -> {
+                String r = TextFormat.row(new String[] {"id", "name", "ok"}, new int[] {4, 6, 2});
+                eq("row pads every cell", "| id   | name   | ok |", r);
+            });
+            test("row truncates long cells", () -> {
+                String r = TextFormat.row(new String[] {"Mississippi", "abcd"}, new int[] {5, 4});
+                eq("row truncates long cells", "| Miss~ | abcd |", r);
+            });
+            test("row null cell and no columns", () -> {
+                String r = TextFormat.row(new String[] {null, "x"}, new int[] {2, 1});
+                String empty = TextFormat.row(new String[0], new int[0]);
+                check("row null cell and no columns", "|    | x |".equals(r) && "|".equals(empty), show(r) + " / " + show(empty));
+            });
+            test("row rejects invalid input", () -> {
+                String a = thrown(() -> TextFormat.row(new String[] {"a", "b"}, new int[] {3}));
+                String b = thrown(() -> TextFormat.row(new String[] {"a"}, new int[] {0}));
+                check("row rejects invalid input",
+                        a.equals("IllegalArgumentException") && b.equals("IllegalArgumentException"),
+                        "mismatched lengths -> " + a + ", width 0 -> " + b);
+            });
+            test("card exact text", () -> {
+                String r = TextFormat.card("Ada", "active");
+                String expected = "**Ada**  \nStatus: _active_\n    $ status --verbose\n"
+                        + "This profile was generated automatically and must not be edited by hand.";
+                eq("card exact text", expected, r);
+            });
+            test("card hard break and no final newline", () -> {
+                String r = TextFormat.card("Ada", "active");
+                boolean hardBreak = r.startsWith("**Ada**  \n");
+                boolean lines = r.lines().count() == 4 && !r.endsWith("\n");
+                check("card hard break and no final newline", hardBreak && lines,
+                        "first line " + show(r.lines().findFirst().orElse("")) + ", " + r.lines().count()
+                        + " lines, ends with newline: " + r.endsWith("\n"));
+            });
+            test("card normalizes its arguments", () -> {
+                String r = TextFormat.card("  Grace \t Hopper ", "on   leave");
+                check("card normalizes its arguments",
+                        r.startsWith("**Grace Hopper**  \nStatus: _on leave_\n"), show(r));
+            });
+        }
+    }
+  explanation: |
+    `normalize` combines two String rules. `strip()` (since Java 11) removes every character for which
+    `Character.isWhitespace` is true, including U+2003, while `trim()` only removes characters up to U+0020 —
+    so `trim()` leaves the em spaces in place. `replaceAll` takes a **regular expression**, so `"\\s+"` matches
+    any run of whitespace. Strings are immutable: each call returns a new String that must be used.
+
+    `row` uses one mutable `StringBuilder`: every `append` returns the same builder, `append(cs, start, end)`
+    copies a slice whose end index is exclusive, and only the final `toString()` creates a String. Validating
+    each width before appending prevents a half-built row.
+
+    The text block exercises the three whitespace rules of text blocks. Incidental indentation — the smallest
+    indentation of all non-blank content lines, plus the closing delimiter's line when it stands on its own — is
+    removed, so the `$ status` line keeps its four extra spaces. Trailing spaces on every line are stripped,
+    so the Markdown hard break needs the `\s` escape: escapes are translated *after* stripping, and the space
+    in front of `\s` is no longer trailing, which gives exactly two spaces. A `\` at the end of a line
+    suppresses that line terminator and joins the two source lines. Finally, putting the closing `"""` directly
+    after the last word means the string does not end with `\n`. `formatted(...)` (Java 15) is
+    `String.format` with the text block as the format string.
+  hints:
+    - '`strip()` removes all Unicode whitespace at both ends, `trim()` only characters up to U+0020. Then `replaceAll("\\s+", " ")` collapses the inner runs.'
+    - 'In `row`, `sb.append(cell, 0, width - 1)` appends a slice (end index exclusive) and `" ".repeat(n)` produces the padding.'
+    - 'Text blocks strip trailing spaces, but `\s` is translated after stripping and keeps the space before it. A `\` at the end of a line joins it with the next one, and a closing `"""` right after the last word avoids the final newline.'
+
+- id: D1-EX-002
+  objective: D1.3
+  lesson: values-date-time
+  title: Meeting planner across daylight-saving transitions
+  difficulty: expert
+  kind: implement
+  prompt: |
+    Implement the public class `Schedule`; all methods are `public static`. Every test uses fixed dates and
+    explicit zones. In `Europe/Paris` in 2026 the clocks jump from 02:00 to 03:00 on **29 March** (CET +01:00 →
+    CEST +02:00) and fall back from 03:00 to 02:00 on **25 October**. Never call `now()`.
+
+    1. `ZonedDateTime meetingEnd(LocalDateTime start, ZoneId zone, Duration length)` — a meeting starts at the
+       wall-clock time `start` in `zone` and lasts exactly `length` of **real elapsed time**. Return its end in
+       the same zone. A `start` inside the spring gap is moved forward by the length of the gap; inside the
+       autumn overlap the earlier offset applies (the default `ZonedDateTime` rules). Throw
+       `IllegalArgumentException` if `length` is zero or negative.
+       Example: `meetingEnd(2026-03-29T01:30, Europe/Paris, 90 minutes)` → `2026-03-29T04:00+02:00[Europe/Paris]`.
+    2. `Duration calendarDayLength(LocalDate date, ZoneId zone)` — the real length of that calendar day in that
+       zone, from its first instant to the first instant of the next day (`PT23H` for 29 March 2026 in Paris).
+    3. `ZonedDateTime sameTimeNextDay(ZonedDateTime t)` — one **calendar day** later (`Period.ofDays(1)`).
+    4. `ZonedDateTime exactly24HoursLater(ZonedDateTime t)` — `Duration.ofHours(24)` later.
+    5. `ZonedDateTime parse(String text, ZoneId zone)` — parses `text` in the pattern `dd/MM/yyyy HH:mm`
+       (two-digit day and month, 24-hour clock) as a local date-time in `zone`. Text in any other layout throws
+       `DateTimeParseException`.
+    6. `String format(ZonedDateTime t)` — `yyyy-MM-dd HH:mm`, a space, and the offset as `+hh:mm`, e.g.
+       `"2026-11-07 15:05 +01:00"`.
+  fileName: Schedule.java
+  starter: |
+    import java.time.*;
+    import java.time.format.DateTimeFormatter;
+    import java.util.Objects;
+
+    public class Schedule {
+
+        public static ZonedDateTime meetingEnd(LocalDateTime start, ZoneId zone, Duration length) {
+            // TODO
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        public static Duration calendarDayLength(LocalDate date, ZoneId zone) {
+            // TODO
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        public static ZonedDateTime sameTimeNextDay(ZonedDateTime t) {
+            // TODO
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        public static ZonedDateTime exactly24HoursLater(ZonedDateTime t) {
+            // TODO
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        public static ZonedDateTime parse(String text, ZoneId zone) {
+            // TODO: pattern dd/MM/yyyy HH:mm
+            throw new UnsupportedOperationException("TODO");
+        }
+
+        public static String format(ZonedDateTime t) {
+            // TODO: pattern yyyy-MM-dd HH:mm xxx
+            throw new UnsupportedOperationException("TODO");
+        }
+    }
+  solution: |
+    import java.time.*;
+    import java.time.format.DateTimeFormatter;
+    import java.util.Objects;
+
+    public class Schedule {
+
+        private static final DateTimeFormatter INPUT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm");
+        private static final DateTimeFormatter OUTPUT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm xxx");
+
+        public static ZonedDateTime meetingEnd(LocalDateTime start, ZoneId zone, Duration length) {
+            Objects.requireNonNull(start);
+            Objects.requireNonNull(zone);
+            if (length.isNegative() || length.isZero())
+                throw new IllegalArgumentException("length must be positive: " + length);
+            // Attach the zone FIRST (gap -> shifted forward, overlap -> earlier offset),
+            // then add the Duration on the instant timeline.
+            return ZonedDateTime.of(start, zone).plus(length);
+        }
+
+        public static Duration calendarDayLength(LocalDate date, ZoneId zone) {
+            return Duration.between(date.atStartOfDay(zone), date.plusDays(1).atStartOfDay(zone));
+        }
+
+        public static ZonedDateTime sameTimeNextDay(ZonedDateTime t) {
+            return t.plus(Period.ofDays(1));          // local timeline: same wall-clock time
+        }
+
+        public static ZonedDateTime exactly24HoursLater(ZonedDateTime t) {
+            return t.plus(Duration.ofHours(24));      // instant timeline: 86 400 elapsed seconds
+        }
+
+        public static ZonedDateTime parse(String text, ZoneId zone) {
+            return LocalDateTime.parse(text, INPUT).atZone(zone);
+        }
+
+        public static String format(ZonedDateTime t) {
+            return OUTPUT.format(t);
+        }
+    }
+  harness: |
+    import java.time.*;
+    import java.time.format.DateTimeParseException;
+
+    public class Main {
+        static final ZoneId PARIS = ZoneId.of("Europe/Paris");
+
+        static void check(String name, boolean ok, Object detail) {
+            System.out.println(ok ? "PASS " + name : "FAIL " + name + ": got " + detail);
+        }
+        static void eq(String name, Object expected, Object actual) {
+            check(name, expected.equals(actual), actual + ", expected " + expected);
+        }
+        static ZonedDateTime z(String text) { return ZonedDateTime.parse(text); }
+        interface Body { void run() throws Exception; }
+        static void test(String name, Body body) {
+            try { body.run(); } catch (Throwable t) { System.out.println("FAIL " + name + ": unexpected " + t); }
+        }
+        static String thrown(Runnable r) {
+            try { r.run(); return "no exception"; } catch (RuntimeException e) { return e.getClass().getSimpleName(); }
+        }
+
+        public static void main(String[] args) {
+            test("meeting on an ordinary day", () -> {
+                var r = Schedule.meetingEnd(LocalDateTime.of(2026, 6, 10, 9, 0), PARIS, Duration.ofMinutes(90));
+                eq("meeting on an ordinary day", z("2026-06-10T10:30+02:00[Europe/Paris]"), r);
+            });
+            test("meeting across spring-forward", () -> {
+                var r = Schedule.meetingEnd(LocalDateTime.of(2026, 3, 29, 1, 30), PARIS, Duration.ofMinutes(90));
+                eq("meeting across spring-forward", z("2026-03-29T04:00+02:00[Europe/Paris]"), r);
+            });
+            test("meeting starting in the gap", () -> {
+                var r = Schedule.meetingEnd(LocalDateTime.of(2026, 3, 29, 2, 30), PARIS, Duration.ofMinutes(30));
+                eq("meeting starting in the gap", z("2026-03-29T04:00+02:00[Europe/Paris]"), r);
+            });
+            test("meeting in the autumn overlap", () -> {
+                var r = Schedule.meetingEnd(LocalDateTime.of(2026, 10, 25, 2, 30), PARIS, Duration.ofHours(1));
+                eq("meeting in the autumn overlap", z("2026-10-25T02:30+01:00[Europe/Paris]"), r);
+            });
+            test("meeting length must be positive", () -> {
+                var start = LocalDateTime.of(2026, 6, 10, 9, 0);
+                String zero = thrown(() -> Schedule.meetingEnd(start, PARIS, Duration.ZERO));
+                String negative = thrown(() -> Schedule.meetingEnd(start, PARIS, Duration.ofMinutes(-5)));
+                check("meeting length must be positive",
+                        zero.equals("IllegalArgumentException") && negative.equals("IllegalArgumentException"),
+                        "zero -> " + zero + ", negative -> " + negative);
+            });
+            test("calendar day lengths", () -> {
+                var spring = Schedule.calendarDayLength(LocalDate.of(2026, 3, 29), PARIS);
+                var autumn = Schedule.calendarDayLength(LocalDate.of(2026, 10, 25), PARIS);
+                var normal = Schedule.calendarDayLength(LocalDate.of(2026, 6, 10), PARIS);
+                var utc = Schedule.calendarDayLength(LocalDate.of(2026, 3, 29), ZoneOffset.UTC);
+                check("calendar day lengths",
+                        spring.equals(Duration.ofHours(23)) && autumn.equals(Duration.ofHours(25))
+                        && normal.equals(Duration.ofHours(24)) && utc.equals(Duration.ofHours(24)),
+                        "spring " + spring + ", autumn " + autumn + ", normal " + normal + ", UTC " + utc);
+            });
+            test("Period day vs Duration of 24 hours", () -> {
+                var saturday = z("2026-03-28T09:00+01:00[Europe/Paris]");
+                var calendar = Schedule.sameTimeNextDay(saturday);
+                var exact = Schedule.exactly24HoursLater(saturday);
+                check("Period day vs Duration of 24 hours",
+                        calendar.equals(z("2026-03-29T09:00+02:00[Europe/Paris]"))
+                        && exact.equals(z("2026-03-29T10:00+02:00[Europe/Paris]")),
+                        "sameTimeNextDay " + calendar + ", exactly24HoursLater " + exact);
+            });
+            test("parse with the dd/MM/yyyy HH:mm pattern", () -> {
+                var afternoon = Schedule.parse("07/11/2026 15:05", PARIS);
+                var gap = Schedule.parse("29/03/2026 02:30", PARIS);
+                check("parse with the dd/MM/yyyy HH:mm pattern",
+                        afternoon.equals(z("2026-11-07T15:05+01:00[Europe/Paris]"))
+                        && gap.equals(z("2026-03-29T03:30+02:00[Europe/Paris]")),
+                        afternoon + " / " + gap);
+            });
+            test("parse rejects other layouts", () -> {
+                String iso = thrown(() -> Schedule.parse("2026-03-29 10:00", PARIS));
+                String oneDigit = thrown(() -> Schedule.parse("29/3/2026 10:00", PARIS));
+                check("parse rejects other layouts",
+                        iso.equals("DateTimeParseException") && oneDigit.equals("DateTimeParseException"),
+                        "\"2026-03-29 10:00\" -> " + iso + ", \"29/3/2026 10:00\" -> " + oneDigit);
+            });
+            test("format with offset", () -> {
+                var a = Schedule.format(z("2026-11-07T15:05+01:00[Europe/Paris]"));
+                var b = Schedule.format(z("2026-03-29T04:00+02:00[Europe/Paris]"));
+                check("format with offset", a.equals("2026-11-07 15:05 +01:00") && b.equals("2026-03-29 04:00 +02:00"),
+                        "\"" + a + "\" / \"" + b + "\"");
+            });
+        }
+    }
+  explanation: |
+    A `ZonedDateTime` is a local date-time plus a zone plus the offset chosen for that moment.
+    `ZonedDateTime.of(start, zone)` resolves the local time against the zone rules: 02:30 on 29 March does not
+    exist in Paris, so it is shifted forward by the length of the gap to 03:30+02:00; 02:30 on 25 October
+    exists twice and the **earlier** offset (+02:00) is kept. `plus(Duration)` then works on the instant
+    timeline: 01:30+01:00 plus 90 minutes is 04:00+02:00, and the meeting starting at 02:30+02:00 in the
+    overlap ends at 02:30+01:00 — the same wall-clock time it started. The tempting
+    `start.plus(length).atZone(zone)` adds *wall-clock* time and gives 03:00 and 03:30 instead.
+
+    Date-based amounts (`plus(Period.ofDays(1))`, `plusDays(1)`) operate on the local timeline: the wall-clock
+    time stays 09:00 and the offset is adjusted. Time-based amounts (`plus(Duration.ofHours(24))`,
+    `plusHours(24)`) add exactly 86,400 seconds, which on the 23-hour day lands at 10:00. The same idea gives
+    the length of a day: `Duration.between(date.atStartOfDay(zone), date.plusDays(1).atStartOfDay(zone))` is
+    PT23H, PT25H or PT24H — and always PT24H in UTC.
+
+    `DateTimeFormatter` pattern letters are case-sensitive: `MM` month vs `mm` minute, `HH` hour 0–23 vs `hh`
+    clock hour 1–12 (meaningful only with `a`), `yyyy` year-of-era vs `YYYY` week-based year. `xxx` prints the
+    offset as `+01:00` (`XXX` would print `Z` for a zero offset). Parsing with `ofPattern` expects exactly two
+    digits for `dd` and `MM`, so `29/3/2026 10:00` fails with `DateTimeParseException`, and a parsed local time
+    that falls into a gap is shifted exactly like in `meetingEnd`.
+  hints:
+    - "Attach the zone first and add the `Duration` afterwards: `ZonedDateTime.of(start, zone).plus(length)`. Adding to the `LocalDateTime` first adds wall-clock time, which is wrong whenever the clocks change during the meeting."
+    - "`date.atStartOfDay(zone)` gives the first instant of a day in that zone, and `Duration.between` of two `ZonedDateTime`s measures elapsed time."
+    - "`plus(Period)` and `plusDays` work on the local timeline, `plus(Duration)` and `plusHours` on the instant timeline. In patterns `MM` is month, `mm` minute, `HH` the 0-23 hour, and `xxx` an offset like `+02:00`."

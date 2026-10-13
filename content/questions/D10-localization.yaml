@@ -1,0 +1,997 @@
+# D10 — Localization (D10.1 locales, resource bundles, message/number/date formatting and parsing)
+# The verifier runs every program with -Duser.language=en -Duser.country=US, so the default locale is en_US.
+
+- id: D10-L10N-001
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: multi
+  format: select-valid
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [locale, locale-of, forlanguagetag, builder]
+  prompt: Which expressions produce a `Locale` that is `equals` to `Locale.CANADA_FRENCH`? Choose four.
+  options:
+    - key: a
+      text: "`Locale.of(\"fr\", \"CA\")`"
+      correct: true
+      why: Locale.of(language, country) (Java 19) builds fr_CA directly.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(Locale.of("fr", "CA").equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: b
+      text: "`Locale.forLanguageTag(\"fr-CA\")`"
+      correct: true
+      why: fr-CA is a well-formed BCP 47 language tag with a hyphen.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(Locale.forLanguageTag("fr-CA").equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`Locale.forLanguageTag(\"fr_CA\")`"
+      why: Language tags use hyphens; fr_CA is not well-formed, so the result is an empty locale — no exception is thrown.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(Locale.forLanguageTag("fr_CA").equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: d
+      text: "`new Locale.Builder().setLanguage(\"fr\").setRegion(\"CA\").build()`"
+      correct: true
+      why: The builder validates and assembles the same language and region.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(new Locale.Builder().setLanguage("fr").setRegion("CA").build().equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: e
+      text: "`Locale.of(\"fr-CA\")`"
+      why: Locale.of does not parse tags; the whole string becomes the language (fr-ca) and there is no country.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(Locale.of("fr-CA").equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "false" }
+    - key: f
+      text: "`Locale.of(\"FR\", \"ca\")`"
+      correct: true
+      why: Locale normalizes the language to lower case and the country to upper case, so this is fr_CA too.
+      java:
+        source: |
+          import java.util.Locale;
+          public class Main { public static void main(String[] args) { System.out.println(Locale.of("FR", "ca").equals(Locale.CANADA_FRENCH)); } }
+        expect: { compiles: true, stdout: "true" }
+  explanation: |
+    Modern code builds locales with `Locale.of(...)` (Java 19, replacing the deprecated constructors), with
+    `Locale.forLanguageTag` for BCP 47 tags such as `fr-CA`, with `Locale.Builder`, or with constants. Case
+    is normalized (`fr_CA`). `forLanguageTag` silently ignores ill-formed input such as `fr_CA`, and
+    `Locale.of` does not parse tags at all.
+  rule: "Locale.of(lang, country) and forLanguageTag(\"lang-COUNTRY\") are equivalent; language is lower-cased and country upper-cased; forLanguageTag needs hyphens."
+  misconception: forLanguageTag accepts the underscore form printed by Locale.toString().
+
+- id: D10-L10N-002
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 100
+  tags: [resourcebundle, parent-chain, properties]
+  prompt: |
+    The classpath contains these three resource bundles:
+
+    ```properties
+    # Menu.properties
+    title=Carta
+    soup=Soup
+    bread=Bread
+    # Menu_es.properties
+    title=Carta del dia
+    soup=Sopa
+    # Menu_es_MX.properties
+    soup=Caldo
+    ```
+
+    What is the output of the following program?
+  code: |
+    import java.util.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            ResourceBundle rb = ResourceBundle.getBundle("Menu", Locale.of("es", "MX"));
+            System.out.println(rb.getString("soup") + " | " + rb.getString("title") + " | "
+                + rb.getString("bread") + " | " + rb.getLocale());
+        }
+    }
+  options:
+    - key: a
+      text: "`Caldo | Carta del dia | Bread | es_MX`"
+      correct: true
+      why: Menu_es_MX is the most specific match; title is inherited from its parent Menu_es and bread from the base bundle Menu.
+    - key: b
+      text: "`Caldo | Carta | Bread | es_MX`"
+      why: The parent chain is Menu_es_MX → Menu_es → Menu; Menu_es is consulted before the base bundle.
+    - key: c
+      text: "`Sopa | Carta del dia | Bread | es`"
+      why: getBundle picks the MOST specific existing bundle, Menu_es_MX, which overrides soup.
+    - key: d
+      text: A `MissingResourceException` is thrown because `Menu_es_MX` has no `title` key
+      why: A key missing in the chosen bundle is looked up in its parent bundles before failing.
+  explanation: |
+    `getBundle` returns the most specific bundle among `Menu_es_MX`, `Menu_es` and `Menu`. That bundle's
+    parent chain follows the same list towards the base, so a missing key is found in `Menu_es` and then in
+    `Menu`. `getLocale()` reports the locale of the bundle actually returned.
+  rule: "The bundle returned for lang_COUNTRY has the parent chain base_lang_COUNTRY → base_lang → base; getString searches the chain."
+  misconception: Each bundle file must contain every key.
+  java:
+    files:
+      - { name: Menu.properties, content: "title=Carta\nsoup=Soup\nbread=Bread\n" }
+      - { name: Menu_es.properties, content: "title=Carta del dia\nsoup=Sopa\n" }
+      - { name: Menu_es_MX.properties, content: "soup=Caldo\n" }
+    expect: { compiles: true, stdout: "Caldo | Carta del dia | Bread | es_MX" }
+
+- id: D10-L10N-003
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [resourcebundle, default-locale, fallback, lookup]
+  prompt: |
+    The default locale is `en_US` and the classpath contains:
+
+    ```properties
+    # Ui.properties
+    ok=OK
+    cancel=Cancel
+    # Ui_en.properties
+    ok=Okay
+    # Ui_de.properties
+    ok=Gut
+    cancel=Abbrechen
+    ```
+
+    What is the output of the following program?
+  code: |
+    import java.util.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            ResourceBundle rb = ResourceBundle.getBundle("Ui", Locale.ITALY);
+            System.out.println("[" + rb.getLocale() + "] " + rb.getString("ok") + " " + rb.getString("cancel"));
+        }
+    }
+  options:
+    - key: a
+      text: "`[en] Okay Cancel`"
+      correct: true
+      why: No Ui_it_IT or Ui_it exists, so the default locale's candidates (Ui_en_US, Ui_en) are tried before the base; Ui_en wins and cancel comes from its parent Ui.
+    - key: b
+      text: "`[] OK Cancel`"
+      why: The base bundle is only the last resort — the default-locale candidates are searched before it.
+    - key: c
+      text: "`[it_IT] OK Cancel`"
+      why: getLocale() returns the locale of the bundle that was found, not the requested locale.
+    - key: d
+      text: A `MissingResourceException` is thrown because there is no Italian bundle
+      why: Falling back is normal; the exception is only thrown if not even the base bundle exists.
+  explanation: |
+    `getBundle("Ui", it_IT)` first tries `Ui_it_IT` and `Ui_it`. Only because neither exists does it try the
+    candidates of the **default locale** `en_US` — `Ui_en_US`, `Ui_en` — and only then the base bundle `Ui`.
+    `Ui_en` is found; its parent is `Ui`, so `cancel` resolves to `Cancel`. Many developers expect the
+    neutral base bundle here.
+  rule: "ResourceBundle.getBundle: requested-locale candidates, then default-locale candidates (only if no requested-locale bundle exists), then the base bundle."
+  misconception: When no bundle for the requested language exists, the base bundle is used.
+  hint: Which locale does getBundle try after the requested one?
+  java:
+    files:
+      - { name: Ui.properties, content: "ok=OK\ncancel=Cancel\n" }
+      - { name: Ui_en.properties, content: "ok=Okay\n" }
+      - { name: Ui_de.properties, content: "ok=Gut\ncancel=Abbrechen\n" }
+    expect: { compiles: true, stdout: "[en] Okay Cancel" }
+
+- id: D10-L10N-004
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [messageformat, apostrophe, quoting, currency]
+  prompt: What is the output of the following program?
+  code: |
+    import java.text.MessageFormat;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(MessageFormat.format("{0} can''t pay {1,number,currency}", "Ana", 12.5));
+            System.out.println(MessageFormat.format("Use '{0}' for {0}, it's {1}", "names", "easy"));
+        }
+    }
+  options:
+    - key: a
+      text: |
+        Ana can't pay $12.50
+        Use {0} for names, its {1}
+      correct: true
+      why: "'' is a literal apostrophe; '{0}' is a quoted literal; the lone apostrophe in it's opens a quoted section that runs to the end, so it is dropped and {1} stays literal."
+    - key: b
+      text: |
+        Ana can't pay $12.50
+        Use 'names' for names, it's easy
+      why: Single apostrophes are quote characters in MessageFormat, not literal text; they are removed and turn what they enclose into literal text.
+    - key: c
+      text: |
+        Ana can''t pay 12.5
+        Use {0} for names, its {1}
+      why: Two apostrophes produce one, and the currency style formats the number with the locale's currency ($12.50 in en_US).
+    - key: d
+      text: |
+        Ana can't pay $12.50
+        Use {0} for names, it's easy
+      why: The unmatched apostrophe in it's quotes the rest of the pattern, including {1}.
+  explanation: |
+    In a `MessageFormat` pattern, a single quote starts (and ends) a quoted section whose content is
+    literal — so `'{0}'` prints `{0}`. A quote that is never closed quotes everything up to the end of the
+    pattern. A literal apostrophe must be written `''`. `{1,number,currency}` formats with the format's
+    locale (here the default `en_US`).
+  rule: "MessageFormat: '' is a literal apostrophe; text between single quotes (including braces) is literal; an unclosed quote extends to the end of the pattern."
+  misconception: Apostrophes in MessageFormat patterns are printed as typed.
+  java:
+    expect: { compiles: true, stdout: "Ana can't pay $12.50\nUse {0} for names, its {1}" }
+
+- id: D10-L10N-005
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [numberformat, parse, parseexception]
+  prompt: What is the result of running the following program?
+  code: |
+    import java.text.*;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) throws ParseException {
+            NumberFormat nf = NumberFormat.getInstance(Locale.US);
+            System.out.println(nf.parse("12.5kg"));
+            System.out.println(nf.parse("-3,000.75 USD"));
+            System.out.println(nf.parse("kg12.5"));
+        }
+    }
+  options:
+    - key: a
+      text: Prints `12.5` and `-3000.75`, then a `java.text.ParseException` is thrown
+      correct: true
+      why: parse(String) stops at the first character it cannot use and returns what it has; it fails only when the text does not START with a number.
+    - key: b
+      text: A `ParseException` is thrown by the first `parse` call because of the trailing `kg`
+      why: Trailing text is ignored by parse(String); only parse(String, ParsePosition) lets you detect where parsing stopped.
+    - key: c
+      text: Prints `12.5`, `-3000.75` and `12.5`
+      why: Leading text cannot be skipped — no number could be parsed at index 0, so ParseException is thrown.
+    - key: d
+      text: Prints `12.5`, then a `NumberFormatException` is thrown
+      why: NumberFormatException belongs to Integer.parseInt/Double.parseDouble; NumberFormat understands grouping separators and throws the checked ParseException.
+  explanation: |
+    `NumberFormat.parse(String)` parses from the beginning of the text as far as it can and ignores the
+    remainder. It throws the **checked** `java.text.ParseException` only if nothing could be parsed at the
+    start. Grouping separators of the locale (`,` in `en_US`) are accepted, so `-3,000.75` is `-3000.75`.
+  rule: "NumberFormat.parse(String) ignores trailing unparsable text and throws ParseException only when no number can be parsed at the beginning."
+  misconception: parse rejects any string that is not entirely a number.
+  java:
+    expect: { compiles: true, stdout: "12.5\n-3000.75", exception: java.text.ParseException }
+
+- id: D10-L10N-006
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [datetimeformatter, formatstyle, localized, month-names]
+  prompt: The default locale is `en_US`. What is the output of the following program?
+  code: |
+    import java.time.LocalDate;
+    import java.time.format.*;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            LocalDate d = LocalDate.of(2024, 12, 1);
+            var shortFmt = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT);
+            System.out.println(d.format(shortFmt) + " | " + d.format(shortFmt.withLocale(Locale.UK)) + " | "
+                + d.format(DateTimeFormatter.ofPattern("MMMM", Locale.GERMANY)) + " | "
+                + d.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)));
+        }
+    }
+  options:
+    - key: a
+      text: "`12/1/24 | 01/12/2024 | Dezember | Dec 1, 2024`"
+      correct: true
+      why: US short dates are month/day/two-digit year; the UK uses day/month/year; MMMM gives the full month name in the formatter's locale; MEDIUM uses the abbreviated month.
+    - key: b
+      text: "`12/1/24 | 12/1/24 | Dezember | Dec 1, 2024`"
+      why: withLocale returns a formatter for the UK locale, whose short style is dd/MM/yyyy.
+    - key: c
+      text: "`12/1/24 | 01/12/2024 | December | Dec 1, 2024`"
+      why: ofPattern(pattern, locale) localizes month names, so the German formatter prints Dezember.
+    - key: d
+      text: "`1/12/24 | 01/12/2024 | Dezember | 1 Dec 2024`"
+      why: The default locale is en_US, which puts the month first in both the SHORT and MEDIUM styles.
+  explanation: |
+    `ofLocalizedDate(FormatStyle)` picks a locale-specific pattern; without `withLocale` it uses the default
+    `FORMAT` locale. `withLocale` returns a new formatter (formatters are immutable). `ofPattern(pattern,
+    locale)` keeps your pattern but takes text such as month and day names from the given locale.
+  rule: "DateTimeFormatter.ofLocalizedDate(style) uses the default FORMAT locale unless withLocale is applied; MMMM/EEEE names come from the formatter's locale."
+  misconception: Localized styles follow one global pattern, or month names are always English.
+  java:
+    expect: { compiles: true, stdout: "12/1/24 | 01/12/2024 | Dezember | Dec 1, 2024" }
+
+- id: D10-L10N-007
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [decimalformat, pattern, zero-padding]
+  prompt: Which `DecimalFormat` patterns format the value `7.5` as `007.50` (default locale `en_US`)? Choose three.
+  options:
+    - key: a
+      text: "`\"000.00\"`"
+      correct: true
+      why: Three mandatory integer digits and two mandatory fraction digits.
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("000.00").format(7.5)); } }
+        expect: { compiles: true, stdout: "007.50" }
+    - key: b
+      text: "`\"#00.00\"`"
+      why: Only two 0s before the decimal point, so only two integer digits are forced — 07.50.
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("#00.00").format(7.5)); } }
+        expect: { compiles: true, stdout: "07.50" }
+    - key: c
+      text: "`\"000.0#\"`"
+      why: The second fraction digit is optional, so the insignificant trailing zero is dropped — 007.5.
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("000.0#").format(7.5)); } }
+        expect: { compiles: true, stdout: "007.5" }
+    - key: d
+      text: "`\"#,000.00\"`"
+      correct: true
+      why: A grouping separator appears only when there are more than three integer digits; the three 0s force 007.
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("#,000.00").format(7.5)); } }
+        expect: { compiles: true, stdout: "007.50" }
+    - key: e
+      text: "`\"##000.00\"`"
+      correct: true
+      why: "Leading # characters only allow extra digits; the minimum is still three integer digits."
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("##000.00").format(7.5)); } }
+        expect: { compiles: true, stdout: "007.50" }
+    - key: f
+      text: "`\"0000.00\"`"
+      why: Four 0s force four integer digits — 0007.50.
+      java:
+        source: |
+          import java.text.DecimalFormat;
+          public class Main { public static void main(String[] args) { System.out.println(new DecimalFormat("0000.00").format(7.5)); } }
+        expect: { compiles: true, stdout: "0007.50" }
+  explanation: |
+    In a `DecimalFormat` pattern, each `0` is a **mandatory** digit (padded with zeros) and each `#` an
+    **optional** digit printed only when significant. The minimum number of integer digits is the number of
+    `0`s before the decimal point, the minimum number of fraction digits the number of `0`s after it. `#`s
+    before the `0`s and grouping separators do not add padding.
+  rule: "DecimalFormat: 0 = digit always shown (zero-padded), # = digit shown only if significant; , sets the grouping size."
+  misconception: "# and 0 are interchangeable, or every symbol in the pattern produces a character."
+
+- id: D10-L10N-008
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [listresourcebundle, properties, class-precedence, getobject]
+  prompt: |
+    The classpath contains the class `Prices_fr` shown below and these property files:
+
+    ```properties
+    # Prices.properties
+    tax=0.10
+    name=Price
+    # Prices_fr.properties
+    tax=0.05
+    name=Prix
+    ```
+
+    What is the output of the following program?
+  code: |
+    import java.util.*;
+
+    class Prices_fr extends ListResourceBundle {
+        public Prices_fr() { }
+        protected Object[][] getContents() {
+            return new Object[][] { { "tax", 0.2 } };
+        }
+    }
+
+    public class Main {
+        public static void main(String[] args) {
+            ResourceBundle rb = ResourceBundle.getBundle("Prices", Locale.FRANCE);
+            Object tax = rb.getObject("tax");
+            System.out.println(tax + " " + tax.getClass().getSimpleName() + " " + rb.getString("name"));
+        }
+    }
+  options:
+    - key: a
+      text: "`0.2 Double Price`"
+      correct: true
+      why: For the candidate name Prices_fr, the class is found before the .properties file, so Prices_fr.properties is never loaded; name falls through to the parent bundle Prices.
+    - key: b
+      text: "`0.05 String Prix`"
+      why: A Java class bundle takes precedence over a properties file with the same base name and locale.
+    - key: c
+      text: "`0.2 Double Prix`"
+      why: The class and the properties file are not merged; only one bundle is loaded per candidate name.
+    - key: d
+      text: "`0.10 String Price`"
+      why: Prices_fr exists (as a class), so the base bundle is only consulted for keys missing in it.
+  explanation: |
+    For each candidate bundle name, the default `ResourceBundle.Control` tries the `java.class` format before
+    `java.properties`. Here the class `Prices_fr` (a `ListResourceBundle` with a public no-arg constructor)
+    is loaded for `fr`, and `Prices_fr.properties` is ignored entirely. Its parent is the base bundle
+    `Prices.properties`. Class bundles may hold any object — `getObject` returns the `Double` 0.2.
+  rule: "For the same bundle name, a ResourceBundle class is preferred over a .properties file; only one of them is used."
+  misconception: All bundles with the same name are merged, or properties files win.
+  java:
+    files:
+      - { name: Prices.properties, content: "tax=0.10\nname=Price\n" }
+      - { name: Prices_fr.properties, content: "tax=0.05\nname=Prix\n" }
+    expect: { compiles: true, stdout: "0.2 Double Price" }
+
+- id: D10-L10N-009
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: runtime-exception
+  difficulty: foundation
+  estSeconds: 75
+  tags: [resourcebundle, missingresourceexception, case-sensitive]
+  prompt: |
+    The classpath contains only `Help.properties` with the line `intro=Welcome`. What is the result of
+    running the program?
+  code: |
+    import java.util.ResourceBundle;
+
+    public class Main {
+        public static void main(String[] args) {
+            ResourceBundle rb = ResourceBundle.getBundle("Help");
+            System.out.println(rb.getString("intro"));
+            System.out.println(rb.getString("Intro"));
+        }
+    }
+  options:
+    - key: a
+      text: "`Welcome` is printed, then a `MissingResourceException` is thrown"
+      correct: true
+      why: Keys are case-sensitive; Intro is not in the bundle (or any parent), so getString throws.
+    - key: b
+      text: "`Welcome` is printed twice"
+      why: Resource bundle keys are compared exactly, like Map keys — case matters.
+    - key: c
+      text: "`Welcome` and `null` are printed"
+      why: getString never returns null for a missing key; it throws MissingResourceException.
+    - key: d
+      text: Compilation fails because `getString` throws a checked exception that is not handled
+      why: MissingResourceException is a RuntimeException, so no handling is required.
+  explanation: |
+    `getString(key)` searches the bundle and its parents; if no bundle has the key it throws the unchecked
+    `java.util.MissingResourceException`. Keys are case-sensitive strings. `getBundle("Help")` uses the
+    default locale; with no `Help_en…` bundle it returns the base bundle.
+  rule: "ResourceBundle.getString throws MissingResourceException (unchecked) if the key is in no bundle of the parent chain; keys are case-sensitive."
+  misconception: A missing key returns null.
+  java:
+    files:
+      - { name: Help.properties, content: "intro=Welcome\n" }
+    expect: { compiles: true, stdout: "Welcome", exception: java.util.MissingResourceException }
+
+- id: D10-L10N-010
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: runtime-exception
+  difficulty: expert
+  estSeconds: 150
+  tags: [resourcebundle, parent-chain, default-locale, missingresourceexception]
+  prompt: |
+    The default locale is `en_US` and the classpath contains:
+
+    ```properties
+    # Msg.properties
+    a=base-a
+    # Msg_en.properties
+    a=en-a
+    b=en-b
+    # Msg_fr.properties
+    a=fr-a
+    ```
+
+    What is the result of running the program?
+  code: |
+    import java.util.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            ResourceBundle rb = ResourceBundle.getBundle("Msg", Locale.CANADA_FRENCH);
+            System.out.println(rb.getString("a"));
+            System.out.println(rb.getString("b"));
+        }
+    }
+  options:
+    - key: a
+      text: "`fr-a` is printed, then a `MissingResourceException` is thrown"
+      correct: true
+      why: Msg_fr is the result; its parent chain is Msg_fr → Msg. The default-locale bundle Msg_en is not part of that chain, so b cannot be found.
+    - key: b
+      text: "`fr-a` and `en-b` are printed"
+      why: The default locale is only used to choose a bundle when no requested-locale bundle exists; it never fills in missing keys.
+    - key: c
+      text: "`en-a` and `en-b` are printed"
+      why: Msg_fr matches the language of fr_CA, so the default-locale step is never reached.
+    - key: d
+      text: "`base-a` is printed, then a `MissingResourceException` is thrown"
+      why: Msg_fr is more specific than the base bundle and defines a, so a is fr-a.
+  explanation: |
+    For `fr_CA` the candidates are `Msg_fr_CA`, `Msg_fr`, then the base. `Msg_fr` exists, so the
+    default-locale candidates (`Msg_en_US`, `Msg_en`) are never considered. The returned bundle's parent
+    chain is `Msg_fr → Msg`; neither contains `b`, so `getString("b")` throws `MissingResourceException`.
+  rule: "The parent chain of a bundle contains only less specific bundles of the same locale lineage and the base bundle — never the default-locale bundles."
+  misconception: A key missing in the localized bundles is looked up in the default locale's bundle.
+  hint: Write down the parent chain of the bundle that is actually returned.
+  java:
+    files:
+      - { name: Msg.properties, content: "a=base-a\n" }
+      - { name: Msg_en.properties, content: "a=en-a\nb=en-b\n" }
+      - { name: Msg_fr.properties, content: "a=fr-a\n" }
+    expect: { compiles: true, stdout: "fr-a", exception: java.util.MissingResourceException }
+
+- id: D10-L10N-011
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [numberformat, currency, percent, rounding, half-even]
+  prompt: What is the output of the following program?
+  code: |
+    import java.text.NumberFormat;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            NumberFormat cur = NumberFormat.getCurrencyInstance(Locale.US);
+            NumberFormat pct = NumberFormat.getPercentInstance(Locale.US);
+            System.out.println(cur.format(-3.5) + " " + cur.format(1234.5) + " "
+                + pct.format(0.125) + " " + pct.format(1.5));
+        }
+    }
+  options:
+    - key: a
+      text: "`-$3.50 $1,234.50 12% 150%`"
+      correct: true
+      why: Currency format uses two fraction digits and grouping; percent multiplies by 100 and rounds 12.5 HALF_EVEN to 12.
+    - key: b
+      text: "`-$3.50 $1,234.50 13% 150%`"
+      why: NumberFormat rounds HALF_EVEN by default, so 12.5 becomes 12 (the even neighbour), not 13.
+    - key: c
+      text: "`($3.50) $1,234.50 12% 150%`"
+      why: The standard currency format in en_US uses a minus sign; parentheses belong to the accounting style.
+    - key: d
+      text: "`-$3.5 $1,234.5 12% 1.5%`"
+      why: The currency format always shows the currency's fraction digits (2 for USD), and the percent format multiplies by 100.
+  explanation: |
+    `getCurrencyInstance(Locale.US)` uses the dollar sign, grouping and exactly two fraction digits.
+    `getPercentInstance` multiplies by 100, shows no fraction digits by default, and — like all
+    `NumberFormat`s — rounds with `RoundingMode.HALF_EVEN`: 12.5 → 12, while 13.5 would become 14.
+  rule: "NumberFormat.getPercentInstance multiplies by 100; NumberFormat/DecimalFormat round HALF_EVEN by default."
+  misconception: Formatting rounds half up like school arithmetic.
+  java:
+    expect: { compiles: true, stdout: "-$3.50 $1,234.50 12% 150%" }
+
+- id: D10-L10N-012
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [numberformat, integer-instance, rounding, parse]
+  prompt: What is the output of the following program?
+  code: |
+    import java.text.*;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) throws ParseException {
+            NumberFormat in = NumberFormat.getIntegerInstance(Locale.US);
+            System.out.println(in.format(2.5) + " " + in.format(3.5) + " " + in.format(-2.5) + " "
+                + in.parse("12.7") + " " + in.parse("1,999.9"));
+        }
+    }
+  options:
+    - key: a
+      text: "`2 4 -2 12 1999`"
+      correct: true
+      why: Formatting rounds HALF_EVEN (2.5 → 2, 3.5 → 4, -2.5 → -2); parsing with an integer format stops at the decimal point.
+    - key: b
+      text: "`3 4 -3 13 2000`"
+      why: This is HALF_UP rounding applied to both formatting and parsing; NumberFormat uses HALF_EVEN and its integer parser does not round at all.
+    - key: c
+      text: "`2 3 -2 12 1999`"
+      why: Formatting does not truncate; 3.5 rounds to the even neighbour 4.
+    - key: d
+      text: "`2 4 -2 12.7 1999.9`"
+      why: An integer instance is set to parse integers only, so it stops at the decimal separator.
+  explanation: |
+    `getIntegerInstance` formats with no fraction digits and HALF_EVEN rounding — ties go to the even
+    neighbour. Its parser is "integer only": it stops at the decimal separator and ignores the rest, as
+    `parse(String)` always ignores trailing text. Grouping separators are accepted when parsing.
+  rule: "getIntegerInstance: HALF_EVEN rounding on format, parseIntegerOnly on parse (stops at the decimal separator)."
+  misconception: The integer format rounds when parsing, or rounds .5 up.
+  java:
+    expect: { compiles: true, stdout: "2 4 -2 12 1999" }
+
+- id: D10-L10N-013
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [locale, category, setdefault, display, format]
+  prompt: The JVM starts with default locale `en_US`. What is the output of the following program?
+  code: |
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            Locale.setDefault(Locale.Category.FORMAT, Locale.FRANCE);
+            Locale.setDefault(Locale.Category.DISPLAY, Locale.GERMANY);
+            System.out.println(Locale.getDefault() + " " + Locale.ITALY.getDisplayCountry() + " "
+                + String.format("%.2f", 1.5) + " " + String.format(Locale.US, "%.2f", 1.5));
+        }
+    }
+  options:
+    - key: a
+      text: "`en_US Italien 1,50 1.50`"
+      correct: true
+      why: Category defaults are separate from Locale.getDefault(); display names use the DISPLAY default (German), and String.format uses the FORMAT default (French) unless a locale is passed.
+    - key: b
+      text: "`de_DE Italien 1,50 1.50`"
+      why: setDefault(Category, locale) changes only that category; the general default returned by getDefault() stays en_US.
+    - key: c
+      text: "`en_US Italy 1.50 1.50`"
+      why: getDisplayCountry() and String.format() without a locale argument read the category defaults that were just changed.
+    - key: d
+      text: "`en_US Italie 1,50 1,50`"
+      why: Display names come from the DISPLAY default (German, Italien), and an explicit Locale.US argument overrides the FORMAT default.
+  explanation: |
+    Since Java 7 the default locale has two categories. `Locale.setDefault(Category, l)` changes only that
+    category, while `Locale.getDefault()` (no argument) keeps returning the general default. Methods that
+    display locale names use `getDefault(Category.DISPLAY)`; formatters (`String.format`, `NumberFormat`,
+    `DateTimeFormatter`) use `getDefault(Category.FORMAT)`. An explicit `Locale` argument always wins.
+  rule: "Locale.setDefault(Category, l) changes only that category; getDisplayXxx() uses DISPLAY, formatting uses FORMAT."
+  misconception: There is only one default locale.
+  java:
+    expect: { compiles: true, stdout: "en_US Italien 1,50 1.50" }
+
+- id: D10-L10N-014
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [compactnumberformat, short, long]
+  prompt: What is the output of the following program?
+  code: |
+    import java.text.NumberFormat;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            var s = NumberFormat.getCompactNumberInstance(Locale.US, NumberFormat.Style.SHORT);
+            var l = NumberFormat.getCompactNumberInstance(Locale.US, NumberFormat.Style.LONG);
+            System.out.println(s.format(2_500_000) + " " + l.format(2_500_000) + " "
+                + s.format(1_400) + " " + l.format(950) + " " + s.format(1_500));
+        }
+    }
+  options:
+    - key: a
+      text: "`2M 2 million 1K 950 2K`"
+      correct: true
+      why: Compact formats show no fraction digits by default and round HALF_EVEN (2.5M → 2M, 1.5K → 2K); values below one thousand are printed unchanged.
+    - key: b
+      text: "`2.5M 2.5 million 1.4K 950 1.5K`"
+      why: The maximum number of fraction digits of a compact format is 0 unless you call setMaximumFractionDigits.
+    - key: c
+      text: "`3M 3 million 1K 950 2K`"
+      why: Rounding is HALF_EVEN, so 2.5 goes to the even neighbour 2.
+    - key: d
+      text: "`2M 2 million 1K 1K 2K`"
+      why: Numbers below 1,000 have no compact form in en_US and are formatted as plain numbers.
+  explanation: |
+    `NumberFormat.getCompactNumberInstance(locale, style)` (Java 12) abbreviates large numbers using the
+    locale's CLDR patterns: `SHORT` gives `2M`/`1K`, `LONG` gives `2 million`/`1 thousand`. By default it
+    keeps no fraction digits and rounds HALF_EVEN; small numbers are not abbreviated.
+  rule: "CompactNumberFormat (Java 12): SHORT/LONG styles, 0 fraction digits by default, HALF_EVEN rounding."
+  misconception: Compact formatting keeps one decimal, like 2.5M.
+  java:
+    expect: { compiles: true, stdout: "2M 2 million 1K 950 2K" }
+
+- id: D10-L10N-015
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [messageformat, placeholders, percent, missing-argument]
+  prompt: What is the output of the following program?
+  code: |
+    import java.text.MessageFormat;
+
+    public class Main {
+        public static void main(String[] args) {
+            System.out.println(MessageFormat.format(
+                "{0}: {1} of {2} ({1,number,percent}) {3}", "Disk", 0.75, "C:"));
+        }
+    }
+  options:
+    - key: a
+      text: "`Disk: 0.75 of C: (75%) {3}`"
+      correct: true
+      why: An argument can be used several times with different formats; a placeholder with no matching argument is left as-is.
+    - key: b
+      text: "`Disk: 0.75 of C: (75%) null`"
+      why: MessageFormat does not substitute null for a missing argument; it keeps the placeholder text.
+    - key: c
+      text: An `IllegalArgumentException` is thrown because argument 3 is missing
+      why: Missing arguments are tolerated by MessageFormat (unlike java.util.Formatter, which throws MissingFormatArgumentException).
+    - key: d
+      text: "`Disk: 0.75 of C: (0.75%) {3}`"
+      why: The percent style multiplies by 100, so 0.75 becomes 75%.
+  explanation: |
+    `MessageFormat` placeholders refer to arguments by index, so one argument can appear several times with
+    different format types. A placeholder whose index has no argument is output unchanged — no exception.
+    `{1,number,percent}` applies the locale's percent format (×100).
+  rule: "MessageFormat: {n} may be reused; {n,number,percent} formats as a percentage; a placeholder without an argument is printed literally."
+  misconception: MessageFormat throws or prints null for missing arguments, like String.format.
+  java:
+    expect: { compiles: true, stdout: "Disk: 0.75 of C: (75%) {3}" }
+
+- id: D10-L10N-016
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 100
+  tags: [locale, default, immutability, tostring]
+  prompt: Which statements about `java.util.Locale` are true? Choose three.
+  options:
+    - key: a
+      text: "`Locale` objects are immutable."
+      correct: true
+      why: Locale has no setters; Locale.Builder exists precisely because a Locale cannot be changed after creation.
+    - key: b
+      text: "`Locale.of(...)` was added in Java 19, and the public `Locale` constructors have been deprecated since then."
+      correct: true
+      why: Java 19 introduced the static factories Locale.of and deprecated new Locale(...), which still compiles with a warning.
+    - key: c
+      text: "`Locale.forLanguageTag(\"en_US\")` returns a locale equal to `Locale.US`."
+      why: Language tags use hyphens (en-US); the underscore form is ill-formed and produces an empty locale.
+    - key: d
+      text: "`Locale.setDefault(locale)` changes the default for both the `DISPLAY` and `FORMAT` categories."
+      correct: true
+      why: The one-argument setDefault sets the general default and both category defaults.
+    - key: e
+      text: "Calling `ResourceBundle.getBundle(name, Locale.FRANCE)` changes `Locale.getDefault()` to `fr_FR`."
+      why: getBundle only reads the default locale (for its fallback step); it never changes it.
+    - key: f
+      text: "`Locale.US.toString()` returns `\"en-US\"`."
+      why: toString() uses underscores (en_US); toLanguageTag() produces the hyphenated en-US.
+  explanation: |
+    `Locale` is an immutable value object. Since Java 19, create it with `Locale.of`, `forLanguageTag`
+    (hyphenated BCP 47 tags), constants or `Locale.Builder`. `toString()` uses underscores and
+    `toLanguageTag()` hyphens. `setDefault(locale)` updates the general default and both categories;
+    no other API changes the default as a side effect.
+  rule: "Locale is immutable; Locale.of (Java 19) replaces the deprecated constructors; toString uses '_', toLanguageTag uses '-'."
+  misconception: Locale strings use the same separator everywhere.
+
+- id: D10-L10N-017
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: foundation
+  estSeconds: 90
+  tags: [datetimeformatter, ofpattern, month-names, day-names]
+  prompt: What is the output of the following program? (4 August 2025 is a Monday.)
+  code: |
+    import java.time.LocalDate;
+    import java.time.format.DateTimeFormatter;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            LocalDate d = LocalDate.of(2025, 8, 4);
+            var fr = DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.FRANCE);
+            var us = DateTimeFormatter.ofPattern("EEE d MMM", Locale.US);
+            System.out.println(d.format(fr) + " | " + d.format(us) + " | " + d.format(fr.withLocale(Locale.ITALY)));
+        }
+    }
+  options:
+    - key: a
+      text: "`lundi, 4 août | Mon 4 Aug | lunedì, 4 agosto`"
+      correct: true
+      why: EEEE/MMMM are full day/month names and EEE/MMM abbreviations, always in the formatter's locale; withLocale switches the language but keeps the pattern.
+    - key: b
+      text: "`Monday, 4 August | Mon 4 Aug | Monday, 4 August`"
+      why: Text fields are localized with the formatter's locale, not printed in English.
+    - key: c
+      text: "`lundi, 4 août | Monday 4 August | lunedì, 4 agosto`"
+      why: Three letters (EEE, MMM) select the abbreviated forms.
+    - key: d
+      text: "`lundi, 4 août | Mon 4 Aug | lundi, 4 août`"
+      why: withLocale returns a copy of the formatter that uses the new locale for names.
+  explanation: |
+    In `DateTimeFormatter` patterns, the number of letters selects the text style: `EEE`/`MMM` abbreviated,
+    `EEEE`/`MMMM` full. The names come from the formatter's locale — given to `ofPattern(pattern, locale)` or
+    replaced with `withLocale` — and the pattern itself (order, punctuation) stays as written.
+  rule: "DateTimeFormatter.ofPattern(pattern, locale): MMM/EEE abbreviated and MMMM/EEEE full names in that locale."
+  misconception: Month and day names are always English.
+  java:
+    expect: { compiles: true, stdout: "lundi, 4 août | Mon 4 Aug | lunedì, 4 agosto" }
+
+- id: D10-L10N-018
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: multi
+  format: select-valid
+  difficulty: advanced
+  estSeconds: 150
+  tags: [compile, parseexception, getbundle, messageformat, locale-constructor]
+  prompt: |
+    Each statement is placed in `public static void main(String[] args)` (which declares **no** exceptions),
+    with `java.util.*`, `java.text.*` and `java.time.format.*` imported and `ResourceBundle rb` in scope.
+    Which statements compile? Choose three.
+  options:
+    - key: a
+      text: "`ResourceBundle b = ResourceBundle.getBundle(\"App\", \"fr\");`"
+      why: There is no getBundle(String, String) overload; the locale must be a Locale object.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { ResourceBundle b = ResourceBundle.getBundle("App", "fr"); } }
+        expect: { compiles: false, errorContains: "no suitable method found for getBundle" }
+    - key: b
+      text: "`Number n = NumberFormat.getInstance().parse(\"12\");`"
+      why: parse(String) declares the checked ParseException, which main neither catches nor declares.
+      java:
+        source: |
+          import java.text.*;
+          public class Main { public static void main(String[] args) { Number n = NumberFormat.getInstance().parse("12"); } }
+        expect: { compiles: false, errorContains: "unreported exception java.text.ParseException" }
+    - key: c
+      text: "`Locale l = new Locale(\"fr\", \"CA\");`"
+      correct: true
+      why: The constructors are deprecated since Java 19 but not removed — deprecation produces a warning, not an error.
+      java:
+        source: |
+          import java.util.*;
+          public class Main { public static void main(String[] args) { Locale l = new Locale("fr", "CA"); System.out.println(l); } }
+        expect: { compiles: true, stdout: "fr_CA" }
+    - key: d
+      text: "`String s = MessageFormat.format(\"{0}-{1}\", 1, 2, 3);`"
+      correct: true
+      why: format takes Object... arguments; extra arguments are simply unused.
+      java:
+        source: |
+          import java.text.*;
+          public class Main { public static void main(String[] args) { String s = MessageFormat.format("{0}-{1}", 1, 2, 3); System.out.println(s); } }
+        expect: { compiles: true, stdout: "1-2" }
+    - key: e
+      text: "`String s = rb.getString(42);`"
+      why: Keys are Strings; there is no getString(int).
+      java:
+        source: |
+          import java.util.*;
+          public class Main {
+              static ResourceBundle rb;
+              public static void main(String[] args) { String s = rb.getString(42); }
+          }
+        expect: { compiles: false, errorContains: "cannot be converted to java.lang.String" }
+    - key: f
+      text: "`var f = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.UK);`"
+      correct: true
+      why: withLocale returns a new DateTimeFormatter, and nothing here throws a checked exception.
+      java:
+        source: |
+          import java.util.*;
+          import java.time.format.*;
+          public class Main { public static void main(String[] args) { var f = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(Locale.UK); System.out.println("ok"); } }
+        expect: { compiles: true, stdout: "ok" }
+  explanation: |
+    `NumberFormat.parse(String)` and `DateFormat.parse(String)` throw the **checked** `ParseException`, unlike
+    the `java.time` parse methods, which throw the unchecked `DateTimeParseException`. `getBundle` needs a
+    `Locale`, not a string. Deprecated APIs such as `new Locale(...)` still compile. `MessageFormat.format`
+    is a varargs method, so surplus arguments are legal.
+  rule: "NumberFormat.parse throws checked ParseException; deprecated members still compile (warning only); getBundle(String, Locale)."
+  misconception: Deprecated constructors no longer compile, or parse methods only throw unchecked exceptions.
+
+- id: D10-L10N-019
+  objective: D10.1
+  lesson: l10n-locales-bundles
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 180
+  tags: [rounding, half-even, half-up, formatter, numberformat]
+  prompt: The default locale is `en_US`. What is the output of the following program?
+  code: |
+    import java.text.NumberFormat;
+    import java.util.Locale;
+
+    public class Main {
+        public static void main(String[] args) {
+            NumberFormat nf = NumberFormat.getInstance(Locale.GERMANY);
+            nf.setMaximumFractionDigits(1);
+            System.out.println(nf.format(2.25) + " " + String.format(Locale.GERMANY, "%.1f", 2.25) + " "
+                + nf.format(0.35) + " " + "%.1f".formatted(0.35));
+        }
+    }
+  options:
+    - key: a
+      text: "`2,2 2,3 0,3 0.4`"
+      correct: true
+      why: NumberFormat rounds the exact binary value HALF_EVEN (2.25 is exact → 2,2; 0.35 is slightly below → 0,3); Formatter rounds the decimal value HALF_UP (2,3 and 0.4), and formatted() uses the default en_US locale.
+    - key: b
+      text: "`2,3 2,3 0,4 0,4`"
+      why: NumberFormat does not round half up, and String.formatted uses the default locale (en_US), not the German locale of an earlier call.
+    - key: c
+      text: "`2,2 2,2 0,4 0.4`"
+      why: java.util.Formatter (behind String.format) uses HALF_UP, so 2.25 becomes 2,3.
+    - key: d
+      text: "`2.2 2,3 0.3 0.4`"
+      why: The NumberFormat was created for Locale.GERMANY, so it uses a decimal comma.
+  explanation: |
+    `NumberFormat`/`DecimalFormat` use `RoundingMode.HALF_EVEN` and round the **exact binary value** of the
+    double: `2.25` is exact, so the tie goes to the even digit (`2,2`); `0.35` is stored as
+    0.34999…, so it rounds down (`0,3`). `java.util.Formatter` (used by `String.format`, `formatted`,
+    `printf`) rounds the decimal value with `HALF_UP`: `2,3` and `0.4`. `formatted` has no locale parameter
+    and uses the default `FORMAT` locale.
+  rule: "NumberFormat/DecimalFormat round HALF_EVEN (on the exact double value); java.util.Formatter rounds HALF_UP."
+  misconception: All Java formatting APIs round the same way.
+  hint: Which rounding mode does each API use?
+  java:
+    expect: { compiles: true, stdout: "2,2 2,3 0,3 0.4" }

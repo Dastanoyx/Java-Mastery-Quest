@@ -1,0 +1,1102 @@
+# D8.2 — thread safety: synchronized, volatile, atomics, locks, synchronizers
+# D8.3 — concurrent collections and parallel streams
+# All multi-threaded programs read shared state only after join(), a latch, Future.get() or
+# ExecutorService.close(), or print order-independent facts (sizes, sorted views), so their output is fixed.
+
+# ───────────────────────── thread safety & locks (lesson conc-thread-safety) ─────────────────────────
+
+- id: D8-LCK-001
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: compile-error
+  difficulty: foundation
+  estSeconds: 75
+  tags: [synchronized, monitor, compile-error]
+  prompt: Which line causes a compilation error?
+  code: |
+    public class Main {
+        private int count;
+        private final Object lock = new Object();
+        synchronized void a() { count++; }
+        static synchronized void b() { }
+        void c() { synchronized (lock) { count++; } }
+        void d() { synchronized (count) { count++; } }
+        void e() { synchronized (Main.class) { b(); } }
+        public static void main(String[] args) { }
+    }
+  options:
+    - key: a
+      text: Line 5
+      why: static synchronized is legal; it locks the Class object Main.class.
+    - key: b
+      text: Line 6
+      why: Any object reference can serve as a lock, and a private final lock object is good practice.
+    - key: c
+      text: Line 7
+      correct: true
+      why: synchronized needs an expression of a reference type; count is a primitive int, so javac reports "unexpected type".
+    - key: d
+      text: Line 8
+      why: A Class object is an ordinary object with a monitor — this is the same lock a static synchronized method uses.
+    - key: e
+      text: The class compiles without errors
+      why: Line 7 tries to lock a primitive value, which has no monitor.
+  explanation: |
+    A `synchronized` statement locks the monitor of the object its expression evaluates to, so the expression
+    must have a **reference** type — locking an `int` is a compile error (*unexpected type, required:
+    reference, found: int*). Instance `synchronized` methods lock `this`, `static synchronized` methods lock the
+    `Class` object, and a `synchronized (Main.class)` block takes that same class lock. A `null` reference
+    compiles but throws `NullPointerException` at runtime.
+  rule: "JLS 14.19: the type of the Expression in a synchronized statement must be a reference type; a static synchronized method locks the Class object, an instance one locks this."
+  misconception: Any field, including a primitive, can be used as a lock.
+  hint: Which of these expressions is not an object?
+  java:
+    expect: { compiles: false, errorContains: "unexpected type", errorLine: 7 }
+
+- id: D8-LCK-002
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: multi
+  format: concept
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [synchronized, monitor, static-synchronized, lock-object]
+  prompt: |
+    Two threads use the **same** `Store` instance. Which pairs of methods can execute at the same time, one in
+    each thread? Choose three.
+  code: |
+    class Store {
+        private final Object stockLock = new Object();
+        private int sold, stock;
+        private static int audits;
+
+        synchronized void sell()   { sold++; }
+        synchronized void refund() { sold--; }
+        static synchronized void audit() { audits++; }
+        void restock() { synchronized (stockLock) { stock++; } }
+        void report()  { synchronized (this) { System.out.println(sold); } }
+    }
+  options:
+    - key: a
+      text: "`sell()` and `audit()`"
+      correct: true
+      why: sell() locks the instance (this); the static audit() locks Store.class — two different monitors.
+    - key: b
+      text: "`sell()` and `refund()`"
+      why: Both are synchronized instance methods on the same object, so they need the same monitor (this).
+    - key: c
+      text: "`sell()` and `restock()`"
+      correct: true
+      why: restock() locks the private stockLock object, not this, so it does not contend with sell().
+    - key: d
+      text: "`refund()` and `report()`"
+      why: synchronized (this) is exactly the lock a synchronized instance method takes, so they exclude each other.
+    - key: e
+      text: "`audit()` and `restock()`"
+      correct: true
+      why: Store.class and stockLock are different objects, so the two methods never wait for each other.
+  explanation: |
+    Two threads exclude each other only when they lock the **same object**. A synchronized instance method locks
+    `this` — the same monitor as a `synchronized (this)` block; a static synchronized method locks the `Class`
+    object; a block on a private lock object locks that object. Mapping each method to its lock answers every
+    "can these run together?" question: sell/refund/report share `this`, audit uses `Store.class`, restock uses
+    `stockLock`.
+  rule: "A synchronized instance method acquires the monitor of this; a static synchronized method acquires the monitor of the Class object; synchronized (expr) acquires the monitor of expr. Only the same monitor excludes."
+  misconception: All synchronized code in a class shares one lock.
+  hint: Write the lock object next to each method.
+  java:
+    source: |
+      class Store {
+          private final Object stockLock = new Object();
+          private int sold, stock;
+          private static int audits;
+
+          synchronized void sell()   { sold++; }
+          synchronized void refund() { sold--; }
+          static synchronized void audit() { audits++; }
+          void restock() { synchronized (stockLock) { stock++; } }
+          void report()  { synchronized (this) { System.out.println(sold); } }
+      }
+      public class Main {
+          public static void main(String[] args) {
+              Store s = new Store();
+              s.sell(); s.sell(); s.refund(); Store.audit(); s.restock();
+              s.report();
+          }
+      }
+    expect: { compiles: true, stdout: "1" }
+
+- id: D8-LCK-003
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [AtomicInteger, compareAndSet, accumulateAndGet, getAndUpdate]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.atomic.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            AtomicInteger a = new AtomicInteger(3);
+            int x = a.getAndAdd(4);
+            int y = a.accumulateAndGet(5, (cur, v) -> cur * v);
+            boolean z = a.compareAndSet(7, 0);
+            int w = a.getAndUpdate(v -> v - 10);
+            System.out.println(x + " " + y + " " + z + " " + w + " " + a);
+        }
+    }
+  options:
+    - key: a
+      text: "`3 35 false 35 25`"
+      correct: true
+      why: getAndAdd returns the old 3 (now 7); accumulateAndGet returns the new 7*5=35; the CAS expects 7 but finds 35; getAndUpdate returns the old 35 and stores 25.
+    - key: b
+      text: "`7 35 false 25 25`"
+      why: This mixes up the naming — getAndX returns the value BEFORE the update, xAndGet the value after.
+    - key: c
+      text: "`3 35 true 0 -10`"
+      why: compareAndSet compares with the current value (35), not with a value the variable had earlier, so it fails and nothing is changed.
+    - key: d
+      text: "`3 12 false 12 2`"
+      why: accumulateAndGet applies the given operator (here multiplication) to the current value and 5; it does not always add.
+  explanation: |
+    Atomic variables follow a strict naming rule: `getAndX` returns the **old** value, `xAndGet` returns the
+    **new** one. `accumulateAndGet(x, op)` stores `op(current, x)`; `updateAndGet`/`getAndUpdate` apply a
+    unary function. `compareAndSet(expected, newValue)` swaps only if the current value equals `expected` and
+    returns whether it did. `toString()` prints the current value. The update functions may be retried under
+    contention, so they should be side-effect free.
+  rule: "AtomicInteger: getAndAdd/getAndUpdate/getAndAccumulate return the previous value; addAndGet/updateAndGet/accumulateAndGet return the updated value; compareAndSet returns true only if the current value equalled the expected value."
+  misconception: compareAndSet checks against the value the variable had when the program last looked at it.
+  hint: Track the stored value after each line, separately from what each call returns.
+  java:
+    expect: { compiles: true, stdout: "3 35 false 35 25" }
+
+- id: D8-LCK-004
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: concept
+  difficulty: advanced
+  estSeconds: 150
+  tags: [volatile, happens-before, atomicity, visibility]
+  prompt: |
+    One writer thread calls `finish(42)` once. Other threads call `poll()` and `hit()` concurrently.
+    Which statement is correct?
+  code: |
+    class Job {
+        private volatile boolean done;
+        private int result;                 // not volatile
+        private volatile int hits;
+
+        void finish(int r) { result = r; done = true; }
+        Integer poll() { return done ? result : null; }
+        void hit() { hits++; }
+    }
+  options:
+    - key: a
+      text: A `poll()` that sees `done == true` is guaranteed to return 42, but concurrent `hit()` calls can still lose increments.
+      correct: true
+      why: The write to result happens-before the volatile write to done, which happens-before a read that sees true; but hits++ is a read-modify-write, and volatile does not make it atomic.
+    - key: b
+      text: "`poll()` is safe, and `hit()` is safe too because `hits` is `volatile`."
+      why: volatile gives visibility and ordering for single reads and writes; hits++ is three steps that other threads can interleave with.
+    - key: c
+      text: "`poll()` may return a stale `result` (e.g. 0) because `result` is not `volatile`; `hit()` can lose increments."
+      why: Program order plus the volatile write/read pair creates a happens-before chain that also publishes the earlier plain write to result.
+    - key: d
+      text: "`poll()` may return a stale `result`, but `hit()` is safe."
+      why: Both halves are reversed — the publication via done is safe, the increment is not.
+  explanation: |
+    Happens-before is transitive. In the writer, `result = r` comes before `done = true` in program order; a
+    volatile write happens-before every later read of that variable that sees it. So a reader that sees
+    `done == true` also sees `result == 42` — the classic *safe publication via a volatile flag*. `volatile`
+    does not make compound actions atomic, though: `hits++` reads, adds and writes, and two threads can both
+    read the same value. Use `AtomicInteger`/`LongAdder` or a lock for counters.
+  rule: "JLS 17.4.5: a write to a volatile field happens-before every subsequent read of that field; happens-before is transitive with program order. volatile does not make read-modify-write operations atomic."
+  misconception: volatile makes ++ atomic, but only protects the variable itself, not earlier writes.
+  hint: Follow program order in the writer, then the volatile write-read edge.
+  java:
+    source: |
+      class Job {
+          private volatile boolean done;
+          private int result;                 // not volatile
+          private volatile int hits;
+
+          void finish(int r) { result = r; done = true; }
+          Integer poll() { return done ? result : null; }
+          void hit() { hits++; }
+      }
+      public class Main {
+          public static void main(String[] args) throws InterruptedException {
+              Job job = new Job();
+              System.out.println(job.poll());
+              Thread writer = new Thread(() -> job.finish(42));
+              writer.start();
+              writer.join();
+              System.out.println(job.poll());
+          }
+      }
+    expect: { compiles: true, stdout: "null\n42" }
+
+- id: D8-LCK-005
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: predict-output
+  difficulty: advanced
+  estSeconds: 150
+  tags: [ReentrantLock, tryLock, reentrancy, hold-count, CountDownLatch]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+    import java.util.concurrent.locks.*;
+
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            ReentrantLock lock = new ReentrantLock();
+            CountDownLatch held = new CountDownLatch(1);
+            CountDownLatch release = new CountDownLatch(1);
+            Thread owner = Thread.ofPlatform().start(() -> {
+                lock.lock();
+                try {
+                    held.countDown();
+                    release.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    lock.unlock();
+                }
+            });
+            held.await();
+            System.out.print(lock.tryLock() + " " + lock.isLocked() + " " + lock.isHeldByCurrentThread() + " ");
+            release.countDown();
+            owner.join();
+            System.out.println(lock.tryLock() + " " + lock.tryLock() + " " + lock.getHoldCount());
+        }
+    }
+  options:
+    - key: a
+      text: "`false true false true true 2`"
+      correct: true
+      why: While the owner holds the lock, tryLock() fails at once; isLocked() reports any holder. After the owner releases it, main acquires it and re-acquires it (reentrant), giving a hold count of 2.
+    - key: b
+      text: "`false true false true false 1`"
+      why: ReentrantLock is reentrant — the thread that already holds it can lock it again, and every acquisition increments the hold count.
+    - key: c
+      text: "`true true true true true 3`"
+      why: tryLock() without a time-out never waits; it returns false immediately if another thread holds the lock.
+    - key: d
+      text: "`false false false true true 2`"
+      why: isLocked() reports whether ANY thread holds the lock; isHeldByCurrentThread() is the per-thread check.
+  explanation: |
+    The latches make the timeline deterministic: `held.await()` returns only after the owner thread has locked,
+    and `owner.join()` returns only after it has unlocked. `tryLock()` never blocks — it returns `false` at once
+    when another thread holds the lock. `isLocked()` is a global query, `isHeldByCurrentThread()` and
+    `getHoldCount()` are about the calling thread. `ReentrantLock` is reentrant, so the second `tryLock()` by
+    the same thread succeeds and the hold count becomes 2 (it would need two `unlock()` calls).
+  rule: "ReentrantLock.tryLock() acquires the lock only if it is not held by another thread at the time of invocation and returns immediately; if the current thread already holds it, the hold count is incremented."
+  misconception: tryLock() waits for the lock, or a thread cannot acquire a lock it already holds.
+  hint: Use the latches to place every call on a timeline.
+  java:
+    expect: { compiles: true, stdout: "false true false true true 2" }
+
+- id: D8-LCK-006
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 90
+  tags: [wait-notify, Condition, IllegalMonitorStateException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.concurrent.locks.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Object monitor = new Object();
+            synchronized (monitor) {
+                monitor.notifyAll();
+                System.out.println("notifyAll inside: ok");
+            }
+            ReentrantLock lock = new ReentrantLock();
+            Condition ready = lock.newCondition();
+            lock.lock();
+            try {
+                ready.signal();
+                System.out.println("signal inside: ok");
+            } finally {
+                lock.unlock();
+            }
+            ready.signalAll();
+            System.out.println("signalAll outside: ok");
+        }
+    }
+  options:
+    - key: a
+      text: It prints all three lines, because signalling with no waiting threads does nothing
+      why: Having no waiters is fine, but signalling a Condition without holding its lock is not — that check happens first.
+    - key: b
+      text: It prints the first two lines, then an `IllegalMonitorStateException` is thrown
+      correct: true
+      why: notifyAll and signal are called while holding the right lock; signalAll after unlock() is called without it.
+    - key: c
+      text: It prints the first line, then an `IllegalMonitorStateException` is thrown by `signal()`
+      why: signal() with no waiting thread is legal as long as the caller holds the lock — it simply wakes nobody.
+    - key: d
+      text: Compilation fails because `ready.signalAll()` is not inside `lock()`/`unlock()`
+      why: The compiler does not track lock ownership; the mistake is only detected at runtime.
+  explanation: |
+    `wait`/`notify`/`notifyAll` require the caller to own the object's monitor, and `Condition.await`/`signal`/
+    `signalAll` require the caller to hold the associated `Lock` (for `ReentrantLock` conditions). Calling them
+    with no waiting threads is harmless, but calling them without the lock throws
+    `IllegalMonitorStateException`. The compiler cannot check this.
+  rule: "Object.notify/notifyAll/wait and ReentrantLock Condition.signal/signalAll/await throw IllegalMonitorStateException if the current thread does not hold the corresponding monitor or lock."
+  misconception: signalling with no waiters is always a no-op.
+  hint: Which lock does the current thread hold at each signal or notify call?
+  java:
+    expect: { compiles: true, stdout: "notifyAll inside: ok\nsignal inside: ok", exception: java.lang.IllegalMonitorStateException }
+
+- id: D8-LCK-007
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 60
+  tags: [liveness, livelock, deadlock, starvation]
+  prompt: |
+    Two threads each need locks A and B. Each thread takes its first lock, calls `tryLock()` on the second,
+    and if that fails it releases the first lock, waits the same fixed 10 ms and tries again. In an unlucky
+    run both threads keep retrying in step: neither is ever blocked, the CPU stays busy, yet neither finishes
+    its work. What is this called?
+  options:
+    - key: a
+      text: Deadlock
+      why: In a deadlock the threads are blocked forever waiting for each other; here they never block — they back off and retry.
+    - key: b
+      text: Livelock
+      correct: true
+      why: The threads stay active and keep reacting to each other, but make no progress — the definition of livelock.
+    - key: c
+      text: Starvation
+      why: Starvation means one thread never gets a resource while others keep making progress; here nobody progresses.
+    - key: d
+      text: A race condition
+      why: A race condition is a correctness problem — a result that depends on interleaving — not a lack of progress.
+  explanation: |
+    **Deadlock**: threads are blocked forever, each holding a lock another needs. **Livelock**: threads are not
+    blocked and keep changing state in response to each other, but none makes progress — typical of symmetric
+    back-off-and-retry schemes; a random back-off breaks the symmetry. **Starvation**: a runnable thread is
+    perpetually denied a resource that other threads keep getting.
+  rule: "Liveness failures: deadlock (blocked forever on each other), livelock (active but no progress), starvation (one thread perpetually denied access)."
+  misconception: Any situation where threads make no progress is a deadlock.
+  hint: Are the threads blocked or busy?
+
+- id: D8-LCK-008
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [race-condition, synchronized, volatile, AtomicInteger, ReentrantLock]
+  prompt: |
+    Four threads each call `increment()` 50 000 times; `main` joins them and prints the counter. Which
+    versions **always** print `200000`? Choose three.
+  code: |
+    public class Main {
+        static int count;
+        static void increment() { count++; }
+
+        public static void main(String[] args) throws InterruptedException {
+            Thread[] ts = new Thread[4];
+            for (int i = 0; i < 4; i++) {
+                ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                ts[i].start();
+            }
+            for (Thread t : ts) t.join();
+            System.out.println(count);
+        }
+    }
+  options:
+    - key: a
+      text: "Declare `static synchronized void increment() { count++; }`"
+      correct: true
+      why: All threads lock the same monitor (Main.class), so each read-add-write runs alone.
+      java:
+        source: |
+          public class Main {
+              static int count;
+              static synchronized void increment() { count++; }
+              public static void main(String[] args) throws InterruptedException {
+                  Thread[] ts = new Thread[4];
+                  for (int i = 0; i < 4; i++) {
+                      ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                      ts[i].start();
+                  }
+                  for (Thread t : ts) t.join();
+                  System.out.println(count);
+              }
+          }
+        expect: { compiles: true, stdout: "200000" }
+    - key: b
+      text: "Declare the field as `static volatile int count;` and keep `increment()` unchanged"
+      why: volatile only guarantees visibility of each single read and write; count++ remains three separate steps, so updates can be lost.
+      java:
+        source: |
+          public class Main {
+              static volatile int count;
+              static void increment() { count++; }
+              public static void main(String[] args) throws InterruptedException {
+                  Thread[] ts = new Thread[4];
+                  for (int i = 0; i < 4; i++) {
+                      ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                      ts[i].start();
+                  }
+                  for (Thread t : ts) t.join();
+                  System.out.println(count <= 200_000);
+              }
+          }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`static void increment() { synchronized (new Object()) { count++; } }`"
+      why: Every call locks a brand-new object that no other thread can ever see, so there is no mutual exclusion at all.
+      java:
+        source: |
+          public class Main {
+              static int count;
+              static void increment() { synchronized (new Object()) { count++; } }
+              public static void main(String[] args) throws InterruptedException {
+                  Thread[] ts = new Thread[4];
+                  for (int i = 0; i < 4; i++) {
+                      ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                      ts[i].start();
+                  }
+                  for (Thread t : ts) t.join();
+                  System.out.println(count <= 200_000);
+              }
+          }
+        expect: { compiles: true, stdout: "true" }
+    - key: d
+      text: "Add `static final ReentrantLock LOCK = new ReentrantLock();` and `static void increment() { LOCK.lock(); try { count++; } finally { LOCK.unlock(); } }`"
+      correct: true
+      why: One shared lock, acquired before the try and released in finally, makes the increment mutually exclusive and its result visible.
+      java:
+        source: |
+          import java.util.concurrent.locks.*;
+          public class Main {
+              static int count;
+              static final ReentrantLock LOCK = new ReentrantLock();
+              static void increment() { LOCK.lock(); try { count++; } finally { LOCK.unlock(); } }
+              public static void main(String[] args) throws InterruptedException {
+                  Thread[] ts = new Thread[4];
+                  for (int i = 0; i < 4; i++) {
+                      ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                      ts[i].start();
+                  }
+                  for (Thread t : ts) t.join();
+                  System.out.println(count);
+              }
+          }
+        expect: { compiles: true, stdout: "200000" }
+    - key: e
+      text: "Replace the field with `static final AtomicInteger COUNT = new AtomicInteger();`, make `increment()` call `COUNT.incrementAndGet()` and print `COUNT.get()`"
+      correct: true
+      why: incrementAndGet is an atomic compare-and-set loop, so no increment can be lost.
+      java:
+        source: |
+          import java.util.concurrent.atomic.*;
+          public class Main {
+              static final AtomicInteger COUNT = new AtomicInteger();
+              static void increment() { COUNT.incrementAndGet(); }
+              public static void main(String[] args) throws InterruptedException {
+                  Thread[] ts = new Thread[4];
+                  for (int i = 0; i < 4; i++) {
+                      ts[i] = new Thread(() -> { for (int j = 0; j < 50_000; j++) increment(); });
+                      ts[i].start();
+                  }
+                  for (Thread t : ts) t.join();
+                  System.out.println(COUNT.get());
+              }
+          }
+        expect: { compiles: true, stdout: "200000" }
+  explanation: |
+    `count++` is a read–add–write sequence. It becomes safe only when every thread uses the **same** lock
+    (a `static synchronized` method locks `Main.class`; a shared `ReentrantLock` unlocked in `finally`) or when
+    the whole step is a single atomic operation (`AtomicInteger.incrementAndGet`). `volatile` fixes visibility
+    but not atomicity, and locking a fresh object on every call excludes nobody. The `join()` calls make the
+    final read happen after all increments. (Options b and c usually print less than 200000, but the exact
+    number varies from run to run.)
+  rule: "Mutual exclusion requires all threads to acquire the same lock; volatile does not make compound actions atomic; AtomicInteger.incrementAndGet is atomic."
+  misconception: Any synchronized block or a volatile field makes count++ thread-safe.
+  hint: For each version ask — do all four threads contend for the same lock, or is the update one atomic step?
+
+- id: D8-LCK-009
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: predict-output
+  difficulty: expert
+  estSeconds: 150
+  tags: [ReentrantReadWriteLock, ReadWriteLock, lock-upgrade, lock-downgrade]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.locks.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            ReentrantReadWriteLock rw = new ReentrantReadWriteLock();
+            rw.readLock().lock();
+            rw.readLock().lock();
+            System.out.print(rw.getReadLockCount() + " " + rw.writeLock().tryLock() + " ");
+            rw.readLock().unlock();
+            rw.readLock().unlock();
+            rw.writeLock().lock();
+            System.out.print(rw.readLock().tryLock() + " " + rw.isWriteLocked() + " ");
+            rw.writeLock().unlock();
+            System.out.println(rw.isWriteLocked() + " " + rw.getReadLockCount());
+        }
+    }
+  options:
+    - key: a
+      text: "`2 false true true false 1`"
+      correct: true
+      why: Read holds are counted (2); a reader cannot upgrade to the write lock; a writer can take the read lock (downgrading), and releasing the write lock leaves that read hold.
+    - key: b
+      text: "`2 true true true false 1`"
+      why: ReentrantReadWriteLock does not support upgrading — while any read lock is held, even by the same thread, the write lock cannot be acquired.
+    - key: c
+      text: "`2 false false true false 0`"
+      why: Downgrading is allowed — the thread holding the write lock may acquire the read lock.
+    - key: d
+      text: "`1 false true true false 1`"
+      why: getReadLockCount counts read-lock holds, so one thread locking twice counts as 2.
+  explanation: |
+    `ReentrantReadWriteLock` lets many threads hold the read lock together, while the write lock is exclusive.
+    Both are reentrant, and `getReadLockCount()` counts holds. A thread holding the read lock **cannot upgrade**:
+    `writeLock().tryLock()` returns `false` (and `writeLock().lock()` would block forever — a self-deadlock).
+    The reverse, **downgrading**, is allowed: the writer may acquire the read lock and then release the write
+    lock, keeping a consistent read view.
+  rule: "ReentrantReadWriteLock: multiple readers or one writer; reentrant; a writer can acquire the read lock (downgrade), but upgrading from read to write is not possible."
+  misconception: A thread that already holds the read lock can simply take the write lock as well.
+  hint: Which direction — read→write or write→read — is allowed for the same thread?
+  java:
+    expect: { compiles: true, stdout: "2 false true true false 1" }
+
+- id: D8-LCK-010
+  objective: D8.2
+  lesson: conc-thread-safety
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [CyclicBarrier, CountDownLatch, barrier-action, synchronizers]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+    import java.util.concurrent.atomic.*;
+
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            AtomicInteger trips = new AtomicInteger();
+            CyclicBarrier barrier = new CyclicBarrier(3, trips::incrementAndGet);
+            CountDownLatch finished = new CountDownLatch(3);
+            for (int i = 0; i < 3; i++) {
+                Thread.ofPlatform().start(() -> {
+                    try {
+                        barrier.await();          // round 1
+                        barrier.await();          // round 2: the same barrier again
+                    } catch (InterruptedException | BrokenBarrierException e) {
+                        throw new IllegalStateException(e);
+                    }
+                    finished.countDown();
+                });
+            }
+            finished.await();
+            System.out.println(trips.get() + " " + barrier.getParties() + " "
+                    + barrier.getNumberWaiting() + " " + barrier.isBroken() + " " + finished.getCount());
+        }
+    }
+  options:
+    - key: a
+      text: "`2 3 0 false 0`"
+      correct: true
+      why: The barrier trips once per round — twice — running the action each time, resets automatically, and the latch reaches 0 when all three threads are through.
+    - key: b
+      text: "`1 3 0 false 0`"
+      why: A CyclicBarrier is reusable; it resets after each trip, so the second round trips it again.
+    - key: c
+      text: "`6 3 0 false 0`"
+      why: The barrier action runs once per trip (by the last thread to arrive), not once per waiting thread.
+    - key: d
+      text: The program never terminates, because a barrier can only be passed once
+      why: That describes CountDownLatch, which cannot be reset. CyclicBarrier is designed for repeated rounds.
+  explanation: |
+    `CyclicBarrier(parties, action)` blocks each caller of `await()` until `parties` threads have arrived; the
+    last arriving thread runs the optional action, then everyone continues and the barrier **resets** for the
+    next round. Two rounds therefore run the action twice. `CountDownLatch` is the one-shot counterpart:
+    `await()` returns once the count reaches zero and it can never be reset. `finished.await()` makes `main`
+    read the results only after all workers are done.
+  rule: "CyclicBarrier: reusable; when the given number of parties have called await, the barrier action (if any) runs once and the barrier resets. CountDownLatch: one-shot, cannot be reset."
+  misconception: A barrier, like a latch, works only once.
+  hint: How many times does the barrier trip, and what runs on each trip?
+  java:
+    expect: { compiles: true, stdout: "2 3 0 false 0" }
+
+# ───────────────────────── concurrent collections & parallel streams (lesson conc-collections-parallel) ─────────────────────────
+
+- id: D8-COL-001
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 150
+  tags: [ConcurrentHashMap, putIfAbsent, merge, compute, computeIfAbsent, null-handling]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            ConcurrentHashMap<String, Integer> m = new ConcurrentHashMap<>();
+            System.out.println(m.putIfAbsent("a", 1) + " " + m.putIfAbsent("a", 2) + " "
+                    + m.merge("a", 5, Integer::sum) + " "
+                    + m.compute("b", (k, v) -> v == null ? 10 : v + 1) + " "
+                    + m.computeIfAbsent("c", k -> null) + " " + m.size());
+            try {
+                System.out.println(m.containsKey(null));
+            } catch (NullPointerException e) {
+                System.out.println("NPE");
+            }
+        }
+    }
+  options:
+    - key: a
+      text: |
+        null 1 6 10 null 2
+        NPE
+      correct: true
+      why: putIfAbsent returns the previous value (null, then 1); merge stores and returns 1+5; compute creates b=10; a null from computeIfAbsent stores nothing; containsKey(null) throws.
+    - key: b
+      text: |
+        null 1 6 10 null 3
+        NPE
+      why: When the mapping function of computeIfAbsent returns null, no mapping is recorded — ConcurrentHashMap could not store a null value anyway.
+    - key: c
+      text: |
+        null 1 5 10 null 2
+        NPE
+      why: merge with an existing key stores remapping(old, value) = 1 + 5, not just the new value.
+    - key: d
+      text: |
+        null 1 6 10 null 2
+        false
+      why: Unlike HashMap, ConcurrentHashMap rejects null keys in queries too — containsKey(null) throws NullPointerException.
+  explanation: |
+    `putIfAbsent` returns the **previous** value (`null` if absent) and only writes when absent. `merge`,
+    `compute` and `computeIfAbsent` return the **new** value; a function returning `null` removes the entry or,
+    for `computeIfAbsent`, stores nothing. All of these are atomic on `ConcurrentHashMap`. Because `null` must
+    unambiguously mean "absent", the map rejects null keys and values — including in `get`, `containsKey` and
+    `remove` — with `NullPointerException`.
+  rule: "ConcurrentHashMap does not allow null keys or values (NullPointerException); putIfAbsent returns the previous value; merge/compute/computeIfAbsent return the new value and a null result means no mapping."
+  misconception: ConcurrentHashMap behaves like HashMap for nulls, and a null-returning computeIfAbsent stores a null entry.
+  hint: Separate "what is returned" from "what is stored" for each call.
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        null 1 6 10 null 2
+        NPE
+
+- id: D8-COL-002
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 120
+  tags: [CopyOnWriteArrayList, snapshot-iterator, UnsupportedOperationException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            List<String> listeners = new CopyOnWriteArrayList<>(List.of("audit", "mail"));
+            Iterator<String> it = listeners.iterator();
+            listeners.add("sms");
+            listeners.remove("audit");
+            int seen = 0;
+            while (it.hasNext()) {
+                System.out.print(it.next() + " ");
+                seen++;
+            }
+            System.out.println(seen + " " + listeners);
+            Iterator<String> again = listeners.iterator();
+            again.next();
+            again.remove();
+        }
+    }
+  options:
+    - key: a
+      text: It prints `mail sms 2 [mail, sms]` and ends normally
+      why: The iterator works on the snapshot taken when it was created; later writes copy to a new array that it never sees.
+    - key: b
+      text: It prints `audit mail 2 [mail, sms]`, then an `UnsupportedOperationException` is thrown
+      correct: true
+      why: The first iterator sees the original two elements; the list itself has changed; iterator.remove() is not supported on copy-on-write iterators.
+    - key: c
+      text: A `ConcurrentModificationException` is thrown by the first `it.next()`
+      why: CopyOnWriteArrayList iterators are snapshot iterators and never throw ConcurrentModificationException.
+    - key: d
+      text: It prints `audit mail 2 [mail, sms]` and ends normally, leaving `[sms]`
+      why: Snapshot iterators cannot change the list — their remove(), set() and add() throw UnsupportedOperationException.
+  explanation: |
+    Every write to a `CopyOnWriteArrayList` copies the backing array; an iterator keeps a reference to the array
+    that existed when it was created. It therefore sees neither the added `"sms"` nor the removal of
+    `"audit"`, and it never throws `ConcurrentModificationException`. Because it iterates a frozen snapshot,
+    its mutating methods (`remove`, `set`, `add`) throw `UnsupportedOperationException`; modify the list itself
+    instead (e.g. `listeners.remove(x)` or `removeIf`).
+  rule: "CopyOnWriteArrayList iterators provide a snapshot of the list at iterator creation, never throw ConcurrentModificationException, and do not support remove, set or add (UnsupportedOperationException)."
+  misconception: A concurrent list's iterator shows live changes and supports remove() like ArrayList's.
+  hint: Which array does the first iterator traverse?
+  java:
+    expect: { compiles: true, stdout: "audit mail 2 [mail, sms]", exception: java.lang.UnsupportedOperationException }
+
+- id: D8-COL-003
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: runtime-exception
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [BlockingQueue, LinkedBlockingQueue, offer, poll, remove, NoSuchElementException]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) throws InterruptedException {
+            BlockingQueue<Integer> q = new LinkedBlockingQueue<>(2);
+            q.put(1);
+            System.out.print(q.offer(2) + " ");
+            System.out.print(q.offer(3, 20, TimeUnit.MILLISECONDS) + " ");
+            System.out.print(q.remainingCapacity() + " " + q.peek() + " ");
+            q.clear();
+            System.out.println(q.poll() + " " + q.poll(20, TimeUnit.MILLISECONDS));
+            q.remove();
+        }
+    }
+  options:
+    - key: a
+      text: It prints `true false 0 1 null null`, then a `NoSuchElementException` is thrown
+      correct: true
+      why: offer fits the second element; the timed offer gives up after 20 ms and returns false; poll and timed poll return null when empty; remove() throws on an empty queue.
+    - key: b
+      text: It prints `true ` and then hangs forever at the timed `offer`
+      why: offer(e, timeout, unit) waits at most the given time and then returns false; only put() blocks indefinitely.
+    - key: c
+      text: It prints `true false 0 1 null null` and ends normally
+      why: remove() belongs to the "throws" family — on an empty queue it throws NoSuchElementException instead of returning null.
+    - key: d
+      text: It prints `true `, then an `IllegalStateException` is thrown by the timed `offer`
+      why: Only add() throws IllegalStateException on a full queue; the timed offer reports failure by returning false.
+  explanation: |
+    `BlockingQueue` methods come in four families. **Throw**: `add` (IllegalStateException when full), `remove`
+    and `element` (NoSuchElementException when empty). **Special value**: `offer` → `false`, `poll`/`peek` →
+    `null`. **Block**: `put`, `take`. **Time out**: `offer(e, t, unit)` → `false`, `poll(t, unit)` → `null`.
+    `new LinkedBlockingQueue<>(2)` is bounded to two elements, so `remainingCapacity()` is 0 when full.
+  rule: "BlockingQueue: add/remove/element throw; offer/poll/peek return a special value; put/take block; timed offer/poll wait up to the time-out and then return false/null."
+  misconception: A timed offer or remove() behaves like its blocking or special-value cousin.
+  hint: Assign each call to one of the four method families.
+  java:
+    expect: { compiles: true, stdout: "true false 0 1 null null", exception: java.util.NoSuchElementException }
+
+- id: D8-COL-004
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: multi
+  format: select-valid
+  difficulty: expert
+  estSeconds: 180
+  tags: [parallel-streams, reduce, identity, associativity, forEach, encounter-order]
+  prompt: Which statements are **guaranteed** to print the same result as the sequential version of the pipeline? Choose three.
+  options:
+    - key: a
+      text: "`System.out.println(IntStream.rangeClosed(1, 5).parallel().reduce(1, (a, b) -> a * b));`"
+      correct: true
+      why: 1 is a true identity for multiplication and multiplication is associative, so every split gives 120.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { System.out.println(IntStream.rangeClosed(1, 5).parallel().reduce(1, (a, b) -> a * b)); } }
+        expect: { compiles: true, stdout: "120" }
+    - key: b
+      text: "`System.out.println(IntStream.rangeClosed(1, 5).parallel().reduce(5, Integer::sum));`"
+      why: 5 is not an identity for addition; a parallel reduce applies the seed once per chunk, so the result depends on how the source was split.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { System.out.println(IntStream.rangeClosed(1, 5).parallel().reduce(5, Integer::sum) >= 20); } }
+        expect: { compiles: true, stdout: "true" }
+    - key: c
+      text: "`System.out.println(Stream.of(\"a\", \"b\", \"c\", \"d\").parallel().reduce(\"\", String::concat));`"
+      correct: true
+      why: "\"\" is the identity of concatenation, concatenation is associative, and reduce respects encounter order — always abcd."
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { System.out.println(Stream.of("a", "b", "c", "d").parallel().reduce("", String::concat)); } }
+        expect: { compiles: true, stdout: "abcd" }
+    - key: d
+      text: "`System.out.println(IntStream.rangeClosed(1, 5).parallel().reduce(0, (a, b) -> a - b));`"
+      why: Subtraction is not associative, so combining partial results in a different grouping changes the answer.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { IntStream.rangeClosed(1, 5).parallel().reduce(0, (a, b) -> a - b); System.out.println("ran"); } }
+        expect: { compiles: true, stdout: "ran" }
+    - key: e
+      text: "`System.out.println(List.of(3, 1, 2).parallelStream().map(x -> x * 10).collect(Collectors.toList()));`"
+      correct: true
+      why: collect into a list keeps encounter order on an ordered source; each thread fills its own container and they are merged in order.
+      java:
+        source: |
+          import java.util.*;
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { System.out.println(List.of(3, 1, 2).parallelStream().map(x -> x * 10).collect(Collectors.toList())); } }
+        expect: { compiles: true, stdout: "[30, 10, 20]" }
+    - key: f
+      text: "`Stream.of(\"a\", \"b\", \"c\").parallel().forEach(System.out::print);`"
+      why: Parallel forEach gives no ordering guarantee — any permutation of abc may be printed. forEachOrdered would be needed.
+      java:
+        source: |
+          import java.util.stream.*;
+          public class Main { public static void main(String[] args) { Stream.of("a", "b", "c").parallel().forEach(s -> { }); System.out.println("ran"); } }
+        expect: { compiles: true, stdout: "ran" }
+  explanation: |
+    A parallel `reduce(identity, op)` splits the source, reduces each chunk starting from `identity`, and
+    combines the partial results. That is only equivalent to the sequential result if `identity` is a real
+    identity (`op(identity, x) == x`) and `op` is associative. Ordered terminal operations such as `reduce`,
+    `collect`, `toList()` and `forEachOrdered` respect encounter order even in parallel; `forEach` does not.
+  rule: "Stream.reduce(identity, accumulator): identity must be an identity for the accumulator and the accumulator must be associative; forEach on a parallel stream does not respect encounter order."
+  misconception: A parallel stream always gives the sequential answer as long as it does not crash.
+  hint: Check each one for a true identity, associativity and an order-respecting terminal operation.
+
+- id: D8-COL-005
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [parallel-streams, encounter-order, findFirst, joining, toList]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.*;
+    import java.util.stream.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            List<String> words = List.of("delta", "alpha", "charlie", "bravo");
+            System.out.println(words.parallelStream().map(String::toUpperCase).collect(Collectors.joining(",")));
+            System.out.println(words.parallelStream().filter(w -> w.length() == 5).findFirst().get());
+            System.out.println(words.parallelStream().map(String::length).toList());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        DELTA,ALPHA,CHARLIE,BRAVO
+        delta
+        [5, 5, 7, 5]
+      correct: true
+      why: joining, findFirst and toList all respect the encounter order of the ordered List source, even in parallel.
+    - key: b
+      text: |
+        ALPHA,BRAVO,CHARLIE,DELTA
+        alpha
+        [5, 5, 5, 7]
+      why: Parallel processing does not sort anything; encounter order comes from the source list.
+    - key: c
+      text: The order of each line varies from run to run, because the streams are parallel
+      why: Only order-insensitive operations such as forEach and findAny may vary; these three terminal operations are defined in terms of encounter order.
+    - key: d
+      text: |
+        DELTA,ALPHA,CHARLIE,BRAVO
+        any of delta, alpha or bravo
+        [5, 5, 7, 5]
+      why: That describes findAny. findFirst must return the first matching element in encounter order, also on a parallel stream.
+  explanation: |
+    Parallelism changes *how* the work is split, not the **meaning** of an ordered pipeline. On an ordered
+    source (a `List`), `collect(...)` including `joining`, `toList()`, `reduce`, `forEachOrdered` and
+    `findFirst()` give the same result as sequentially. `forEach` and `findAny` are the operations allowed to
+    ignore order; `unordered()` explicitly drops the constraint.
+  rule: "For ordered streams, collect, toList, reduce, findFirst and forEachOrdered respect encounter order regardless of parallel execution; forEach and findAny need not."
+  misconception: Any parallel stream produces results in a random order.
+  hint: Which of these three terminal operations are allowed to ignore encounter order?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        DELTA,ALPHA,CHARLIE,BRAVO
+        delta
+        [5, 5, 7, 5]
+
+- id: D8-COL-006
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: concept
+  difficulty: foundation
+  estSeconds: 90
+  tags: [synchronizedList, ConcurrentHashMap, ConcurrentSkipListMap, CopyOnWriteArrayList, iteration]
+  prompt: Which statement about Java's thread-safe collections is true?
+  options:
+    - key: a
+      text: When several threads use a list returned by `Collections.synchronizedList`, a thread that iterates over it must hold the list's lock — `synchronized (list) { … }` — for the whole loop.
+      correct: true
+      why: Each method call is synchronized, but iteration is many calls; the Javadoc requires manual synchronization on the list while iterating.
+    - key: b
+      text: "`ConcurrentHashMap` allows one `null` key, just like `HashMap`."
+      why: ConcurrentHashMap rejects all null keys and values with NullPointerException.
+    - key: c
+      text: "`ConcurrentSkipListMap` keeps its entries in insertion order."
+      why: It is the concurrent counterpart of TreeMap — sorted by natural order or a Comparator.
+    - key: d
+      text: Iterating over a `ConcurrentHashMap` throws `ConcurrentModificationException` if another thread adds an entry meanwhile.
+      why: ConcurrentHashMap iterators are weakly consistent and never throw ConcurrentModificationException.
+    - key: e
+      text: "`CopyOnWriteArrayList` is the best choice for a list that many threads write to constantly."
+      why: Every write copies the whole array; it suits read-mostly lists such as listener registries, not write-heavy ones.
+  explanation: |
+    The synchronized wrappers lock one monitor per method call, so compound actions — check-then-act and
+    iteration — still need an explicit `synchronized (list)` block. Concurrent collections avoid that:
+    `ConcurrentHashMap` and `ConcurrentSkipListMap/Set` have weakly consistent iterators and reject `null`;
+    the skip-list structures are sorted. `CopyOnWriteArrayList` gives snapshot iteration at the cost of a full
+    copy per write.
+  rule: "Collections.synchronizedList: the user must manually synchronize on the returned list when iterating over it. ConcurrentHashMap/ConcurrentSkipListMap reject nulls and have weakly consistent iterators; skip-list collections are sorted."
+  misconception: A synchronized wrapper makes every use of the collection, including iteration, thread-safe automatically.
+  hint: Which operation of a synchronized wrapper consists of many separate method calls?
+
+- id: D8-COL-007
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: runtime-exception
+  difficulty: advanced
+  estSeconds: 150
+  tags: [ConcurrentHashMap, weakly-consistent, HashMap, ConcurrentModificationException, fail-fast]
+  prompt: What is the result of running this program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            Map<String, Integer> chm = new ConcurrentHashMap<>(Map.of("a", 1, "b", 2, "c", 3));
+            for (String k : chm.keySet()) {
+                if (chm.get(k) % 2 == 1) chm.remove(k);
+            }
+            System.out.println(chm);
+            Map<String, Integer> hm = new HashMap<>(Map.of("a", 1, "b", 2, "c", 3));
+            for (String k : hm.keySet()) {
+                if (hm.get(k) % 2 == 1) hm.remove(k);
+            }
+            System.out.println(hm);
+        }
+    }
+  options:
+    - key: a
+      text: It prints `{b=2}`, then a `ConcurrentModificationException` is thrown
+      correct: true
+      why: The ConcurrentHashMap iterator is weakly consistent and tolerates removals; the HashMap iterator is fail-fast and notices the structural change on its next step.
+    - key: b
+      text: It prints `{b=2}` twice
+      why: HashMap's iterator is fail-fast even in a single thread; removing through the map (not the iterator) while iterating makes the next next() throw.
+    - key: c
+      text: A `ConcurrentModificationException` is thrown by the first loop
+      why: Concurrent collections never throw ConcurrentModificationException; their iterators are weakly consistent.
+    - key: d
+      text: It prints `{a=1, b=2, c=3}`, then a `ConcurrentModificationException` is thrown
+      why: The removals in the first loop really happen — the map is modified even though the loop is iterating over it.
+  explanation: |
+    `ConcurrentHashMap` iterators are **weakly consistent**: they never throw `ConcurrentModificationException`
+    and you may modify the map while iterating, so both odd entries are removed. `HashMap` iterators are
+    **fail-fast**: removing via `hm.remove(k)` bumps the modification count and the next `next()` throws —
+    whatever the iteration order, because one of the two odd keys is removed while another key is still
+    ahead. The safe single-threaded alternatives are `iterator.remove()` or `hm.values().removeIf(...)`.
+  rule: "HashMap collection-view iterators are fail-fast (ConcurrentModificationException after structural modification not made through the iterator); ConcurrentHashMap iterators are weakly consistent and never throw it."
+  misconception: ConcurrentModificationException only happens with multiple threads, or concurrent maps throw it too.
+  hint: Which of the two iterators checks a modification counter?
+  java:
+    expect: { compiles: true, stdout: "{b=2}", exception: java.util.ConcurrentModificationException }
+
+- id: D8-COL-008
+  objective: D8.3
+  lesson: conc-collections-parallel
+  type: single
+  format: predict-output
+  difficulty: intermediate
+  estSeconds: 120
+  tags: [ConcurrentSkipListSet, NavigableSet, virtual-threads, sorted]
+  prompt: What is the output of the following program?
+  code: |
+    import java.util.*;
+    import java.util.concurrent.*;
+
+    public class Main {
+        public static void main(String[] args) {
+            NavigableSet<Integer> seen = new ConcurrentSkipListSet<>();
+            try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
+                for (int t = 0; t < 4; t++) {
+                    int base = t;
+                    ex.submit(() -> { for (int i = 0; i < 5; i++) seen.add(base + i * 4); });
+                }
+            }
+            System.out.println(seen.size() + " " + seen.first() + " " + seen.last());
+            System.out.println(seen.headSet(5) + " " + seen.ceiling(17) + " " + seen.descendingSet().first());
+        }
+    }
+  options:
+    - key: a
+      text: |
+        20 0 19
+        [0, 1, 2, 3, 4] 17 19
+      correct: true
+      why: The four tasks add the distinct values 0..19; close() waits for them; the skip-list set is sorted, headSet(5) is exclusive and ceiling(17) is the least element >= 17.
+    - key: b
+      text: |
+        20 0 19
+        [0, 1, 2, 3, 4, 5] 17 19
+      why: headSet(toElement) excludes toElement by default; headSet(5, true) would include it.
+    - key: c
+      text: |
+        20 0 19
+        [0, 1, 2, 3, 4] 18 19
+      why: ceiling(e) returns the least element greater than OR EQUAL to e; higher(e) would be strictly greater.
+    - key: d
+      text: The output varies between runs because the four tasks add their values in an unpredictable order
+      why: The insertion order does vary, but a ConcurrentSkipListSet keeps its elements sorted, and close() makes main read the set only after every task finished.
+  explanation: |
+    `ConcurrentSkipListSet` is a thread-safe, **sorted** `NavigableSet` — the concurrent counterpart of
+    `TreeSet`. Concurrent `add` calls from many threads are safe, and since the order of the elements depends
+    only on their values, the printed result is deterministic once all writers are done (here guaranteed by
+    the executor's `close()`). The navigation methods behave like `TreeSet`'s: `headSet(to)` is exclusive,
+    `ceiling` is ≥, `higher` is >, `descendingSet()` reverses the view.
+  rule: "ConcurrentSkipListSet is a scalable concurrent NavigableSet sorted by natural ordering or a Comparator; it does not permit null elements."
+  misconception: A collection filled by several threads always has an unpredictable content order.
+  hint: Does the order of insertion matter for a sorted set?
+  java:
+    expect:
+      compiles: true
+      stdout: |
+        20 0 19
+        [0, 1, 2, 3, 4] 17 19
